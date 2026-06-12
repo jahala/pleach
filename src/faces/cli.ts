@@ -31,6 +31,8 @@ Flags (run):
   --journal PATH          Run journal JSONL (default: <repo-root>/.git/pleach/journal.jsonl)
   --rctrl-bin PATH        rctrl binary (default: $PLEACH_RCTRL_BIN or 'rctrl' on PATH)
   --tend-module PATH      tend ingester module path (default: $PLEACH_TEND_MODULE; required)
+  --allowed-tools LIST    Tool allowlist for claude workers (e.g. "Read,Write,Edit,Bash") —
+                          without it real workers block on permission prompts
 
 Landing is manual by design: verified work is published as node/<id> branches;
 merge the integration node's branch yourself (git merge node/<feature>).
@@ -49,6 +51,7 @@ interface Flags {
   journal?: string;
   rctrlBin: string;
   tendModule?: string;
+  allowedTools?: string;
 }
 
 class UsageError extends Error {
@@ -105,6 +108,10 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         flags.tendModule = takeValue(arg, next);
         i += 1;
         break;
+      case '--allowed-tools':
+        flags.allowedTools = takeValue(arg, next);
+        i += 1;
+        break;
       default:
         throw new UsageError(`unknown flag '${arg}'`);
     }
@@ -151,7 +158,10 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     isolate: createIsolateSeam(exec, flags.repoRoot),
     lock: createLockSeam(),
     journal: createJournal(journalPath),
-    rctrl: createRctrlSeam(exec, { bin: flags.rctrlBin }),
+    rctrl: createRctrlSeam(exec, {
+      bin: flags.rctrlBin,
+      ...(flags.allowedTools !== undefined ? { allowedTools: flags.allowedTools } : {}),
+    }),
     tend: createTendSeam(await createModuleTransport(flags.tendModule)),
   };
 
