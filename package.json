@@ -1,0 +1,21 @@
+{
+  "name": "pleach",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src test",
+    "check": "bun run typecheck && bun run lint && bun run test"
+  },
+  "dependencies": {
+    "zod": "^4.3.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "latest",
+    "@types/node": "latest",
+    "bun-types": "^1.3.14",
+    "typescript": "latest"
+  }
+}
