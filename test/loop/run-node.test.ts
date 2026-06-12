@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { PlanInvalidError } from '../../src/core/errors.ts';
 import type { AuditResult } from '../../src/core/plan.ts';
 import { runNode } from '../../src/loop/run-node.ts';
-import { type SpawnCtx, type WaitScript, makeHarness, makeNode, stop } from './harness.ts';
+import { makeHarness, makeNode, type SpawnCtx, stop, type WaitScript } from './harness.ts';
 
 // spec: §6 + ledger — the per-node ladder. In-memory seams (deterministic
 // worker, in-memory git); the subject is run-node's control flow.
@@ -50,7 +50,10 @@ describe('runNode — ladder ordering (§6 runNode sequence)', () => {
 
   test('smoke failure prevents the audit worker from spawning', async () => {
     const h = makeHarness({
-      execScript: (argv) => (argv.join(' ') === 'run smoke' ? { output: 'smoke boom', exitCode: 1 } : { output: '', exitCode: 0 }),
+      execScript: (argv) =>
+        argv.join(' ') === 'run smoke'
+          ? { output: 'smoke boom', exitCode: 1 }
+          : { output: '', exitCode: 0 },
     });
     const node = makeNode({
       id: 'n',
@@ -106,7 +109,10 @@ describe('runNode — non-stop reasons', () => {
     const script: WaitScript = (ctx) =>
       ctx.role === 'build' ? stop({ reason: 'input', message: 'allow Bash?' }) : stop();
     const h = makeHarness({ waitScript: script });
-    const node = makeNode({ id: 'n', policy: { maxAttempts: 3, onDead: 'resume', reauditWhen: ['compacted'] } });
+    const node = makeNode({
+      id: 'n',
+      policy: { maxAttempts: 3, onDead: 'resume', reauditWhen: ['compacted'] },
+    });
     const r = await runNode(node, ['base'], h.deps, { defaultTimeoutMs: DEF });
     expect(r.verdict.status).toBe('blocked');
     expect(r.verdict.evidence.blockedReason).toBe('allow Bash?');
@@ -122,7 +128,10 @@ describe('runNode — non-stop reasons', () => {
       return buildSpawns === 1 ? stop({ reason: 'dead' }) : stop();
     };
     const h = makeHarness({ waitScript: script });
-    const node = makeNode({ id: 'n', policy: { maxAttempts: 2, onDead: 'resume', reauditWhen: ['compacted'] } });
+    const node = makeNode({
+      id: 'n',
+      policy: { maxAttempts: 2, onDead: 'resume', reauditWhen: ['compacted'] },
+    });
     const r = await runNode(node, ['base'], h.deps, { defaultTimeoutMs: DEF });
     expect(r.verdict.status).toBe('done');
     expect(h.log.count('isolate', 'n')).toBe(2); // re-isolated
@@ -134,7 +143,10 @@ describe('runNode — non-stop reasons', () => {
   test('dead with onDead fail → status dead, no re-isolate', async () => {
     const script: WaitScript = (ctx) => (ctx.role === 'build' ? stop({ reason: 'dead' }) : stop());
     const h = makeHarness({ waitScript: script });
-    const node = makeNode({ id: 'n', policy: { maxAttempts: 2, onDead: 'fail', reauditWhen: ['compacted'] } });
+    const node = makeNode({
+      id: 'n',
+      policy: { maxAttempts: 2, onDead: 'fail', reauditWhen: ['compacted'] },
+    });
     const r = await runNode(node, ['base'], h.deps, { defaultTimeoutMs: DEF });
     expect(r.verdict.status).toBe('dead');
     expect(h.log.count('isolate', 'n')).toBe(1);
@@ -151,7 +163,10 @@ describe('runNode — gates', () => {
     // override scanMarkers via markers map keyed by cwd; the first cwd has the
     // marker, the second (retry, reused tree per spec) — we simulate clearing by
     // having the worker "resolve" it: emulate by clearing markers on 2nd build.
-    const node = makeNode({ id: 'n', policy: { maxAttempts: 2, onDead: 'resume', reauditWhen: ['compacted'] } });
+    const node = makeNode({
+      id: 'n',
+      policy: { maxAttempts: 2, onDead: 'resume', reauditWhen: ['compacted'] },
+    });
     // Patch: clear markers after first attempt's scan. We do this by wrapping.
     const realScan = h.deps.isolate.scanMarkers;
     h.deps.isolate.scanMarkers = async (cwd: string) => {
@@ -166,7 +181,8 @@ describe('runNode — gates', () => {
 
   test('smoke fail exhausts attempts → status failed with gate evidence', async () => {
     const h = makeHarness({
-      execScript: (argv) => (argv.join(' ') === 'smoke' ? { output: 'broke', exitCode: 2 } : { output: '', exitCode: 0 }),
+      execScript: (argv) =>
+        argv.join(' ') === 'smoke' ? { output: 'broke', exitCode: 2 } : { output: '', exitCode: 0 },
     });
     const node = makeNode({
       id: 'n',
@@ -181,7 +197,10 @@ describe('runNode — gates', () => {
 
   test('setup failure → status failed, gate.ran is the setup command, consumes attempts', async () => {
     const h = makeHarness({
-      execScript: (argv) => (argv.join(' ') === 'bad setup' ? { output: 'no net', exitCode: 1 } : { output: '', exitCode: 0 }),
+      execScript: (argv) =>
+        argv.join(' ') === 'bad setup'
+          ? { output: 'no net', exitCode: 1 }
+          : { output: '', exitCode: 0 },
     });
     const node = makeNode({
       id: 'n',
@@ -191,7 +210,9 @@ describe('runNode — gates', () => {
     const r = await runNode(node, ['base'], h.deps, { defaultTimeoutMs: DEF });
     expect(r.verdict.status).toBe('failed');
     expect(r.verdict.evidence.gate).toEqual({ ran: 'bad setup', exitCode: 1 });
-    expect(h.log.count('isolate', 'n')).toBe(2); // setup is retryable, re-isolate per attempt
+    // setup-fail is retryable → SAME tree reused (setup idempotent by contract)
+    expect(h.log.count('isolate', 'n')).toBe(1);
+    expect(h.log.count('exec', undefined)).toBe(2); // setup re-execed each attempt
   });
 });
 
@@ -262,7 +283,10 @@ describe('runNode — audit', () => {
 describe('runNode — retry carries evidence (ledger A3)', () => {
   test('smoke retry re-prompt contains the smoke output tail', async () => {
     const h = makeHarness({
-      execScript: (argv) => (argv.join(' ') === 'smoke' ? { output: 'SMOKE-OUTPUT-XYZ', exitCode: 1 } : { output: '', exitCode: 0 }),
+      execScript: (argv) =>
+        argv.join(' ') === 'smoke'
+          ? { output: 'SMOKE-OUTPUT-XYZ', exitCode: 1 }
+          : { output: '', exitCode: 0 },
     });
     const node = makeNode({
       id: 'n',
@@ -284,7 +308,11 @@ describe('runNode — retry carries evidence (ledger A3)', () => {
       scans += 1;
       return scans === 1 ? realScan(cwd) : [];
     };
-    const node = makeNode({ id: 'n', work: { prompt: 'base' }, policy: { maxAttempts: 2, onDead: 'resume', reauditWhen: ['compacted'] } });
+    const node = makeNode({
+      id: 'n',
+      work: { prompt: 'base' },
+      policy: { maxAttempts: 2, onDead: 'resume', reauditWhen: ['compacted'] },
+    });
     await runNode(node, ['base'], h.deps, { defaultTimeoutMs: DEF });
     const sends = h.log.of('send').filter((e) => e.node === 'n');
     const retrySend = sends[sends.length - 1];
