@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { RebuildRequiredError } from '../../src/core/errors.ts';
 import type { Plan, Verdict } from '../../src/core/plan.ts';
 import { runPlan } from '../../src/loop/run-plan.ts';
-import { makeHarness, makeNode, stop, type WaitScript } from './harness.ts';
+import { type Harness, makeHarness, makeNode, stop, type WaitScript } from './harness.ts';
 
 // spec: §6 + ledger A1,B1,B2,C2,M3 + blocked + ordering. In-memory seams; the
 // subject is run-plan's scheduling, close paths, and commit/dispose ordering.
@@ -87,7 +87,7 @@ describe('runPlan — A1 dual close', () => {
 });
 
 describe('runPlan — §6 commit-on-verified', () => {
-  test('emitVerdict {closed:false} on an audit node → NO node/<id> branch, dependents skipped', async () => {
+  test('emitVerdict {closed:false} on an audit node → node never closes, dependents skipped', async () => {
     const h = makeHarness({
       auditEgress: () => auditPass,
       emitDecision: () => ({ closed: false }), // tend refuses to close
@@ -96,12 +96,13 @@ describe('runPlan — §6 commit-on-verified', () => {
       nodes: [auditNode('a'), makeNode({ id: 'b', needs: ['a'] })],
     });
     const summary = await runPlan(p, h.deps, { repoRoot: REPO, defaultTimeoutMs: 1000 });
+    // Commit precedes emit (B2), but tend's refusal means 'a' is NOT closed; its
+    // dependent 'b' never becomes ready and is reported skipped.
     expect(summary.closed).not.toContain('a');
     expect(summary.skipped).toContain('b');
-    // Branch is force-deleted / never persists for an unclosed node? Spec: commit
-    // happens before emit; if tend refuses, the work is NOT closed and dependents
-    // are skipped. The ref may exist but the node is not in closed.
     expect(summary.closed).toEqual([]);
+    // 'b' must never have isolated (its only dep never closed).
+    expect(h.log.count('isolate', 'b')).toBe(0);
   });
 });
 
@@ -211,16 +212,25 @@ describe('runPlan — C4 audit re-spawn through the scheduler', () => {
 });
 
 describe('runPlan — M3 defensive copy of readClosed', () => {
-  test('mutating the Map returned by tend after start does not affect the run', async () => {
+  test('mutating the Map returned by tend after the loop reads it does not affect the run', async () => {
     const closed = new Map<string, string | null>();
     const h = makeHarness({ closed });
+    // Mutate the source map from inside the FIRST isolate — unambiguously after
+    // the loop has done `new Map(await readClosed())`. A non-defensive loop that
+    // held the live reference would now see 'y' as pre-closed and skip it.
+    const realIsolate = h.deps.isolate.isolate;
+    let mutated = false;
+    h.deps.isolate.isolate = async (node, baseRefs) => {
+      if (!mutated) {
+        mutated = true;
+        closed.set('y', 'b'.repeat(40));
+      }
+      return realIsolate(node, baseRefs);
+    };
     const p = plan({
       nodes: [makeNode({ id: 'x' }), makeNode({ id: 'y', needs: ['x'] })],
     });
-    // Mutate the source map to falsely mark 'y' closed AFTER the run reads it.
-    const runP = runPlan(p, h.deps, { repoRoot: REPO, defaultTimeoutMs: 1000 });
-    closed.set('y', 'b'.repeat(40)); // should NOT affect the run's view
-    const summary = await runP;
+    const summary = await runPlan(p, h.deps, { repoRoot: REPO, defaultTimeoutMs: 1000 });
     // y must still be BUILT (closed by the run), not skipped as pre-closed.
     expect(h.log.count('isolate', 'y')).toBe(1);
     expect(summary.closed).toContain('y');
@@ -296,4 +306,44 @@ describe('runPlan — lock + journal', () => {
     expect(evs).toContain('run-start');
     expect(evs).toContain('run-end');
   });
+});
+
+// ── lead review: the closed-before-dispose window ────────────────────────────
+// ledger: ordering invariant under CONCURRENCY. closed.set(A) must not become
+// visible to the scheduler while A's worktree is still being disposed — another
+// node's resolution can wake the scheduler inside that window and a dependent
+// would isolate against a live tree.
+test('lead: dependent never isolates inside its dep dispose window (cross-node wake)', async () => {
+  let h: Harness | undefined;
+  const until = async (cond: () => boolean, ms: number): Promise<void> => {
+    const t0 = Date.now();
+    while (!cond() && Date.now() - t0 < ms) await new Promise((r) => setTimeout(r, 5));
+  };
+  const harness = makeHarness({
+    // Hold A's dispose open until C (wrongly) isolates, or 300ms.
+    disposeDelay: async (nodeId) => {
+      if (nodeId !== 'a') return;
+      await until(() => (h as Harness).log.count('isolate', 'c') > 0, 300);
+    },
+    // B finishes only after A has ENTERED dispose — its resolution is the
+    // scheduler wake that exposes the window.
+    waitScript: async (ctx) => {
+      if (ctx.node === 'b') {
+        await until(() => (h as Harness).log.count('dispose-start', 'a') > 0, 1000);
+      }
+      return stop();
+    },
+  });
+  h = harness;
+
+  const p = plan({
+    nodes: [makeNode({ id: 'a' }), makeNode({ id: 'b' }), makeNode({ id: 'c', needs: ['a'] })],
+  });
+  await runPlan(p, harness.deps, { repoRoot: REPO, maxConcurrency: 2 });
+
+  const isoC = harness.log.first('isolate', 'c');
+  const disposeA = harness.log.first('dispose', 'a');
+  expect(isoC).toBeGreaterThan(-1);
+  expect(disposeA).toBeGreaterThan(-1);
+  expect(isoC).toBeGreaterThan(disposeA);
 });
