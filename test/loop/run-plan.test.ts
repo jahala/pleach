@@ -211,6 +211,33 @@ describe('runPlan — C4 audit re-spawn through the scheduler', () => {
   });
 });
 
+describe('runPlan — failure is diagnosable from the journal alone', () => {
+  test('a failed node records its gate + attempts in the verdict event', async () => {
+    // Smoke fails forever → node failed with a gate. The journal (not the
+    // disposed worktree) must explain why.
+    const h = makeHarness({
+      execScript: (argv) =>
+        argv.join(' ').includes('false')
+          ? { output: 'boom', exitCode: 1 }
+          : { output: '', exitCode: 0 },
+    });
+    const p = plan({
+      nodes: [
+        makeNode({
+          id: 'n',
+          accept: { smoke: 'false' },
+          policy: { maxAttempts: 1, onDead: 'fail', reauditWhen: ['compacted'] },
+        }),
+      ],
+    });
+    await runPlan(p, h.deps, { repoRoot: REPO });
+    const verdict = h.journal.find((e) => e.event === 'verdict' && e.node === 'n');
+    expect(verdict?.status).toBe('failed');
+    expect(verdict?.attempts).toBe(1);
+    expect((verdict?.gate as { ran: string } | undefined)?.ran).toContain('false');
+  });
+});
+
 describe('runPlan — M3 defensive copy of readClosed', () => {
   test('mutating the Map returned by tend after the loop reads it does not affect the run', async () => {
     const closed = new Map<string, string | null>();

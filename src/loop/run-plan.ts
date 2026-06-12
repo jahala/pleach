@@ -131,7 +131,16 @@ async function runUnderLock(
   // dependent's isolate (the scheduler only schedules dependents after closed).
   async function settle(node: Node, outcome: RunNodeResult): Promise<void> {
     const { verdict, iso } = outcome;
-    await deps.journal.append({ event: 'verdict', node: node.id, status: verdict.status });
+    // Record the full diagnostic shape — a failed run must be explainable from
+    // the journal alone (the worktrees and sessions are gone by then).
+    await deps.journal.append({
+      event: 'verdict',
+      node: node.id,
+      status: verdict.status,
+      attempts: verdict.attempts,
+      ...(verdict.evidence.gate ? { gate: verdict.evidence.gate } : {}),
+      ...(verdict.evidence.blockedReason ? { blockedReason: verdict.evidence.blockedReason } : {}),
+    });
 
     if (verdict.status === 'blocked') {
       // run-node already disposed the tree for non-done verdicts.

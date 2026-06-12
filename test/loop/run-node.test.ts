@@ -276,7 +276,26 @@ describe('runNode — audit', () => {
     });
     const r = await runNode(node, ['base'], h.deps, { defaultTimeoutMs: DEF });
     expect(r.verdict.status).toBe('failed');
-    expect(r.verdict.evidence.gate).toEqual({ ran: 'audit n', exitCode: -1 });
+    expect(r.verdict.evidence.gate?.ran).toContain('audit n');
+    expect(r.verdict.evidence.gate?.ran).toContain('unparseable');
+  });
+
+  test('auditor dies (non-stop reason) → node fails distinctly, gate names the auditor reason', async () => {
+    // A dead/blocked/timed-out auditor returns no verdict — it must NOT be fed
+    // to the JSON parser as if it were bad egress. The gate records the reason.
+    const script: WaitScript = (ctx) =>
+      ctx.role === 'build'
+        ? stop()
+        : { reason: 'dead', finalMessage: '', filesTouched: [], telemetry: {} };
+    const h = makeHarness({ waitScript: script });
+    const node = makeNode({
+      id: 'n',
+      accept: { audit: { command: 'audit n', provider: 'codex' } },
+      policy: { maxAttempts: 1, onDead: 'fail', reauditWhen: ['compacted'] },
+    });
+    const r = await runNode(node, ['base'], h.deps, { defaultTimeoutMs: DEF });
+    expect(r.verdict.status).toBe('failed');
+    expect(r.verdict.evidence.gate?.ran).toContain('auditor dead');
   });
 });
 
