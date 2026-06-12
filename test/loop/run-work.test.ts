@@ -58,9 +58,10 @@ function scriptedWorker(waits: WorkerResult[]): {
 }
 
 // Scripted exec keyed by the first argv element (the command head).
-function scriptedExec(
-  byHead: Record<string, { output: string; exitCode: number }>,
-): { exec: ExecFn; calls: { argv: readonly string[]; timeoutMs?: number }[] } {
+function scriptedExec(byHead: Record<string, { output: string; exitCode: number }>): {
+  exec: ExecFn;
+  calls: { argv: readonly string[]; timeoutMs?: number }[];
+} {
   const calls: { argv: readonly string[]; timeoutMs?: number }[] = [];
   const exec: ExecFn = async (argv, opts) => {
     calls.push({ argv, timeoutMs: opts.timeoutMs });
