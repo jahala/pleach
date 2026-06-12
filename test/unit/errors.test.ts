@@ -6,6 +6,7 @@ import {
   LockHeldError,
   PlanInvalidError,
   RebuildRequiredError,
+  TendTransportError,
   WorkerSpawnError,
 } from '../../src/core/errors.ts';
 
@@ -88,5 +89,18 @@ describe('RebuildRequiredError', () => {
     expect(e).toBeInstanceOf(Error);
     expect(e.name).toBe('RebuildRequiredError');
     expect(e.nodeId).toBe('step-3');
+  });
+});
+
+describe('TendTransportError', () => {
+  test('instanceof + fields', () => {
+    const e = new TendTransportError('/path/to/ingester.ts', 'missing export readClosed');
+    expect(e).toBeInstanceOf(TendTransportError);
+    expect(e).toBeInstanceOf(Error);
+    expect(e.name).toBe('TendTransportError');
+    expect(e.modulePath).toBe('/path/to/ingester.ts');
+    expect(e.detail).toBe('missing export readClosed');
+    expect(e.message).toContain('/path/to/ingester.ts');
+    expect(e.message).toContain('missing export readClosed');
   });
 });
