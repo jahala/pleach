@@ -13,7 +13,9 @@ const Work = z.union([
 ]);
 
 const Node = z.object({
-  id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/),    // v1.1: interpolated into git refs + shell — charset enforced
+  id: z.string()                                            // v1.1.1: dot-separated alnum/_/- segments — legal as a git
+    .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*(\.[A-Za-z0-9][A-Za-z0-9_-]*)*$/)  // refname + shell-safe; '.' is the composite separator
+    .refine((s) => !s.endsWith('.lock'), 'git refuses refname components ending .lock'),
   worker: z.object({
     provider: z.string().optional(),
     model: z.string().optional(),
@@ -53,6 +55,7 @@ const Verdict = z.object({
   evidence: z.object({
     traceRef: z.string().optional(),
     diffRef: z.string().optional(),                         // v1.1: verified commit SHA — REQUIRED on close (resume base, ledger B1/B2)
+    blockedReason: z.string().optional(),                   // v1.1.1: the blocking prompt text when status === 'blocked'
     filesTouched: z.array(z.string()).default([]),
     gate: z.object({ ran: z.string(), exitCode: z.number() }).optional(),
   }),
