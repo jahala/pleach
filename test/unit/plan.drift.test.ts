@@ -51,10 +51,10 @@ describe('Node schema', () => {
 
   test('node id with valid chars is accepted', () => {
     const node = NodeSchema.parse({
-      id: 'A1.step:two-ok_v3',
+      id: 'A1.step.two-ok_v3',
       work: { prompt: 'x' },
     });
-    expect(node.id).toBe('A1.step:two-ok_v3');
+    expect(node.id).toBe('A1.step.two-ok_v3');
   });
 });
 
@@ -115,5 +115,27 @@ describe('Plan schema', () => {
     });
     expect(plan.nodes).toHaveLength(1);
     expect(plan.nodes[0].needs).toEqual([]);
+  });
+});
+
+describe('Node id grammar (v1.1.1 — ratified)', () => {
+  const reject = (id: string) =>
+    expect(() => NodeSchema.parse({ id, work: { prompt: 'x' } })).toThrow();
+
+  test("':' is rejected (invalid in git refnames)", () => {
+    reject('feat:step');
+  });
+
+  test("'..' is rejected (refnames may not contain it)", () => {
+    reject('a..b');
+  });
+
+  test("trailing '.lock' is rejected (git refuses the component)", () => {
+    reject('x.lock');
+  });
+
+  test('dot-separated composite ids are accepted', () => {
+    const n = NodeSchema.parse({ id: 'completion-detection.i003', work: { prompt: 'x' } });
+    expect(n.id).toBe('completion-detection.i003');
   });
 });

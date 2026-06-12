@@ -1,4 +1,4 @@
-# `@agent-contract/plan` v1.1 — canonical text
+# `@agent-contract/plan` v1.1.1 — canonical text
 
 This repo is the contract's home. `src/core/plan.ts` must match the fenced block below byte-for-byte
 (drift-tested). tend and rctrl vendor from this file. Schema changes happen here first — doc + source +
@@ -26,7 +26,9 @@ const Work = z.union([
 ]);
 
 const Node = z.object({
-  id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/),    // v1.1: interpolated into git refs + shell — charset enforced
+  id: z.string()                                            // v1.1.1: dot-separated alnum/_/- segments — legal as a git
+    .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*(\.[A-Za-z0-9][A-Za-z0-9_-]*)*$/)  // refname + shell-safe; '.' is the composite separator
+    .refine((s) => !s.endsWith('.lock'), 'git refuses refname components ending .lock'),
   worker: z.object({
     provider: z.string().optional(),
     model: z.string().optional(),
@@ -66,6 +68,7 @@ const Verdict = z.object({
   evidence: z.object({
     traceRef: z.string().optional(),
     diffRef: z.string().optional(),                         // v1.1: verified commit SHA — REQUIRED on close (resume base, ledger B1/B2)
+    blockedReason: z.string().optional(),                   // v1.1.1: the blocking prompt text when status === 'blocked'
     filesTouched: z.array(z.string()).default([]),
     gate: z.object({ ran: z.string(), exitCode: z.number() }).optional(),
   }),
@@ -124,6 +127,28 @@ export interface WorkerResult {
   filesTouched: string[];
   exitCode?: number;
   reason?: 'stop' | 'dead' | 'timeout' | 'aborted' | 'input' | 'idle';
+  message?: string;                           // blocking prompt text → Verdict.evidence.blockedReason
   telemetry: { tokens?: number; contextPct?: number; compacted?: boolean };
 }
 ```
+
+## Ratified spec prose (v1.1.1 — binding, from the tend-side ratification)
+
+- **Setup failure is an environment failure, not a work failure**: Verdict `status: 'failed'`,
+  `evidence.gate = { ran: <setup command>, exitCode }` (the `gate.ran` string is what distinguishes a
+  setup failure from a RED-gate failure in the ledger). It consumes an attempt. `policy.timeoutMs`
+  covers setup like every other exec.
+- **Timeout default**: an omitted `policy.timeoutMs` means the conductor's default (30 minutes), never
+  unbounded. **`blocked` preempts `timeout`**: when `wait()` reports `input`, return `blocked` promptly —
+  the attempt clock is for silent hangs; a prompt is a signal, not a hang.
+- **Model diversity is checked against the RESOLVED provider**: when `worker.provider` is omitted, the
+  conductor must enforce `accept.audit.provider ≠ <resolved default>` at spawn time (the schema cannot
+  see the default).
+- **Single writer during a run**: `emitVerdict` is the only writer to the source polyglots while a run
+  holds the lock. A human or MCP edit mid-run staleifies evidence out from under the ledger.
+- **`diffRef` REQUIRED-on-close is enforced by tend's ingester** (refuses `{closed:true}` without it),
+  not just annotated. `AuditResult.verdicts[].evidenceSha` is advisory — tend hashes evidence itself at
+  write time.
+- **Work-union mapping pin** (tend's seven-beat pipeline → this contract): PRE → `setup`; VERIFY →
+  `accept`; POST/DOC → conductor ledger + tend ingestion. `{command}` nodes are exit-code gated with no
+  test wrap.
