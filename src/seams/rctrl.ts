@@ -192,9 +192,9 @@ export function createRctrlSeam(exec: ExecFn, opts: RctrlSeamOpts) {
     });
     const finalMessage = readResult.exitCode === 0 ? readResult.output.trim() : '';
 
-    // rctrl actions — returns formatted text (not JSON); JSON.parse will fail →
-    // actions = undefined per spec.
-    const actionsResult = await exec([bin, 'actions', name], {
+    // rctrl actions --json — the raw ActionManifest (toolsUsed, files*, errors,
+    // finalMessage, turnCount). Unparseable/failed → actions = undefined.
+    const actionsResult = await exec([bin, 'actions', '--json', name], {
       cwd,
       env: mergeEnv(),
       timeoutMs: 30_000,
@@ -219,8 +219,7 @@ export function createRctrlSeam(exec: ExecFn, opts: RctrlSeamOpts) {
         ? diffResult.output.trim()
         : undefined;
 
-    // filesTouched: dedup(filesEdited ∪ filesWritten) from actions manifest.
-    // actions is text → undefined → filesTouched = [].
+    // filesTouched: dedup(filesEdited ∪ filesWritten) from the manifest.
     const filesTouched = extractFilesTouched(actions);
 
     return { reason, finalMessage, actions, diff, filesTouched, telemetry: {} };

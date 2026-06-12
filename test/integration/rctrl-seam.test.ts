@@ -117,6 +117,11 @@ describe.skipIf(!binPresent)('rctrl seam integration', () => {
       expect(result.finalMessage).toContain('hello from pleach');
       expect(Array.isArray(result.filesTouched)).toBe(true);
       expect(result.telemetry).toBeDefined();
+      // actions --json: the manifest arrives parsed, not as undefined text
+      const manifest = result.actions as Record<string, unknown>;
+      expect(manifest).toBeDefined();
+      expect(typeof manifest.turnCount).toBe('number');
+      expect(String(manifest.finalMessage)).toContain('hello from pleach');
     } finally {
       await worker?.kill();
     }
