@@ -75,3 +75,15 @@ export class RebuildRequiredError extends Error {
     this.nodeId = nodeId;
   }
 }
+
+export class TendTransportError extends Error {
+  readonly name = 'TendTransportError';
+  readonly modulePath: string;
+  readonly detail: string;
+
+  constructor(modulePath: string, detail: string) {
+    super(`tend transport error at '${modulePath}': ${detail}`);
+    this.modulePath = modulePath;
+    this.detail = detail;
+  }
+}
