@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# tend feature artifact: wordcount
+# Proof-run polyglot for the pleach P6 proof example.
+# Constructed as a minimal bash+HTML polyglot following the fixture pattern in:
+#   missoula/tests/fixtures/audit-emit/passing/docs/tend/features/__fixture__.tend.html
+#
+# Supports: bash wordcount.tend.html data | jq .
+#           bash wordcount.tend.html --validate
+#           tend audit wordcount --cwd <project-root>
+#           readPolyglotOoData (missoula's file reader)
+: << 'OO_HTML'
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>wordcount · tend</title></head>
+<body>
+<script id="oo-meta" type="application/json">
+{
+  "kind": "feature",
+  "template_version": "proof-minimal",
+  "generated_at": "2026-06-12T00:00:00.000Z"
+}
+</script>
+<script id="oo-data" type="application/json">
+{
+  "id": "wordcount",
+  "title": "Wordcount Library",
+  "status": "in-progress",
+  "what": "A TypeScript/Bun library that counts words, lines, and characters in plain text — exposing a stats() function that combines all three metrics into a single typed object.",
+  "why": "Agent workflows that summarise or gate on content size need reliable, tested text metrics they can import without pulling in a heavy NLP dependency.",
+  "how": "Three pure functions (countWords, countLines, countChars) plus an aggregator stats() in src/count.ts; every function has a co-located bun:test suite.",
+  "steps": [
+    {
+      "id": "s1",
+      "title": "Implement countLines (test-first)",
+      "description": "Add countLines(text: string): number to src/count.ts. Write a failing test first in test/count.test.ts that specifies its behaviour (empty string=0; single line with no trailing newline=1; 'a\\nb'=2; 'a\\nb\\n'=2). Then implement to make it pass.",
+      "status": "pending",
+      "step_type": "agent",
+      "dependencies": []
+    },
+    {
+      "id": "s2",
+      "title": "Implement countChars (test-first)",
+      "description": "Add countChars(text: string): number to src/count.ts. Write a failing test first in test/count.test.ts that specifies its behaviour (empty string=0; 'hello'=5; counts all characters including whitespace and newlines). Then implement to make it pass.",
+      "status": "pending",
+      "step_type": "agent",
+      "dependencies": []
+    },
+    {
+      "id": "s3",
+      "title": "Implement stats() integrating all three counters",
+      "description": "Add stats(text: string): { words: number; lines: number; chars: number } to src/count.ts that delegates to countWords, countLines, countChars. Write a test: stats('hello\\nworld') must return { words: 2, lines: 2, chars: 11 }. Resolve any merge conflicts from s1+s2 branches. All bun tests must pass.",
+      "status": "pending",
+      "step_type": "agent",
+      "dependencies": ["s1", "s2"]
+    }
+  ],
+  "checks": [
+    {
+      "id": "c1",
+      "validates": "what",
+      "method": "synthetic-test",
+      "integration_level": "unit",
+      "description": "All bun tests pass — countWords, countLines, countChars, and stats() each have passing tests covering empty-string and multi-value cases.",
+      "verification_recipe": "Run `bun test` in the project root; all test suites must exit 0 with zero failures. Each of the four exported functions must have at least one passing test in test/count.test.ts.",
+      "negctrl": {
+        "file": "src/count.ts",
+        "find": "return trimmed.split(/\\s+/).length",
+        "replace": "return trimmed.split(/\\s+/).length + 1",
+        "test": "bun test test/count.test.ts"
+      }
+    },
+    {
+      "id": "c2",
+      "validates": "how",
+      "method": "synthetic-test",
+      "integration_level": "integration",
+      "description": "stats('hello\\nworld') returns { words: 2, lines: 2, chars: 11 } — the aggregator composes all three counters correctly with no off-by-one errors.",
+      "verification_recipe": "After stats() is implemented, run `bun test test/count.test.ts` and confirm the stats integration test passes. The test must call stats('hello\\nworld') and assert words===2, lines===2, chars===11."
+    }
+  ]
+}
+</script>
+</body>
+</html>
+OO_HTML
+
+# ── Bash dispatch ────────────────────────────────────────────────────────────
+set -euo pipefail
+SELF="${BASH_SOURCE[0]}"
+case "$SELF" in /*) ;; *) SELF="$(cd "$(dirname "$SELF")" && pwd)/$(basename "$SELF")" ;; esac
+
+_extract_oo_data() {
+  awk '
+    /<script id="oo-data" type="application\/json">/ { in_block=1; next }
+    in_block && /<\/script>/ { exit }
+    in_block { print }
+  ' "$SELF"
+}
+
+verb="${1:-}"
+case "$verb" in
+  data)
+    _extract_oo_data
+    ;;
+  --validate)
+    _extract_oo_data | python3 -m json.tool > /dev/null 2>&1 \
+      && echo "oo-data: valid JSON" \
+      || { echo "oo-data: INVALID JSON" >&2; exit 1; }
+    ;;
+  status)
+    echo "wordcount · in-progress"
+    ;;
+  *)
+    echo "tend feature: wordcount (Wordcount Library)"
+    echo "status: in-progress"
+    echo ""
+    echo "usage: bash wordcount.tend.html [data|--validate|status]"
+    echo "  data        print oo-data JSON block"
+    echo "  --validate  validate oo-data is well-formed JSON"
+    echo "  status      one-line status"
+    ;;
+esac
