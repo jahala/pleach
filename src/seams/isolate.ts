@@ -199,6 +199,32 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     await gitMust(exec, cwd, 'add', '-A', '--', ...files);
   }
 
+  // ── changedFiles ─────────────────────────────────────────────────────────
+
+  async function changedFiles(cwd: string): Promise<string[]> {
+    // --porcelain=v1: "XY path" (or "XY old -> new" for renames). Untracked
+    // ignored files are excluded by default — junk that .gitignore names can
+    // never enter the staging set this way (ledger S1/C2).
+    // NOTE: git() not gitMust() — gitMust trims, which eats the leading
+    // status character's padding on the first porcelain line.
+    const r = await git(exec, cwd, 'status', '--porcelain');
+    if (r.exitCode !== 0) {
+      throw new IsolateCatastrophicError(
+        'git status --porcelain',
+        `exited ${r.exitCode} in ${cwd}:\n${r.output}`,
+      );
+    }
+    const files: string[] = [];
+    for (const line of r.output.split('\n')) {
+      if (line.length < 4) continue;
+      const path = line.slice(3);
+      const arrow = path.indexOf(' -> ');
+      const final = arrow === -1 ? path : path.slice(arrow + 4);
+      if (final.length > 0 && !files.includes(final)) files.push(final);
+    }
+    return files;
+  }
+
   // ── commitBranch ─────────────────────────────────────────────────────────
 
   async function commitBranch(
@@ -222,5 +248,5 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     return r.output.trim() || null;
   }
 
-  return { isolate, scanMarkers, stage, commitBranch, refSha };
+  return { isolate, scanMarkers, stage, changedFiles, commitBranch, refSha };
 }
