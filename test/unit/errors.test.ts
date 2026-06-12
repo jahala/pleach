@@ -7,6 +7,7 @@ import {
   PlanInvalidError,
   RebuildRequiredError,
   TendTransportError,
+  WorkerSeamError,
   WorkerSpawnError,
 } from '../../src/core/errors.ts';
 
@@ -79,6 +80,17 @@ describe('WorkerSpawnError', () => {
     expect(e).toBeInstanceOf(Error);
     expect(e.name).toBe('WorkerSpawnError');
     expect(e.detail).toBe('rctrl spawn exited 1');
+  });
+});
+
+describe('WorkerSeamError', () => {
+  test('instanceof + fields', () => {
+    const e = new WorkerSeamError('send subprocess exited 1: error output');
+    expect(e).toBeInstanceOf(WorkerSeamError);
+    expect(e).toBeInstanceOf(Error);
+    expect(e.name).toBe('WorkerSeamError');
+    expect(e.detail).toBe('send subprocess exited 1: error output');
+    expect(e.message).toContain('send subprocess exited 1: error output');
   });
 });
 
