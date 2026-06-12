@@ -4,8 +4,8 @@ import type {
   ConductorDeps,
   ExecFn,
   ExecResult,
-  Isolation,
   IsolateSeam,
+  Isolation,
   JournalSeam,
   LockHandle,
   LockSeam,
@@ -46,7 +46,9 @@ export class EventLog {
   }
   // Sequence number of the first event matching kind (+optional node), or -1.
   first(kind: string, node?: string): number {
-    const e = this.events.find((ev) => ev.kind === kind && (node === undefined || ev.node === node));
+    const e = this.events.find(
+      (ev) => ev.kind === kind && (node === undefined || ev.node === node),
+    );
     return e ? e.at : -1;
   }
   last(kind: string, node?: string): number {
@@ -167,9 +169,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   // ── exec ──────────────────────────────────────────────────────────────────
   const exec: ExecFn = async (argv, execOpts) => {
     log.push('exec', undefined, argv.join(' '));
-    const r = opts.execScript
-      ? opts.execScript(argv, execOpts.cwd)
-      : { output: '', exitCode: 0 };
+    const r = opts.execScript ? opts.execScript(argv, execOpts.cwd) : { output: '', exitCode: 0 };
     return r;
   };
 
