@@ -15,18 +15,30 @@ export interface RctrlSeamOpts {
   // Extra env vars passed as --env KEY=VAL to rctrl spawn — reach the worker.
   // Use for FAKE_CLAUDE_* in tests; production typically leaves this empty.
   workerEnv?: Record<string, string>;
-  // Tool allowlist for spawned workers. Real claude workers hit permission
-  // prompts without it (reason 'input' → the node blocks). Passed only when
-  // the resolved provider is claude — rctrl rejects it for codex/gemini/
-  // opencode by design (their work-or-error guard), so the auditor on codex
-  // spawns without scoping (v1 limitation, documented).
+  // Tool allowlist for spawned workers. Claude-only (rctrl rejects it for other
+  // providers by design). A curated allowlist CANNOT cover MCP tools, so it is
+  // not enough to keep an autonomous worker from blocking — see permissionMode.
   allowedTools?: string;
+  // Claude permission mode (e.g. 'bypassPermissions'). The real fix for
+  // unattended workers: a curated allowedTools list can't enumerate the MCP
+  // tools the environment injects, so the worker blocks on the first one. The
+  // conductor's safety is external (disposable worktree + cross-provider audit
+  // + gates), so bypassing in-worker prompts is correct here. Claude-only;
+  // rctrl rejects it for other providers (so the codex auditor spawns without
+  // it — codex's own approval policy governs there).
+  permissionMode?: string;
 }
 
 // The concrete return type is structurally compatible with RctrlSeam; the
 // inferred type exposes the extra __name field on workers for test access.
 export function createRctrlSeam(exec: ExecFn, opts: RctrlSeamOpts) {
-  const { bin, env: seamEnv = {}, workerEnv: seamWorkerEnv = {}, allowedTools } = opts;
+  const {
+    bin,
+    env: seamEnv = {},
+    workerEnv: seamWorkerEnv = {},
+    allowedTools,
+    permissionMode,
+  } = opts;
 
   // Merge seam-level env into every exec call.
   function mergeEnv(extra?: Record<string, string>): Record<string, string> {
@@ -45,8 +57,12 @@ export function createRctrlSeam(exec: ExecFn, opts: RctrlSeamOpts) {
     const argv: string[] = [bin, 'spawn', '--name', name, '--cwd', spec.cwd];
     if (spec.provider !== undefined) argv.push('--provider', spec.provider);
     if (spec.model !== undefined) argv.push('--model', spec.model);
-    if (allowedTools !== undefined && (spec.provider ?? 'claude') === 'claude') {
+    const isClaude = (spec.provider ?? 'claude') === 'claude';
+    if (allowedTools !== undefined && isClaude) {
       argv.push('--allowed-tools', allowedTools);
+    }
+    if (permissionMode !== undefined && isClaude) {
+      argv.push('--permission-mode', permissionMode);
     }
     // Pass per-worker env vars as --env KEY=VAL flags (reaches the worker process).
     for (const [k, v] of Object.entries(seamWorkerEnv)) {
