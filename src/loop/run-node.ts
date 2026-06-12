@@ -218,7 +218,20 @@ export async function runNode(
           return {
             verdict: failedVerdict(node, attempts, {
               // node.accept.audit is defined inside this block.
-              gate: { ran: node.accept.audit.command, exitCode: -1 },
+              gate: { ran: `${node.accept.audit.command} (egress unparseable)`, exitCode: -1 },
+            }),
+          };
+        }
+        if (auditOutcome.kind === 'worker-fault') {
+          // The auditor died / timed out / blocked — it never returned a verdict.
+          // Distinct from a fail verdict; record the reason for the journal.
+          await disposeQuiet(iso);
+          return {
+            verdict: failedVerdict(node, attempts, {
+              gate: {
+                ran: `${node.accept.audit.command} (auditor ${auditOutcome.reason})`,
+                exitCode: -1,
+              },
             }),
           };
         }
@@ -262,6 +275,7 @@ export async function runNode(
 type AuditOutcome =
   | { kind: 'pass'; result: AuditResult }
   | { kind: 'fail'; evidence: string }
+  | { kind: 'worker-fault'; reason: string; message?: string }
   | { kind: 'parse-exhausted' };
 
 async function runAudit(
@@ -275,18 +289,24 @@ async function runAudit(
 
   for (let reaudit = 0; reaudit < REAUDIT_BUDGET; reaudit += 1) {
     const worker = await deps.rctrl.spawnWorker({ provider: audit.provider, cwd });
-    let finalMessage: string;
+    let res: WorkerResult;
     try {
       await worker.send(audit.command);
-      const res = await worker.wait({ timeoutMs });
-      finalMessage = res.finalMessage;
+      res = await worker.wait({ timeoutMs });
     } finally {
       await worker.kill();
     }
 
+    // A non-stop auditor produced no verdict to read — it died, timed out, or
+    // is held at a prompt. Feeding '' to the JSON parser would mis-label this
+    // as bad egress; surface it honestly so the journal records WHY.
+    if (res.reason !== 'stop') {
+      return { kind: 'worker-fault', reason: res.reason ?? 'aborted', message: res.message };
+    }
+
     let parsed: AuditResult;
     try {
-      const raw = extractAuditJson(finalMessage);
+      const raw = extractAuditJson(res.finalMessage);
       parsed = AuditResultSchema.parse(raw);
     } catch (err) {
       // Zod failure or AuditParseError → reaudit (bad egress), bounded.
