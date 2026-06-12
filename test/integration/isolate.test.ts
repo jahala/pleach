@@ -355,3 +355,22 @@ test('ledger: dispose — worktree removed; second dispose is a no-op', async ()
     await repo.cleanup();
   }
 });
+
+// ── lead review fixes ────────────────────────────────────────────────────────
+
+// ledger: C1 — a marker gate that cannot run must throw, never report clean
+test('lead-review: scanMarkers on a non-repo path throws IsolateCatastrophicError', async () => {
+  const { exec } = await import('../../src/seams/exec.ts');
+  const seam = createIsolateSeam(exec, '/nonexistent-pleach-repo');
+  await expect(seam.scanMarkers('/nonexistent-pleach-dir')).rejects.toThrow(
+    IsolateCatastrophicError,
+  );
+});
+
+test('lead-review: stage into a non-repo path throws IsolateCatastrophicError (typed)', async () => {
+  const { exec } = await import('../../src/seams/exec.ts');
+  const seam = createIsolateSeam(exec, '/nonexistent-pleach-repo');
+  await expect(seam.stage('/nonexistent-pleach-dir', ['x.txt'])).rejects.toThrow(
+    IsolateCatastrophicError,
+  );
+});
