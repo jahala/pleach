@@ -15,12 +15,18 @@ export interface RctrlSeamOpts {
   // Extra env vars passed as --env KEY=VAL to rctrl spawn — reach the worker.
   // Use for FAKE_CLAUDE_* in tests; production typically leaves this empty.
   workerEnv?: Record<string, string>;
+  // Tool allowlist for spawned workers. Real claude workers hit permission
+  // prompts without it (reason 'input' → the node blocks). Passed only when
+  // the resolved provider is claude — rctrl rejects it for codex/gemini/
+  // opencode by design (their work-or-error guard), so the auditor on codex
+  // spawns without scoping (v1 limitation, documented).
+  allowedTools?: string;
 }
 
 // The concrete return type is structurally compatible with RctrlSeam; the
 // inferred type exposes the extra __name field on workers for test access.
 export function createRctrlSeam(exec: ExecFn, opts: RctrlSeamOpts) {
-  const { bin, env: seamEnv = {}, workerEnv: seamWorkerEnv = {} } = opts;
+  const { bin, env: seamEnv = {}, workerEnv: seamWorkerEnv = {}, allowedTools } = opts;
 
   // Merge seam-level env into every exec call.
   function mergeEnv(extra?: Record<string, string>): Record<string, string> {
@@ -39,6 +45,9 @@ export function createRctrlSeam(exec: ExecFn, opts: RctrlSeamOpts) {
     const argv: string[] = [bin, 'spawn', '--name', name, '--cwd', spec.cwd];
     if (spec.provider !== undefined) argv.push('--provider', spec.provider);
     if (spec.model !== undefined) argv.push('--model', spec.model);
+    if (allowedTools !== undefined && (spec.provider ?? 'claude') === 'claude') {
+      argv.push('--allowed-tools', allowedTools);
+    }
     // Pass per-worker env vars as --env KEY=VAL flags (reaches the worker process).
     for (const [k, v] of Object.entries(seamWorkerEnv)) {
       argv.push('--env', `${k}=${v}`);

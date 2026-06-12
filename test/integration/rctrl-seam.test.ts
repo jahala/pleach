@@ -74,8 +74,9 @@ async function teardownState(): Promise<void> {
 
 type Seam = ReturnType<typeof createRctrlSeam>;
 
-function makeSeam(): Seam {
+function makeSeam(extra: { allowedTools?: string } = {}): Seam {
   return makeRctrl(exec, {
+    ...extra,
     bin: RCTRL_BIN,
     env: {
       RCTRL_STATE: stateDir,
@@ -104,7 +105,10 @@ describe.skipIf(!binPresent)('rctrl seam integration', () => {
   // ledger: D2 — happy path: spawn → send → wait → stop, non-empty finalMessage,
   // filesTouched array → kill
   test('happy path: spawn → send → wait(stop) → kill', async () => {
-    const seam = makeSeam();
+    // allowedTools rides the spawn for claude workers — the real rctrl binary
+    // validates the flag path end-to-end (it would exit 2 on a non-claude
+    // provider; for claude it scopes permissions so real workers don't block).
+    const seam = makeSeam({ allowedTools: 'Read,Write,Edit,Bash' });
     let worker: Awaited<ReturnType<Seam['spawnWorker']>> | undefined;
     try {
       worker = await seam.spawnWorker({ cwd: '/tmp' });
