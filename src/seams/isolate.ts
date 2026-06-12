@@ -18,7 +18,10 @@ async function git(
 async function gitMust(exec: ExecFn, cwd: string, ...args: string[]): Promise<string> {
   const r = await git(exec, cwd, ...args);
   if (r.exitCode !== 0) {
-    throw new Error(`git -C ${cwd} ${args.join(' ')} exited ${r.exitCode}:\n${r.output}`);
+    throw new IsolateCatastrophicError(
+      `git ${args.join(' ')}`,
+      `exited ${r.exitCode} in ${cwd}:\n${r.output}`,
+    );
   }
   return r.output.trim();
 }
@@ -145,7 +148,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
 
       // exit >1: catastrophic
       // Try to abort any in-progress merge
-      await git(exec, worktreePath, 'merge', '--abort').catch(() => undefined);
+      await git(exec, worktreePath, 'merge', '--abort');
       await dispose();
       throw new IsolateCatastrophicError(
         ref,
@@ -182,9 +185,10 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
         .filter(Boolean);
     }
 
-    // exit >1: git error — treat as clean rather than crashing (defensive)
-    // This can happen in fresh worktrees with no tracked files.
-    return [];
+    // exit >1: git itself failed. A gate that cannot run must fail CLOSED —
+    // reporting "clean" here would let conflict markers reach a verified
+    // branch (ledger C1).
+    throw new IsolateCatastrophicError('git grep', `exited ${r.exitCode} in ${cwd}:\n${r.output}`);
   }
 
   // ── stage ────────────────────────────────────────────────────────────────

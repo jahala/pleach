@@ -18,12 +18,20 @@ export const exec: ExecFn = async (argv, opts) => {
 
   const mergedEnv = env ? { ...process.env, ...env } : process.env;
 
-  const proc = Bun.spawn(argv as string[], {
-    cwd,
-    env: mergedEnv,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
+  // Totality: spawn itself can fail (nonexistent cwd or binary). The contract
+  // is "the return type says so" — resolve with exit 127 (command-not-found
+  // convention) instead of rejecting with an untyped Error.
+  let proc: Bun.Subprocess<'ignore', 'pipe', 'pipe'>;
+  try {
+    proc = Bun.spawn(argv as string[], {
+      cwd,
+      env: mergedEnv,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+  } catch (err) {
+    return { output: err instanceof Error ? err.message : String(err), exitCode: 127 };
+  }
 
   let output = '';
 
