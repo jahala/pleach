@@ -374,3 +374,35 @@ test('lead-review: stage into a non-repo path throws IsolateCatastrophicError (t
     IsolateCatastrophicError,
   );
 });
+
+// ledger: S1/C2 — staging fallback: actual changes only, gitignored junk excluded
+test('lead: changedFiles lists modified + untracked-unignored, never ignored junk', async () => {
+  const { exec } = await import('../../src/seams/exec.ts');
+  const repo = await mkdtemp(join(tmpdir(), 'pleach-cf-'));
+  const run = async (...args: string[]) => {
+    const r = await exec(['git', '-C', repo, ...args], { cwd: repo });
+    if (r.exitCode !== 0) throw new Error(r.output);
+  };
+  try {
+    await run('init', '-q');
+    await run('config', 'user.email', 't@t');
+    await run('config', 'user.name', 't');
+    await writeFile(join(repo, 'a.txt'), 'one\n');
+    await writeFile(join(repo, '.gitignore'), 'junk/\n');
+    await run('add', '-A');
+    await run('commit', '-q', '-m', 'init');
+
+    await writeFile(join(repo, 'a.txt'), 'two\n'); // modified tracked
+    await writeFile(join(repo, 'b.txt'), 'new\n'); // untracked unignored
+    await mkdir(join(repo, 'junk'), { recursive: true });
+    await writeFile(join(repo, 'junk', 'x.bin'), 'zzz'); // ignored
+
+    const seam = createIsolateSeam(exec, repo);
+    const files = await seam.changedFiles(repo);
+    expect(files).toContain('a.txt');
+    expect(files).toContain('b.txt');
+    expect(files.some((f) => f.startsWith('junk'))).toBe(false);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+  }
+});

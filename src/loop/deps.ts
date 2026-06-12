@@ -33,6 +33,11 @@ export interface IsolateSeam {
   scanMarkers(cwd: string): Promise<string[]>;
   // Scoped staging — only the given paths, never `git add -A` (ledger S1).
   stage(cwd: string, files: readonly string[]): Promise<void>;
+  // Paths (relative) with uncommitted changes — tracked modifications plus
+  // untracked-unignored files. The loop's staging fallback when the worker
+  // manifest is unavailable; combined with never re-staging at commit time it
+  // keeps auditor droppings out of verified commits (ledger S1/C2).
+  changedFiles(cwd: string): Promise<string[]>;
   // Commit what is staged and force-point `branch` at the new commit.
   commitBranch(cwd: string, branch: string, message: string): Promise<{ sha: string }>;
   // Resolve a ref to a commit SHA in the repo containing `cwd`; null if the
