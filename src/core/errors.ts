@@ -66,6 +66,16 @@ export class WorkerSpawnError extends Error {
   }
 }
 
+export class WorkerSeamError extends Error {
+  readonly name = 'WorkerSeamError';
+  readonly detail: string;
+
+  constructor(detail: string) {
+    super(`worker seam error: ${detail}`);
+    this.detail = detail;
+  }
+}
+
 export class RebuildRequiredError extends Error {
   readonly name = 'RebuildRequiredError';
   readonly nodeId: string;
