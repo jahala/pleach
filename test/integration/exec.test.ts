@@ -55,3 +55,10 @@ describe('exec seam', () => {
     expect(result.output).toContain('err');
   });
 });
+
+// Totality: spawn failure (nonexistent cwd) resolves with exit 127 — never rejects.
+test('lead-review: nonexistent cwd resolves with exitCode 127, does not reject', async () => {
+  const r = await exec(['git', 'status'], { cwd: '/nonexistent-pleach-cwd' });
+  expect(r.exitCode).toBe(127);
+  expect(r.output.length).toBeGreaterThan(0);
+});
