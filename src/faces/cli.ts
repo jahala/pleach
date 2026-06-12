@@ -31,8 +31,9 @@ Flags (run):
   --journal PATH          Run journal JSONL (default: <repo-root>/.git/pleach/journal.jsonl)
   --rctrl-bin PATH        rctrl binary (default: $PLEACH_RCTRL_BIN or 'rctrl' on PATH)
   --tend-module PATH      tend ingester module path (default: $PLEACH_TEND_MODULE; required)
-  --allowed-tools LIST    Tool allowlist for claude workers (e.g. "Read,Write,Edit,Bash") —
-                          without it real workers block on permission prompts
+  --allowed-tools LIST    Tool allowlist for claude workers (cannot cover MCP tools)
+  --permission-mode MODE  Claude permission mode for workers (default: bypassPermissions —
+                          unattended workers can't answer prompts; safety is external)
 
 Landing is manual by design: verified work is published as node/<id> branches;
 merge the integration node's branch yourself (git merge node/<feature>).
@@ -52,6 +53,7 @@ interface Flags {
   rctrlBin: string;
   tendModule?: string;
   allowedTools?: string;
+  permissionMode: string;
 }
 
 class UsageError extends Error {
@@ -63,6 +65,10 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
   const flags: Flags = {
     repoRoot: process.cwd(),
     rctrlBin: process.env.PLEACH_RCTRL_BIN ?? 'rctrl',
+    // Workers run unattended — default to bypassing in-worker permission prompts
+    // (a curated allowlist can't cover MCP tools). Safety is external: disposable
+    // worktree + cross-provider audit + gates. Override with --permission-mode.
+    permissionMode: 'bypassPermissions',
   };
   if (process.env.PLEACH_TEND_MODULE !== undefined) {
     flags.tendModule = process.env.PLEACH_TEND_MODULE;
@@ -110,6 +116,10 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         break;
       case '--allowed-tools':
         flags.allowedTools = takeValue(arg, next);
+        i += 1;
+        break;
+      case '--permission-mode':
+        flags.permissionMode = takeValue(arg, next);
         i += 1;
         break;
       default:
@@ -160,6 +170,7 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     journal: createJournal(journalPath),
     rctrl: createRctrlSeam(exec, {
       bin: flags.rctrlBin,
+      permissionMode: flags.permissionMode,
       ...(flags.allowedTools !== undefined ? { allowedTools: flags.allowedTools } : {}),
     }),
     tend: createTendSeam(await createModuleTransport(flags.tendModule)),
