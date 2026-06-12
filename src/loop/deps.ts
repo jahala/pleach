@@ -48,6 +48,9 @@ export interface WorkerResult {
   filesTouched: string[];
   exitCode?: number;
   reason?: 'stop' | 'dead' | 'timeout' | 'aborted' | 'input' | 'idle';
+  // The blocking prompt text when reason is input/idle — the loop carries it
+  // into Verdict.evidence.blockedReason (contract v1.1.1).
+  message?: string;
   telemetry: { tokens?: number; contextPct?: number; compacted?: boolean };
 }
 
