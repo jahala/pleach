@@ -76,7 +76,7 @@ export interface SpawnCtx {
   spawnIndex: number; // 0-based per (node, role)
 }
 
-export type WaitScript = (ctx: SpawnCtx, waitIndex: number) => WorkerResult;
+export type WaitScript = (ctx: SpawnCtx, waitIndex: number) => WorkerResult | Promise<WorkerResult>;
 
 export function stop(over: Partial<WorkerResult> = {}): WorkerResult {
   return { finalMessage: 'done', filesTouched: [], reason: 'stop', telemetry: {}, ...over };
@@ -128,6 +128,9 @@ export interface HarnessOpts {
   changedByNode?: Record<string, string[]>;
   // marker files left in cwd, keyed by node id (simulates auditor droppings).
   markersByNode?: Record<string, string[]>;
+  // Awaited inside dispose(node) between 'dispose-start' and 'dispose' — lets a
+  // test hold a worktree open to expose scheduling races.
+  disposeDelay?: (nodeId: string) => Promise<void>;
 }
 
 export interface Harness {
@@ -194,6 +197,8 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
         cwd,
         conflictFiles,
         async dispose() {
+          log.push('dispose-start', node.id, cwd);
+          if (opts.disposeDelay) await opts.disposeDelay(node.id);
           log.push('dispose', node.id, cwd);
         },
       };
@@ -246,7 +251,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
           log.push('send', nodeId, `${role}:${text}`);
         },
         async wait() {
-          const res = waitScript(ctx, waitIndex);
+          const res = await waitScript(ctx, waitIndex);
           waitIndex += 1;
           log.push('wait', nodeId, `${role}:${res.reason}`);
           return res;
