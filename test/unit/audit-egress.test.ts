@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { extractAuditJson } from '../../src/core/audit-egress.ts';
+import { buildAuditPrompt, extractAuditJson } from '../../src/core/audit-egress.ts';
 import { AuditParseError } from '../../src/core/errors.ts';
 
 // ledger: C4 — untruncated audit egress; the LAST fenced tend-audit-result block
@@ -82,5 +82,24 @@ describe('extractAuditJson — failure modes throw AuditParseError', () => {
 
   test('empty string → throws AuditParseError', () => {
     expect(() => extractAuditJson('')).toThrow(AuditParseError);
+  });
+});
+
+// The defect the P6 proof named: sending the auditor the BARE command leaves the
+// deterministic tend-audit-result block in the tool's stdout while the agent
+// replies with a prose summary — extractAuditJson reads the agent's message, so
+// it finds no block ("egress unparseable"). buildAuditPrompt forces the block
+// into the reply. This module owns both halves of the egress contract.
+describe('buildAuditPrompt — elicits a parseable egress', () => {
+  test('embeds the exact command to run', () => {
+    const cmd = 'bun /missoula/src/bin/tend.ts audit wordcount';
+    expect(buildAuditPrompt(cmd)).toContain(cmd);
+  });
+
+  test('instructs the auditor to reproduce the tend-audit-result block verbatim', () => {
+    const p = buildAuditPrompt('audit-cmd');
+    expect(p).toContain(FENCE); // names the exact fence the parser reads
+    expect(p).toMatch(/verbatim/i);
+    expect(p).toMatch(/do not summarize/i);
   });
 });
