@@ -99,8 +99,9 @@ describe('createTendSeam — queue serialization', () => {
 
     // No overlap: every start ≥ previous end.
     for (let i = 1; i < records.length; i++) {
-      const prev = records[i - 1]!;
-      const curr = records[i]!;
+      const prev = records[i - 1];
+      const curr = records[i];
+      if (!prev || !curr) continue;
       expect(curr.startMs).toBeGreaterThanOrEqual(prev.endMs);
     }
   });

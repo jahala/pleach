@@ -214,7 +214,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       log.push('changedFiles', undefined, cwd);
       return git.changed.get(cwd) ?? [];
     },
-    async commitBranch(cwd, branch, _message): Promise<{ sha: string }> {
+    async commitBranch(_cwd, branch, _message): Promise<{ sha: string }> {
       const sha = git.newSha();
       git.refs.set(branch, sha);
       log.push('commitBranch', branch, sha);
