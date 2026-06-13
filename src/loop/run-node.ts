@@ -1,5 +1,5 @@
 import { toArgv } from '../core/argv.ts';
-import { extractAuditJson } from '../core/audit-egress.ts';
+import { buildAuditPrompt, extractAuditJson } from '../core/audit-egress.ts';
 import { classify } from '../core/classify.ts';
 import {
   AuditParseError,
@@ -291,7 +291,7 @@ async function runAudit(
     const worker = await deps.rctrl.spawnWorker({ provider: audit.provider, cwd });
     let res: WorkerResult;
     try {
-      await worker.send(audit.command);
+      await worker.send(buildAuditPrompt(audit.command));
       res = await worker.wait({ timeoutMs });
     } finally {
       await worker.kill();
