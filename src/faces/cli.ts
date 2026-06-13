@@ -8,7 +8,7 @@ import {
 } from '../core/errors.ts';
 import { PlanSchema } from '../core/plan.ts';
 import { validatePlan } from '../core/validate.ts';
-import type { ConductorDeps } from '../loop/deps.ts';
+import type { ConductorDeps, RunSummary } from '../loop/deps.ts';
 import { runPlan } from '../loop/run-plan.ts';
 import { exec } from '../seams/exec.ts';
 import { createIsolateSeam } from '../seams/isolate.ts';
@@ -32,15 +32,16 @@ Flags (run):
   --rctrl-bin PATH        rctrl binary (default: $PLEACH_RCTRL_BIN or 'rctrl' on PATH)
   --tend-module PATH      tend ingester module path (default: $PLEACH_TEND_MODULE; required)
   --allowed-tools LIST    Tool allowlist for claude workers (cannot cover MCP tools)
-  --permission-mode MODE  Claude permission mode for workers (default: bypassPermissions —
-                          unattended workers can't answer prompts; safety is external)
+  --permission-mode MODE  Permission/approval mode for workers (default: bypassPermissions —
+                          unattended workers can't answer prompts; safety is external). Rides
+                          claude (any mode) and codex (bypassPermissions only).
 
 Landing is manual by design: verified work is published as node/<id> branches;
 merge the integration node's branch yourself (git merge node/<feature>).
 
 Exit codes:
-  0  every plan node closed
-  1  one or more nodes failed / blocked / skipped (summary on stdout says which)
+  0  every plan node closed (verified)
+  1  one or more nodes failed / partial / blocked / skipped (summary on stdout says which)
   2  usage error, unreadable or invalid plan
   3  another conductor holds the lock for this (repo, source)
 `;
@@ -156,6 +157,20 @@ async function verbValidate(planPath: string): Promise<number> {
   return 0;
 }
 
+// Pure: map a RunSummary to the process exit code. 0 only when every node closed
+// (verified). A 'partial' node — work landed and every gate passed, but tend
+// declined to verify-close — is NOT success (the run didn't achieve a verified
+// close), so it maps to 1 alongside failed/blocked/skipped. The JSON summary on
+// stdout carries the per-bucket breakdown for a caller that must tell them apart.
+export function summaryExitCode(summary: RunSummary): number {
+  const clean =
+    summary.failed.length === 0 &&
+    summary.partial.length === 0 &&
+    summary.blocked.length === 0 &&
+    summary.skipped.length === 0;
+  return clean ? 0 : 1;
+}
+
 async function verbRun(planPath: string, flags: Flags): Promise<number> {
   const plan = await readPlan(planPath);
   if (flags.tendModule === undefined) {
@@ -184,9 +199,7 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
   });
 
   process.stdout.write(`${JSON.stringify(summary)}\n`);
-  const allClosed =
-    summary.failed.length === 0 && summary.blocked.length === 0 && summary.skipped.length === 0;
-  return allClosed ? 0 : 1;
+  return summaryExitCode(summary);
 }
 
 export async function runCli(argv: readonly string[]): Promise<number> {

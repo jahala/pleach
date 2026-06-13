@@ -11,7 +11,7 @@ import { type RunNodeResult, runNode } from './run-node.ts';
 // commit-before-emit + dual-close decision. Composes injected seams only.
 //
 // Concurrency model (the v0.3 shape): ready() = pending nodes whose needs are
-// all closed and that aren't failed/blocked/inflight; launch up to a semaphore
+// all closed and that aren't failed/partial/blocked/inflight; launch up to a semaphore
 // cap; Promise.race the inflight set; node promises NEVER reject (.catch maps a
 // surprise to a failed verdict). The closed-then-dispose ordering happens
 // inside each node's inflight promise so a dependent can never isolate against
@@ -89,21 +89,30 @@ async function runUnderLock(
 
   const failed = new Set<string>();
   const blocked = new Set<string>();
+  // Audit nodes that reached a 'done' verdict (work committed, gates green) but
+  // tend declined to verify-close — published, unverified, terminal (never re-run).
+  const partial = new Set<string>();
   const inflight = new Map<string, Promise<void>>();
 
-  // A node is schedulable when pending, not yet failed/blocked/inflight, and
-  // all its needs are closed.
+  // A node is schedulable when pending, not yet failed/blocked/partial/inflight,
+  // and all its needs are closed.
   function ready(): Node[] {
     const out: Node[] = [];
     for (const node of plan.nodes) {
-      if (closed.has(node.id) || failed.has(node.id) || blocked.has(node.id)) continue;
+      if (
+        closed.has(node.id) ||
+        failed.has(node.id) ||
+        blocked.has(node.id) ||
+        partial.has(node.id)
+      )
+        continue;
       if (inflight.has(node.id)) continue;
       if (node.needs.every((d) => closed.has(d))) out.push(node);
     }
     return out;
   }
 
-  // Run one node to its terminal effect on closed/failed/blocked. Never rejects.
+  // Run one node to its terminal effect on closed/failed/partial/blocked. Never rejects.
   async function runOne(node: Node): Promise<void> {
     const baseRefs = baseRefsFor(node, baseRefForClosed);
     await deps.journal.append({ event: 'node-start', node: node.id });
@@ -224,9 +233,12 @@ async function runUnderLock(
       baseRefForClosed.set(node.id, `node/${node.id}`);
       await deps.journal.append({ event: 'closed', node: node.id, sha });
     } else {
-      // tend refused to close an audit node — the branch was published but the
-      // node never closes; dependents are skipped.
-      failed.add(node.id);
+      // tend declined to verify-close this audit node: the branch IS published
+      // (node/<id> committed, every conductor gate green) but tend won't flip the
+      // feature to verified. That's 'partial', not 'failed' — nothing broke, it's
+      // just unverified. Dependents stay skipped (they can't build on an unverified
+      // base); a caller must not retry it as a failure.
+      partial.add(node.id);
       await deps.journal.append({ event: 'not-closed', node: node.id });
     }
   }
@@ -244,12 +256,15 @@ async function runUnderLock(
   }
 
   const skipped = plan.nodes
-    .filter((n) => !closed.has(n.id) && !failed.has(n.id) && !blocked.has(n.id))
+    .filter(
+      (n) => !closed.has(n.id) && !failed.has(n.id) && !blocked.has(n.id) && !partial.has(n.id),
+    )
     .map((n) => n.id);
 
   const summary: RunSummary = {
     closed: plan.nodes.filter((n) => closed.has(n.id)).map((n) => n.id),
     failed: [...failed],
+    partial: [...partial],
     skipped,
     blocked: [...blocked],
   };

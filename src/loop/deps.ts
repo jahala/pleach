@@ -102,6 +102,13 @@ export interface ConductorDeps {
 export interface RunSummary {
   closed: string[];
   failed: string[];
+  // Nodes that ran to a 'done' verdict — work committed to node/<id>, every
+  // conductor gate (build, smoke, cross-provider audit) green — but tend's
+  // emitVerdict declined to verify-close (e.g. a check lacked a discriminating
+  // negative control). The branch is published; the node is NOT failed (nothing
+  // broke) and NOT closed (not verified). Dependents are skipped. A caller must
+  // not retry these as failures — the build is already good.
+  partial: string[];
   skipped: string[];
   // Nodes whose worker settled at a permission prompt (Verdict status
   // 'blocked') — neither failed-retryable nor closed; a human attaches.
