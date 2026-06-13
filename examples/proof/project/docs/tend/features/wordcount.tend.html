@@ -75,7 +75,13 @@
       "method": "synthetic-test",
       "integration_level": "integration",
       "description": "stats('hello\\nworld') returns { words: 2, lines: 2, chars: 11 } — the aggregator composes all three counters correctly with no off-by-one errors.",
-      "verification_recipe": "After stats() is implemented, run `bun test test/count.test.ts` and confirm the stats integration test passes. The test must call stats('hello\\nworld') and assert words===2, lines===2, chars===11."
+      "verification_recipe": "After stats() is implemented, run `bun test test/count.test.ts` and confirm the stats integration test passes. The test must call stats('hello\\nworld') and assert words===2, lines===2, chars===11.",
+      "negctrl": {
+        "file": "src/count.ts",
+        "find": "chars: countChars(text)",
+        "replace": "chars: countChars(text) + 1",
+        "test": "bun test test/count.test.ts"
+      }
     }
   ]
 }
