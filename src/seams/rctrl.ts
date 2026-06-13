@@ -19,13 +19,15 @@ export interface RctrlSeamOpts {
   // providers by design). A curated allowlist CANNOT cover MCP tools, so it is
   // not enough to keep an autonomous worker from blocking — see permissionMode.
   allowedTools?: string;
-  // Claude permission mode (e.g. 'bypassPermissions'). The real fix for
-  // unattended workers: a curated allowedTools list can't enumerate the MCP
-  // tools the environment injects, so the worker blocks on the first one. The
+  // Permission/approval mode for workers (e.g. 'bypassPermissions'). The real fix
+  // for unattended workers: a curated allowedTools list can't enumerate the MCP
+  // tools the environment injects, so the worker blocks on the first prompt. The
   // conductor's safety is external (disposable worktree + cross-provider audit
-  // + gates), so bypassing in-worker prompts is correct here. Claude-only;
-  // rctrl rejects it for other providers (so the codex auditor spawns without
-  // it — codex's own approval policy governs there).
+  // + gates), so bypassing in-worker prompts is correct here. Rides claude (any
+  // mode) AND codex ('bypassPermissions' → rctrl maps it to codex's
+  // --dangerously-bypass-approvals-and-sandbox so an unattended auditor doesn't
+  // block on codex's approval prompt). Suppressed for other providers, which
+  // rctrl rejects. rctrl is the enforcing guardrail, not the seam.
   permissionMode?: string;
 }
 
@@ -57,11 +59,15 @@ export function createRctrlSeam(exec: ExecFn, opts: RctrlSeamOpts) {
     const argv: string[] = [bin, 'spawn', '--name', name, '--cwd', spec.cwd];
     if (spec.provider !== undefined) argv.push('--provider', spec.provider);
     if (spec.model !== undefined) argv.push('--model', spec.model);
-    const isClaude = (spec.provider ?? 'claude') === 'claude';
-    if (allowedTools !== undefined && isClaude) {
+    const provider = spec.provider ?? 'claude';
+    if (allowedTools !== undefined && provider === 'claude') {
       argv.push('--allowed-tools', allowedTools);
     }
-    if (permissionMode !== undefined && isClaude) {
+    // permissionMode rides claude (any mode) AND codex ('bypassPermissions' →
+    // codex's --dangerously-bypass-approvals-and-sandbox). rctrl validates and
+    // rejects per-provider; suppressing it elsewhere (gemini) avoids a spawn rctrl
+    // would reject.
+    if (permissionMode !== undefined && (provider === 'claude' || provider === 'codex')) {
       argv.push('--permission-mode', permissionMode);
     }
     // Pass per-worker env vars as --env KEY=VAL flags (reaches the worker process).
