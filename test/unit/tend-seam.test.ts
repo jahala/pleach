@@ -13,6 +13,8 @@
  *     and execute in FIFO order.
  *  2. Set→Map adaptation: a Set<string> from readClosed becomes Map<id, null>.
  *  3. Map pass-through: a Map<string, string | null> is returned as-is.
+ *  4. Source translation: plan.source (feature polyglot path) is translated to
+ *     the project root before the transport is called (ingester requires the root).
  */
 import { describe, expect, test } from 'bun:test';
 import type { Verdict } from '../../src/core/plan.ts';
@@ -157,5 +159,72 @@ describe('createTendSeam — Set→Map adaptation', () => {
     const result = await seam.emitVerdict(makeVerdict('n1'), '/tmp/garden');
 
     expect(result).toEqual({ closed: false });
+  });
+});
+
+// ── Source translation ────────────────────────────────────────────────────────
+// ledger: TEND-SRC1 — plan.source is the feature polyglot path (convention:
+// {root}/docs/tend/features/{id}.tend.html). The transport (ingester) requires
+// the project root. The seam adapter must translate before calling the transport.
+
+describe('createTendSeam — source translation', () => {
+  test('feature polyglot path is translated to project root for readClosed', async () => {
+    const received: string[] = [];
+    const transport: TendTransport = {
+      async readClosed(source) {
+        received.push(source);
+        return new Set<string>();
+      },
+      async emitVerdict(_v, _source) {
+        return { closed: false };
+      },
+    };
+    const seam = createTendSeam(transport);
+    const featurePath = '/my/project/docs/tend/features/wordcount.tend.html';
+
+    await seam.readClosed(featurePath);
+
+    expect(received).toHaveLength(1);
+    expect(received[0]).toBe('/my/project'); // project root, not the feature path
+  });
+
+  test('feature polyglot path is translated to project root for emitVerdict', async () => {
+    const received: string[] = [];
+    const transport: TendTransport = {
+      async readClosed(_source) {
+        return new Set<string>();
+      },
+      async emitVerdict(_v, source) {
+        received.push(source);
+        return { closed: false };
+      },
+    };
+    const seam = createTendSeam(transport);
+    const featurePath = '/my/project/docs/tend/features/wordcount.tend.html';
+
+    await seam.emitVerdict(makeVerdict('n1'), featurePath);
+
+    expect(received).toHaveLength(1);
+    expect(received[0]).toBe('/my/project');
+  });
+
+  test('project root path (no docs/tend/features segment) passes through unchanged', async () => {
+    // If source is already a root (e.g. test/smoke scenarios pass a project root directly)
+    const received: string[] = [];
+    const transport: TendTransport = {
+      async readClosed(source) {
+        received.push(source);
+        return new Set<string>();
+      },
+      async emitVerdict(_v, _source) {
+        return { closed: false };
+      },
+    };
+    const seam = createTendSeam(transport);
+
+    await seam.readClosed('/my/project');
+
+    expect(received).toHaveLength(1);
+    expect(received[0]).toBe('/my/project');
   });
 });

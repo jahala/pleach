@@ -19,6 +19,18 @@ function adaptToMap(raw: Set<string> | Map<string, string | null>): Map<string, 
   return out;
 }
 
+// Translate plan.source (feature polyglot path: {root}/docs/tend/features/{id}.tend.html)
+// to the project root the transport (ingester) requires. Convention: the feature file
+// is 4 path segments below the root (docs/ → tend/ → features/ → {id}.tend.html).
+// If the path does not contain the expected segment, it is assumed to be a root
+// already and is returned unchanged.
+function toProjectRoot(source: string): string {
+  const marker = '/docs/tend/features/';
+  const idx = source.indexOf(marker);
+  if (idx === -1) return source;
+  return source.slice(0, idx);
+}
+
 // createTendSeam wraps a TendTransport with a serial promise-chain queue so
 // that at most one transport call is in flight at any time, even when callers
 // fire concurrently (single-ingester invariant — ENGINEERING.md concurrency
@@ -41,12 +53,12 @@ export function createTendSeam(transport: TendTransport): TendSeam {
   return {
     readClosed(source: string): Promise<Map<string, string | null>> {
       return enqueue(async () => {
-        const raw = await transport.readClosed(source);
+        const raw = await transport.readClosed(toProjectRoot(source));
         return adaptToMap(raw);
       });
     },
     emitVerdict(v: Verdict, source: string): Promise<{ closed: boolean }> {
-      return enqueue(() => transport.emitVerdict(v, source));
+      return enqueue(() => transport.emitVerdict(v, toProjectRoot(source)));
     },
   };
 }
