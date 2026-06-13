@@ -8,7 +8,7 @@ import { AuditParseError } from '../../src/core/errors.ts';
 const FENCE = 'tend-audit-result';
 
 function block(json: string): string {
-  return ['```' + FENCE, json, '```'].join('\n');
+  return [`\`\`\`${FENCE}`, json, '```'].join('\n');
 }
 
 describe('extractAuditJson — happy path', () => {
