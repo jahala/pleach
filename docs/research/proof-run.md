@@ -48,30 +48,59 @@ tend's honest-middle works"), so the feature result is `partial`, tend refuses
 `verified`, and `emitVerdict` returns `{closed:false}`. The honest-middle guardrail
 correctly prevents a partially-discriminated feature from being marked verified.
 
+## Run 3 — full verified close (all open items resolved)
+
+After the robustness fixes landed (c2 negctrl, conductor `partial` bucket, rctrl codex
+permission bypass + seam wiring), re-ran on a fresh seed with the reinstalled rctrl
+binary. **Every node closed:**
+
+```json
+{"closed":["wordcount.s1","wordcount.s2","wordcount"],"failed":[],"partial":[],"skipped":[],"blocked":[]}
+```
+
+Journal trail (`proof-journal.jsonl`): `run-start → node-start s1/s2 → verdict s2 done →
+closed s2 → verdict s1 done → closed s1 → node-start wordcount → verdict wordcount done →
+closed wordcount → run-end`. Three `node/<id>` branches published; exit 0.
+
+What changed since Run 2, end to end:
+
+- **c2 negctrl** (`722fc40`): c2 now flips `chars: countChars(text)` → `+ 1` under a test,
+  so the audit's negative control discriminates and **both** c1 and c2 are
+  pass+discriminated. tend's honest-middle `deriveResult` returns `pass` → `verified` →
+  `emitVerdict {closed:true}` → pleach closes `wordcount`.
+- **codex audited in a worktree without blocking.** rctrl now delivers codex's Stop hook
+  via a shared `$CODEX_HOME` (PR #34 — a project `.codex/hooks.json` is silently ignored
+  in linked worktrees), and maps `--permission-mode bypassPermissions` →
+  `--dangerously-bypass-approvals-and-sandbox` (PR #36); the pleach seam passes that bypass
+  to the codex auditor (`09f5beb`). The auditor completed its turn under the unattended
+  conductor with no human present.
+- **`partial` is now first-class** (`cdb2932`): the summary carries an (empty) `partial`
+  bucket. A clean verified close, so nothing landed there — but a future honest-middle
+  `partial` reads distinctly from `failed`.
+
+This is the full **tend → pleach → verified** bridge proven against real claude builders,
+a real codex auditor, and real tend — every check discriminated, every node closed.
+
 ## State
 
-- **Defect #1 (audit egress relay): FIXED, tested, verified.** The proof's purpose —
-  demonstrating the full claude-builds / codex-audits / tend-gates pipeline with a
-  parseable, machine-checked audit — is achieved.
-- The terminal `partial → not verified` is the designed honest-middle, not a failure of
-  the system.
+- **Full bridge proven (Run 3).** claude builds → codex audits → tend honest-middle
+  verifies → pleach closes — every node green, against real agents + real tend. All four
+  Run-2 open items are resolved (below).
+- The honest-middle does its job in *both* directions: Run 2 (c2 had no negctrl) correctly
+  capped at `partial`; Run 3 (c2 discriminates) correctly reached `verified`. Same
+  guardrail, no special-casing.
 
-## Open items (decisions / follow-ups, not blockers)
+## Resolution of the Run-2 open items
 
-1. **Proof expectation vs payload.** README §"What success means" criterion 3 expects
-   tend to flip wordcount to `verified`, but the payload's c2 (no negctrl) caps the
-   feature at `partial` — these contradict. To demonstrate a *full verified close*, give
-   c2 a negctrl so every check is pass+discriminated. To keep demonstrating the
-   honest-middle, fix the README to expect `partial`. (Proof-design choice, not a code
-   defect.)
-2. **Conductor: `failed` vs `partial`.** A node that is `done` but not-closed because
-   tend honestly returns `partial` is lumped into `failed` in the run summary. Consider a
-   distinct `partial`/`not-verified` outcome so an honest-middle result reads differently
-   from a real failure.
-3. **rctrl N8 (codex approval bypass).** Latent — did NOT block this run (codex completed
-   its audit turn), but the rctrl seam deliberately gives codex no permission bypass and
-   a manual repro showed codex *can* prompt for command approval. Worth a per-provider
-   permission primitive for robustness against codex configs that require approval.
-4. **Step-node closure does not persist across conductor runs** (s1/s2 re-ran on run 2).
-   Expected pre-T1 (tend records feature-level closure; SHA persistence is tend's pending
-   work, which pleach already anticipates via `Map<id, sha|null>`).
+1. **Proof expectation vs payload** — ✅ c2 given a discriminating negctrl (`722fc40`); the
+   payload reaches a full verified close (Run 3). README and payload now agree.
+2. **Conductor `failed` vs `partial`** — ✅ distinct `partial` `RunSummary` bucket
+   (`cdb2932`, test-first): a done-but-not-verified node no longer reads as `failed`, and
+   the CLI maps `partial` to exit 1 (not success) via a pure `summaryExitCode`.
+3. **rctrl N8 (codex approval bypass)** — ✅ codex maps `--permission-mode
+   bypassPermissions` → `--dangerously-bypass-approvals-and-sandbox` (rctrl #36); the
+   pleach seam passes it to the codex auditor (`09f5beb`). Both test-first.
+4. **Step-node closure persistence across runs** — flagged to tend as **T1 / B1-B2**
+   (jahala/pleach#9): tend owns feature-level closure + SHA persistence; pleach already
+   anticipates it (`Map<id, sha|null>` + the `Set→Map` adapter) and degrades gracefully.
+   Non-blocking; tracked cross-repo.
