@@ -87,7 +87,7 @@ describe('runPlan — A1 dual close', () => {
 });
 
 describe('runPlan — §6 commit-on-verified', () => {
-  test('emitVerdict {closed:false} on an audit node → node never closes, dependents skipped', async () => {
+  test('emitVerdict {closed:false} on an audit node → partial (not failed); dependents skipped', async () => {
     const h = makeHarness({
       auditEgress: () => auditPass,
       emitDecision: () => ({ closed: false }), // tend refuses to close
@@ -103,6 +103,16 @@ describe('runPlan — §6 commit-on-verified', () => {
     expect(summary.closed).toEqual([]);
     // 'b' must never have isolated (its only dep never closed).
     expect(h.log.count('isolate', 'b')).toBe(0);
+    // The work LANDED (committed to node/a) and the audit PASSED — tend just
+    // won't verify it. That is 'partial', NOT 'failed': a caller that retries
+    // failed nodes must not rebuild a node whose branch is already published & good.
+    expect(summary.partial).toContain('a');
+    expect(summary.failed).not.toContain('a');
+    // The journal records it honestly — a done verdict plus a not-closed event,
+    // never a failure — so the run is explainable from the journal alone.
+    const aVerdict = h.journal.find((e) => e.event === 'verdict' && e.node === 'a');
+    expect(aVerdict?.status).toBe('done');
+    expect(h.journal.some((e) => e.event === 'not-closed' && e.node === 'a')).toBe(true);
   });
 });
 
