@@ -32,3 +32,26 @@ export function extractAuditJson(finalMessage: string): unknown {
     throw new AuditParseError(finalMessage);
   }
 }
+
+// buildAuditPrompt wraps the deterministic audit `command` in instructions that
+// force the (stochastic) auditor to surface its result where the parser looks.
+// The bare command alone leaves the `tend-audit-result` block in the tool's
+// stdout while the agent replies with a prose summary — extractAuditJson reads
+// the agent's MESSAGE, so it finds nothing ("egress unparseable", the defect the
+// P6 proof named). The auditor must reproduce the block verbatim in its reply.
+// Pairs with extractAuditJson: this module owns both halves of the egress
+// contract — elicit the block, then parse it.
+export function buildAuditPrompt(command: string): string {
+  return [
+    'Run this exact command in your shell and report its result:',
+    '',
+    command,
+    '',
+    `The command prints a fenced \`\`\`${FENCE_LABEL} block to stdout. Reproduce that block`,
+    'in your reply VERBATIM — character for character, both fences included — as the final',
+    'content of your message. Do not summarize, re-judge, reformat, truncate, or wrap it.',
+    'Your reply is parsed by a machine that reads only that block; a summary or paraphrase',
+    'fails the audit. If the command errors and prints no such block, say so and paste the',
+    'complete error output instead.',
+  ].join('\n');
+}
