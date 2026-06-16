@@ -2503,7 +2503,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "how": "parseFlags → readPlan (Zod) → construct ConductorDeps from seams → runPlan → summaryExitCode; JSON RunSummary on stdout; errors → stderr + typed exit code",
   "progress": {
     "implementation": 0,
-    "verification": 0
+    "verification": 67
   },
   "personas_resolved": [
     {
@@ -2586,7 +2586,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     {
       "id": "conductor-loop",
       "title": "Conductor Loop: DAG Scheduler and Per-Node Ladder",
-      "status": "planned",
+      "status": "verified",
       "priority": "high",
       "personas": [
         "operator",
@@ -2609,7 +2609,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     {
       "id": "isolate-seam",
       "title": "Isolate Seam: Git Worktree Lifecycle",
-      "status": "planned",
+      "status": "verified",
       "priority": "high",
       "personas": [
         "developer",
@@ -2632,7 +2632,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     {
       "id": "lock-journal",
       "title": "Lock and Journal: Run Safety Primitives",
-      "status": "planned",
+      "status": "verified",
       "priority": "medium",
       "personas": [
         "developer"
@@ -2721,7 +2721,84 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     "kind": "svg",
     "alt": "Run triangle flowing into a forking branch — pleach run executor",
     "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><polygon class=\"tc-wh tc-frame\" points=\"32,20 32,60 58,40\" /><line class=\"tc-ln\" x1=\"58\" y1=\"40\" x2=\"80\" y2=\"40\"/><line class=\"tc-ln\" x1=\"80\" y1=\"40\" x2=\"95\" y2=\"28\"/><line class=\"tc-ln\" x1=\"80\" y1=\"40\" x2=\"95\" y2=\"52\"/><circle class=\"tc-ac\" cx=\"95\" cy=\"28\" r=\"5\"/><circle class=\"tc-fg\" cx=\"95\" cy=\"52\" r=\"5\"/></svg>"
-  }
+  },
+  "audit": {
+    "ran_at": "2026-06-16T20:25:00Z",
+    "result": "partial",
+    "verdicts": [
+      {
+        "check_id": "c001",
+        "verdict": "pass",
+        "evidence_path": "test/e2e/cli.test.ts — fullStack describe 'three nodes close; retry happened; node branches published'; ran `bun test test/e2e/cli.test.ts -t \"three nodes close\"` → 1 pass, 11 expect() calls; negctrl (replace `return clean ? 0 : 1` with `return 1` in cli.ts) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "99aa9543e59b7e371dbbba5e2572703fec975987"
+      },
+      {
+        "check_id": "c002",
+        "verdict": "pass",
+        "evidence_path": "test/unit/cli-summary.test.ts — 6 tests covering partial/failed/blocked/skipped all → 1; ran → 6 pass; negctrl (remove `summary.partial.length === 0 &&` from summaryExitCode) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "f9a7b695d15a232e8784a3da091bb990de6a5c66"
+      },
+      {
+        "check_id": "c003",
+        "verdict": "pass",
+        "evidence_path": "test/e2e/cli.test.ts ungated 'invalid plan JSON → exit 2'; ran `bun test test/e2e/cli.test.ts` → 4 pass; negctrl (replace PlanInvalidError throw with generic Error in readPlan) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "99aa9543e59b7e371dbbba5e2572703fec975987"
+      },
+      {
+        "check_id": "c004",
+        "verdict": "partial",
+        "evidence_path": "cli.ts:176-178 correctly guards missing tendModule with UsageError. Manual: `bun src/main.ts run examples/proof/plan.json` → exit 2. But negctrl (remove UsageError throw) against full e2e suite → DOES NOT DISCRIMINATE. No test exercises the missing --tend-module CLI path.",
+        "validates_job_satisfied": false
+      },
+      {
+        "check_id": "c005",
+        "verdict": "partial",
+        "evidence_path": "cli.ts:230-232 catches LockHeldError → return 3. test/integration/lock.test.ts confirms seam throws LockHeldError (4 pass). Negctrl (replace `return 3` with `return 1` in LockHeldError catch) → DOES NOT DISCRIMINATE. No CLI-level test exercises exit-3 path.",
+        "validates_job_satisfied": false
+      },
+      {
+        "check_id": "c006",
+        "verdict": "pass",
+        "evidence_path": "test/e2e/cli.test.ts full-stack retry test; flaky.sh fails first attempt then closes with .sentinel committed to node/e2; ran → 1 pass; negctrl (replace `if (attempts < maxAttempts) return undefined` with always-fail in run-node.ts) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "99aa9543e59b7e371dbbba5e2572703fec975987"
+      }
+    ],
+    "drift": []
+  },
+  "judgments": [
+    {
+      "question_id": "check_discriminates",
+      "target": "feature",
+      "verdict": "n_a",
+      "rationale": "negctrl proves discrimination mechanically for c001, c002, c003, c006; semantic re-judgment skipped for negctrl-proven checks.",
+      "judged_sha": "4632ab2bc454dd7951d7ca8d4c9f09029086a1b3"
+    },
+    {
+      "question_id": "check_discriminates",
+      "target": "check:c004",
+      "verdict": "push_back",
+      "rationale": "c004 guard (missing --tend-module → exit 2) is correct in source but no test catches breaking it. Negctrl did not discriminate. A dedicated test for `pleach run <plan.json>` without --tend-module is needed.",
+      "judged_sha": "07dbb4304d5b5a712a6c4d0a16950d5476946f65"
+    },
+    {
+      "question_id": "check_discriminates",
+      "target": "check:c005",
+      "verdict": "push_back",
+      "rationale": "c005 LockHeldError→exit 3 catch is correct in source but no CLI-level test catches breaking it. Negctrl on `return 3` did not discriminate. A CLI-level integration test spawning a second pleach process with a held lock is needed.",
+      "judged_sha": "0ab01c3fcd07461d1e0493ed1e564181169c682f"
+    },
+    {
+      "question_id": "impact_measurable",
+      "target": "slots:impact",
+      "verdict": "pass",
+      "rationale": "IMPACT: 'One command turns a tend plan into verified branches; the exit code alone tells the operator whether to trust the run or intervene.' c001 (exit 0 all-closed) and c002 (exit 1 on partial/failed/blocked/skipped) directly measure the observable exit-code contract. The full-stack e2e confirms the end-to-end loop.",
+      "judged_sha": "df1040ce733dc225a30ece743cacde917b458088"
+    }
+  ]
 }
 </script>
 <!-- OO:DATA:END -->

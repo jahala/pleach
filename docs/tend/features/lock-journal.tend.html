@@ -2491,7 +2491,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
 {
   "id": "lock-journal",
   "title": "Lock and Journal: Run Safety Primitives",
-  "status": "planned",
+  "status": "verified",
   "priority": "medium",
   "journey_phase": "build",
   "personas": [
@@ -2501,8 +2501,8 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "where": "src/seams/lock.ts; src/seams/journal.ts",
   "how": "lock: sha1(source).slice(12) → .git/pleach-{sha}.lock; O_EXCL write of pid; stale: ESRCH → unlink + retry; journal: mkdir -p on first append; JSON.stringify per event + newline",
   "progress": {
-    "implementation": 0,
-    "verification": 0
+    "implementation": 100,
+    "verification": 100
   },
   "personas_resolved": [
     {
@@ -2586,7 +2586,58 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     "kind": "svg",
     "alt": "Padlock beside three stacked lines — run lock and JSONL trace",
     "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><rect class=\"tc-wh tc-frame\" x=\"20\" y=\"38\" width=\"30\" height=\"26\" rx=\"3\"/><path class=\"tc-ln\" d=\"M26,38 L26,28 a9,9 0 0 1 18,0 L44,38\"/><circle class=\"tc-ac\" cx=\"35\" cy=\"51\" r=\"5\"/><rect class=\"tc-wh tc-frame\" x=\"66\" y=\"22\" width=\"46\" height=\"36\" rx=\"3\"/><line class=\"tc-la\" x1=\"74\" y1=\"33\" x2=\"104\" y2=\"33\"/><line class=\"tc-la\" x1=\"74\" y1=\"41\" x2=\"104\" y2=\"41\"/><line class=\"tc-la\" x1=\"74\" y1=\"49\" x2=\"96\" y2=\"49\"/></svg>"
-  }
+  },
+  "audit": {
+    "ran_at": "2026-06-16T20:10:00Z",
+    "result": "pass",
+    "verdicts": [
+      {
+        "check_id": "c001",
+        "verdict": "pass",
+        "evidence_path": "src/seams/lock.ts:33 ; ran `bun test test/integration/lock.test.ts -t 'B4: second acquire throws LockHeldError with the holder pid'` → pass ; negctrl (break EEXIST return false→true) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "3d55c039339e5109f525860fb0cb16b7da547073"
+      },
+      {
+        "check_id": "c002",
+        "verdict": "pass",
+        "evidence_path": "src/seams/lock.ts:100-106 (makeHandle.release) ; ran `bun test test/integration/lock.test.ts -t 'B4: release → reacquire works'` → pass ; negctrl (comment out release unlink) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "3d55c039339e5109f525860fb0cb16b7da547073"
+      },
+      {
+        "check_id": "c003",
+        "verdict": "pass",
+        "evidence_path": "src/seams/lock.ts:55 (isAlive ESRCH branch) ; ran `bun test test/integration/lock.test.ts -t 'B4: stale lock with dead pid is taken over'` → pass ; negctrl (ESRCH return false→true) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "3d55c039339e5109f525860fb0cb16b7da547073"
+      },
+      {
+        "check_id": "c004",
+        "verdict": "pass",
+        "evidence_path": "src/seams/lock.ts:29 (fh.writeFile pid) ; ran `bun test test/integration/lock.test.ts -t 'B4: lockfile content is the acquiring pid'` → pass ; negctrl (writeFile pid→'0') → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "3d55c039339e5109f525860fb0cb16b7da547073"
+      },
+      {
+        "check_id": "c005",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-plan.ts:66,271 (journal.append run-start/run-end) ; ran `bun test test/loop/run-plan.test.ts -t 'acquires the lock and releases it; journals run-start and run-end'` → pass ; negctrl (suppress run-start emit in run-plan.ts) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+      }
+    ],
+    "drift": []
+  },
+  "judgments": [
+    {
+      "question_id": "check_discriminates",
+      "target": "feature",
+      "verdict": "n_a",
+      "rationale": "All 5 checks discriminate via negctrl: c001 EEXIST path, c002 release unlink, c003 ESRCH stale branch, c004 pid write, c005 run-start emission in run-plan.ts. Note: negctrl for c005 targets src/loop/run-plan.ts (the journal.append call site) rather than src/seams/journal.ts (the seam implementation) because the test uses the in-memory harness journal seam.",
+      "judged_sha": "6d1421a92a6fcefd8278552f59118251cc16b249"
+    }
+  ]
 }
 </script>
 <!-- OO:DATA:END -->

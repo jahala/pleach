@@ -2503,7 +2503,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "how": "rctrl spawn --name --cwd [--provider] [--model] [--allowed-tools] [--permission-mode] [--env K=V]; send --json captures sinceMtime; wait --json --since --timeout; read/actions/diff gathered on stop; WorkerSpawnError/WorkerSeamError on failures",
   "progress": {
     "implementation": 0,
-    "verification": 0
+    "verification": 80
   },
   "personas_resolved": [
     {
@@ -2560,7 +2560,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "integration",
       "verification_recipe": "send; wait → stop; wait again with 2s timeout (no send); expect reason='timeout' and finalMessage=''.",
       "status": "open",
-      "validates_job": "operator:2"
+      "validates_job": "developer:1"
     },
     {
       "id": "c004",
@@ -2570,7 +2570,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "integration",
       "verification_recipe": "spawnWorker; send; kill tmux session directly; wait → reason='dead', finalMessage=''.",
       "status": "open",
-      "validates_job": "operator:2"
+      "validates_job": "developer:1"
     },
     {
       "id": "c005",
@@ -2606,7 +2606,58 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     "kind": "svg",
     "alt": "Square loop and circle agent joined by a two-way arrow channel — rctrl spawn/send bridge",
     "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><rect class=\"tc-wh tc-frame\" x=\"16\" y=\"24\" width=\"34\" height=\"32\" rx=\"3\"/><circle class=\"tc-ac\" cx=\"90\" cy=\"40\" r=\"16\"/><line class=\"tc-ln\" x1=\"50\" y1=\"36\" x2=\"72\" y2=\"32\"/><line class=\"tc-ln\" x1=\"72\" y1=\"32\" x2=\"68\" y2=\"26\"/><line class=\"tc-ln\" x1=\"72\" y1=\"48\" x2=\"50\" y2=\"44\"/><line class=\"tc-ln\" x1=\"50\" y1=\"44\" x2=\"54\" y2=\"38\"/></svg>"
-  }
+  },
+  "audit": {
+    "ran_at": "2026-06-16T20:25:00Z",
+    "result": "partial",
+    "verdicts": [
+      {
+        "check_id": "c001",
+        "verdict": "pass",
+        "evidence_path": "test/integration/rctrl-seam.test.ts:107 ; ran `bun test test/integration/rctrl-seam.test.ts -t \"happy path: spawn\"` → pass ; negctrl (break `readResult.exitCode === 0 ? readResult.output.trim` → `readResult.exitCode === 999 ? readResult.output.trim`) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "0da48fd1b6d760cc9182761ded6e643941d6b105"
+      },
+      {
+        "check_id": "c002",
+        "verdict": "partial",
+        "evidence_path": "test/integration/rctrl-seam.test.ts:140 ; ran `bun test test/integration/rctrl-seam.test.ts -t \"two-turn conversation\"` → pass ; negctrl (3 strategies tried: break sinceMtime assignment in send, break --since injection into argv, break post-stop Date.now() advance) → DOES NOT DISCRIMINATE — fake-claude responds deterministically; test does not exercise the race-condition invariant it claims to verify",
+        "validates_job_satisfied": false,
+        "evidence_sha": "0da48fd1b6d760cc9182761ded6e643941d6b105"
+      },
+      {
+        "check_id": "c003",
+        "verdict": "pass",
+        "evidence_path": "test/integration/rctrl-seam.test.ts:164 ; ran `bun test test/integration/rctrl-seam.test.ts -t \"timeout: second wait\"` → pass ; negctrl (break `sinceMtime = reason === 'stop' ? Date.now() : undefined` → `sinceMtime = reason === 'stop' ? 0 : undefined`) → DISCRIMINATES ; re-anchored operator:2 → developer:1",
+        "validates_job_satisfied": true,
+        "evidence_sha": "0da48fd1b6d760cc9182761ded6e643941d6b105"
+      },
+      {
+        "check_id": "c004",
+        "verdict": "pass",
+        "evidence_path": "test/integration/rctrl-seam.test.ts:184 ; ran `bun test test/integration/rctrl-seam.test.ts -t \"dead: killing tmux\"` → pass ; negctrl (break `return { reason, finalMessage: '', filesTouched: [], telemetry: {} }` → `return { reason: 'timeout', ... }`) → DISCRIMINATES ; re-anchored operator:2 → developer:1",
+        "validates_job_satisfied": true,
+        "evidence_sha": "0da48fd1b6d760cc9182761ded6e643941d6b105"
+      },
+      {
+        "check_id": "c005",
+        "verdict": "pass",
+        "evidence_path": "test/integration/rctrl-seam.test.ts:208 ; ran `bun test test/integration/rctrl-seam.test.ts -t \"spawn failure: nonexistent cwd\"` → pass ; negctrl (break name-echo guard `throw new WorkerSpawnError(\\`rctrl spawn succeeded but name not found in output`) → DISCRIMINATES ; note: exitCode guard also present but name-echo is discriminating path for nonexistent-cwd scenario",
+        "validates_job_satisfied": true,
+        "evidence_sha": "0da48fd1b6d760cc9182761ded6e643941d6b105"
+      }
+    ],
+    "drift": []
+  },
+  "judgments": [
+    {
+      "question_id": "check_discriminates",
+      "target": "feature",
+      "verdict": "n_a",
+      "rationale": "Verdicts are per-check. c002 failed all 3 negctrl strategies; c001/c003/c004/c005 discriminate.",
+      "judged_sha": "a049bbbaf6124a454f537406ee94aa33eee4fd07"
+    }
+  ]
 }
 </script>
 <!-- OO:DATA:END -->

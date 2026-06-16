@@ -1,34 +1,75 @@
-## tend — Feature Map
+# pleach — working in this repo
 
-tend tracks planned work across sessions. If it's not updated, the next session starts blind.
+**What this is.** pleach is the **deterministic conductor** between **tend** (the feature ledger that
+decides what "done" means) and **rctrl** (the boundary that runs one unit of agent work over tmux). It
+consumes a `Plan` — a DAG of nodes — isolates each node in a detached git worktree merged from its
+dependencies' verified branches, enforces **gates** (setup · conflict-marker scan · smoke · cross-provider
+audit), and publishes a `node/<id>` branch **only for verified work**, so garbage can't propagate down the
+DAG. **The prime invariant: agents produce; code decides** — every canonical decision (close, verify,
+quarantine, retry) is deterministic code; agent output is parsed evidence, never interpreted.
 
-### Start here
-1. `/tend position` — define who you're building for (personas + jobs)
-2. `/tend brainstorm` — shape your first feature into slots + checks
-3. `/tend plan` — break it into testable steps
-4. `/tend run` — build it
-5. `/tend audit` — verify it with real evidence
+**Read before substantial work:** [`ENGINEERING.md`](../ENGINEERING.md) is the binding doctrine. Also
+[`README.md`](../README.md) (what + status), [`docs/contract/plan-schema.md`](../docs/contract/plan-schema.md)
+(the `@agent-contract/plan` schema — this repo is its home), and [`docs/ledger.md`](../docs/ledger.md)
+(the verified defect ledger; every test maps to a ledger item).
 
-When you need it: `/tend discover` (map an existing codebase into features) · `/tend change` (requirement changes) · `/tend narrate` (write the article body)
+## How agents work here (non-negotiables — full detail in ENGINEERING.md)
 
-### Daily loop
-1. `/tend` — see status + what's unblocked
-2. Pick the suggested feature or choose from the list
-3. No plan? → `/tend plan` creates implementation steps
-4. Implement steps — `tend_update_feature` with steps[] (by-id merge) as you complete each
-5. All done? → `/tend audit` verifies code matches checks
+- **Test-first.** No fix or feature without a failing test first; every defect-ledger item lands RED before
+  its fix. If you can't write the failing test, you don't understand the change yet.
+- **No stubs, mocks, or TODOs in committed code.** (The in-memory seams used in loop tests are *real*
+  implementations of the seam interfaces, not behavior-mocks — see ENGINEERING.md's testing doctrine.)
+- **S.U.P.E.R., strict downward deps.** `core/` is pure & total and imports nothing else; `seams/` + `faces/`
+  own all I/O; `loop/` composes injected seams it was *given* (never imports a seam module). A face never
+  calls git; the loop never spawns a process; a seam never makes a scheduling decision.
+- **Typed errors, caught at the face.** Discriminated `Error` subclasses in `core/errors.ts`; `faces/` map
+  them to exit codes. No bare `new Error` outside `core/errors.ts`.
+- **Single schema source.** `core/plan.ts` is the only Plan/Node/Verdict/AuditResult definition, pinned
+  byte-for-byte to `docs/contract/plan-schema.md` by a drift test. Derive types via `z.infer`; never
+  hand-declare them. A schema change = doc + source + drift-test + `docs/contract/CHANGES.md` in ONE commit.
+- **Smallest reasonable change**; match surrounding style; no speculative abstraction; no back-compat shims
+  (this is greenfield). Never `rm` — use `trash`.
+- **Green before merge:** `bun run check` = `tsc --noEmit` + `biome check` + `bun test`. Must be green.
 
-### Before you build
-When asked to implement multi-file changes, check tend first:
-1. `ls docs/tend/features/` (or `tend_get_unblocked`) — does this work map to a feature?
-2. No match → `/tend brainstorm` to create one (minimal draft is fine)
-3. Match → `tend_update_feature` with the touched step's status as you complete each
+## Architecture
 
-### MCP tools
-- `tend_get_context` — full feature context in one call
-- `tend_get_unblocked` — what to work on next
-- `tend_update_feature` — single write surface; step status is one of many fields
-- `tend_get_gaps` — what needs attention; each gap names the closing skill
-- `npx tend-cli ui` — generate web dashboard and open in browser
+```
+faces/   cli.ts                                   ← argv, exit codes, stdout/stderr discipline
+loop/    run-plan · run-node · run-work           ← the deterministic loop; composes injected seams
+seams/   rctrl · tend · isolate · exec · lock · journal   ← all I/O, thin
+core/    plan · validate · classify · errors      ← pure, total
+```
 
-For reads of a single feature, use the polyglot: `bash docs/tend/<id>.tend.html data | jq`.
+Stack: Bun + `bun:test`, TypeScript strict, `zod` the only dependency, `biome`. Runtime substrate:
+`git ≥ 2.38`, `tmux`, the `rctrl` binary, a `tend` transport.
+
+## Track work in tend (this repo dogfoods itself)
+
+tend tracks planned work across sessions in a garden at `docs/tend/` (dashboard: `index.html`). If it's not
+updated, the next session starts blind.
+
+- **`/tend`** — see status + what's unblocked. The chain: `/tend position` (personas + jobs) →
+  `/tend brainstorm` (slots + checks) → `/tend plan` (testable steps) → `/tend run` (build) → `/tend audit`
+  (verify with real evidence). Also `/tend discover` (map existing code), `/tend change` (requirements
+  shift), `/tend narrate` (article body + diagrams).
+- **Before multi-file work,** check tend first (`tend_get_unblocked` or `ls docs/tend/features/`). A match →
+  update the touched step's status via `tend_update_feature` (object arrays merge by-id). No match →
+  `/tend brainstorm` a minimal feature.
+- **MCP tools:** `tend_get_context` (full feature in one call) · `tend_get_unblocked` · `tend_get_gaps`
+  (each gap names its closing skill) · `tend_update_feature` (single write surface). Single-feature reads go
+  through the polyglot: `bash docs/tend/<id>.tend.html data | jq` — never parse a `.tend.html` as text.
+
+## Gotchas
+
+- **`/tend audit` is the only path to `status: verified`, and it's strict:** a `pass` needs a real test
+  that runs green *and* **discriminates** — the `negctrl` helper mutates the source in a throwaway worktree
+  and the test must then fail. A check's `validates_job` should point at the job its test actually asserts:
+  seam/component tests → `developer:1`; operator end-to-end guarantees verify at the loop / CLI / proof-run
+  layer. (Current: 5 of 8 features verified; `cli-run` / `rctrl-seam` / `tend-seam` are `partial` with named
+  test gaps.)
+- **tend#47 (upstream, filed):** the operator/developer persona polyglots validate as invalid — the
+  catalog→snapshot mirror writes `journey_phases` the schema forbids, and the served tend dist is stale.
+  Persona narrative writes are blocked until it's fixed + the missoula dist rebuilt + the tend MCP
+  restarted. Don't "fix" it by reverting persona content.
+- **`.mcp.json`** wires the tend MCP server to a local missoula checkout (machine-specific absolute path);
+  it's gitignored.
