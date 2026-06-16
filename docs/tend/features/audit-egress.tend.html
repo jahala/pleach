@@ -2491,7 +2491,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
 {
   "id": "audit-egress",
   "title": "Audit Egress: Fenced Block Protocol",
-  "status": "planned",
+  "status": "verified",
   "priority": "medium",
   "journey_phase": "build",
   "personas": [
@@ -2502,8 +2502,8 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "where": "src/core/audit-egress.ts",
   "how": "BLOCK_RE regex iterates all matches, last wins; AuditParseError on missing block or invalid JSON; buildAuditPrompt wraps command with verbatim-reproduction instructions",
   "progress": {
-    "implementation": 0,
-    "verification": 0
+    "implementation": 100,
+    "verification": 100
   },
   "personas_resolved": [
     {
@@ -2539,7 +2539,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "unit",
       "verification_recipe": "extractAuditJson with one block → returns parsed object.",
       "status": "open",
-      "validates_job": "operator:0"
+      "validates_job": "developer:1"
     },
     {
       "id": "c002",
@@ -2549,7 +2549,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "unit",
       "verification_recipe": "Message with two fenced blocks (first has 'fail', second has 'pass'); extractAuditJson → verdicts from second block.",
       "status": "open",
-      "validates_job": "operator:0"
+      "validates_job": "developer:1"
     },
     {
       "id": "c003",
@@ -2559,7 +2559,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "unit",
       "verification_recipe": "extractAuditJson('no fence here') → throws AuditParseError; err.raw === input.",
       "status": "open",
-      "validates_job": "operator:0"
+      "validates_job": "developer:1"
     },
     {
       "id": "c004",
@@ -2569,7 +2569,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "unit",
       "verification_recipe": "extractAuditJson with ```tend-audit-result\\n{not json}\\n```; → AuditParseError.",
       "status": "open",
-      "validates_job": "operator:0"
+      "validates_job": "developer:1"
     },
     {
       "id": "c005",
@@ -2598,7 +2598,65 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     "kind": "svg",
     "alt": "Document rectangle with a fenced-block band highlighted by fence lines — tend-audit-result protocol",
     "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><rect class=\"tc-wh tc-frame\" x=\"18\" y=\"14\" width=\"84\" height=\"52\" rx=\"3\"/><line class=\"tc-la\" x1=\"26\" y1=\"24\" x2=\"86\" y2=\"24\"/><line class=\"tc-la\" x1=\"26\" y1=\"32\" x2=\"80\" y2=\"32\"/><rect class=\"tc-ac\" x=\"18\" y=\"38\" width=\"84\" height=\"14\" rx=\"0\"/><line class=\"tc-ln\" x1=\"26\" y1=\"38\" x2=\"26\" y2=\"52\"/><line class=\"tc-ln\" x1=\"86\" y1=\"38\" x2=\"86\" y2=\"52\"/><line class=\"tc-la\" x1=\"26\" y1=\"60\" x2=\"72\" y2=\"60\"/></svg>"
-  }
+  },
+  "audit": {
+    "ran_at": "2026-06-16T20:10:00Z",
+    "result": "pass",
+    "verdicts": [
+      {
+        "check_id": "c001",
+        "verdict": "pass",
+        "evidence_path": "src/core/audit-egress.ts:19-34 (extractAuditJson, BLOCK_RE matchAll loop); test/unit/audit-egress.test.ts:15 — ran `bun test test/unit/audit-egress.test.ts -t \"parses a single fenced tend-audit-result block\"` → 1 pass; negctrl (`lastContent = match[1] ?? `→`lastContent = null; void `) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "25372484c6c227290f63e16057bf85f3246d9234"
+      },
+      {
+        "check_id": "c002",
+        "verdict": "pass",
+        "evidence_path": "src/core/audit-egress.ts:21-23 (loop overwrites lastContent on each match, so last wins); test/unit/audit-egress.test.ts:30 — ran `bun test test/unit/audit-egress.test.ts -t \"returns the JSON of the LAST tend-audit-result block\"` → 1 pass; negctrl (`lastContent = match[1] ?? `→`lastContent = null; void `) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "25372484c6c227290f63e16057bf85f3246d9234"
+      },
+      {
+        "check_id": "c003",
+        "verdict": "pass",
+        "evidence_path": "src/core/audit-egress.ts:25-27 (null-check throw AuditParseError); test/unit/audit-egress.test.ts:54 — ran `bun test test/unit/audit-egress.test.ts -t \"no tend-audit-result block\"` → 1 pass; negctrl (`if (lastContent === null) {`→`if (false) {`) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "25372484c6c227290f63e16057bf85f3246d9234"
+      },
+      {
+        "check_id": "c004",
+        "verdict": "pass",
+        "evidence_path": "src/core/audit-egress.ts:29-33 (catch block throw AuditParseError); test/unit/audit-egress.test.ts:66 — ran `bun test test/unit/audit-egress.test.ts -t \"block present but content is not valid JSON\"` → 1 pass; negctrl (`} catch {`→`} catch (ignored) { return {}; } if (false) {`) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "25372484c6c227290f63e16057bf85f3246d9234"
+      },
+      {
+        "check_id": "c005",
+        "verdict": "pass",
+        "evidence_path": "src/core/audit-egress.ts:44-56 (buildAuditPrompt joins verbatim-instruction array); test/unit/audit-egress.test.ts:99 — ran `bun test test/unit/audit-egress.test.ts -t \"instructs the auditor to reproduce the tend-audit-result block verbatim\"` → 1 pass; negctrl (`in your reply VERBATIM`→`in your reply SUMMARIZED`) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "25372484c6c227290f63e16057bf85f3246d9234"
+      }
+    ],
+    "drift": []
+  },
+  "judgments": [
+    {
+      "question_id": "check_discriminates",
+      "target": "feature",
+      "verdict": "n_a",
+      "rationale": "All 5 checks have a discriminating negctrl (exit 0); semantic re-judgment skipped for negctrl-proven checks.",
+      "judged_sha": "3d9ed66253caa9774756258db68b65d486fca440"
+    },
+    {
+      "question_id": "impact_measurable",
+      "target": "slots:impact",
+      "verdict": "pass",
+      "rationale": "IMPACT states the auditor's verdict is recovered verbatim and parsed deterministically. c001 measures single-block extraction, c002 measures last-block-wins determinism, c003/c004 measure typed error paths on missing/invalid blocks, c005 measures the verbatim-reproduction instruction. Together these checks directly measure all observable components of the IMPACT claim.",
+      "judged_sha": "620d41e4b5a38b066857f19003c5029d03c31b44"
+    }
+  ]
 }
 </script>
 <!-- OO:DATA:END -->

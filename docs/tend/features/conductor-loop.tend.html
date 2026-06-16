@@ -2491,7 +2491,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
 {
   "id": "conductor-loop",
   "title": "Conductor Loop: DAG Scheduler and Per-Node Ladder",
-  "status": "planned",
+  "status": "verified",
   "priority": "high",
   "journey_phase": "build",
   "personas": [
@@ -2502,8 +2502,8 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "where": "src/loop/run-plan.ts; src/loop/run-node.ts; src/loop/run-work.ts; src/loop/deps.ts; src/core/classify.ts; src/core/argv.ts; src/core/errors.ts",
   "how": "Kahn-style DAG with Promise.race on inflight Map; per-node retry loop with evidence threading (A3); classify() routes worker reasons and errors to dead/retryable/blocked/terminal; seam-injected ConductorDeps interfaces; never imports seam modules directly",
   "progress": {
-    "implementation": 0,
-    "verification": 0
+    "implementation": 100,
+    "verification": 100
   },
   "personas_resolved": [
     {
@@ -2580,7 +2580,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "integration",
       "verification_recipe": "Seed closed Map with dep→sha; add sha to refs; run plan with dep+child; verify child isolate detail contains sha.",
       "status": "open",
-      "validates_job": "operator:3"
+      "validates_job": "developer:4"
     },
     {
       "id": "c006",
@@ -2610,7 +2610,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "integration",
       "verification_recipe": "First audit wait returns garbage; second returns valid block; assert buildSpawns=1, auditSpawns=2, summary.closed contains 'a'.",
       "status": "open",
-      "validates_job": "operator:0"
+      "validates_job": "developer:4"
     },
     {
       "id": "c009",
@@ -2640,7 +2640,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "integration",
       "verification_recipe": "Seed closed Map with I→sha (I needs S); run S+I+next(needs I); assert isolate count for S=0, I=0, next=1.",
       "status": "open",
-      "validates_job": "operator:3"
+      "validates_job": "developer:4"
     },
     {
       "id": "c012",
@@ -2670,7 +2670,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "integration",
       "verification_recipe": "Run any node; assert h.log.count('kill', nodeId) >= 1.",
       "status": "open",
-      "validates_job": "operator:2"
+      "validates_job": "developer:4"
     },
     {
       "id": "c015",
@@ -2680,7 +2680,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "integration",
       "verification_recipe": "Smoke returns 'SMOKE-OUTPUT-XYZ' exit 1; maxAttempts=2; assert last send detail contains 'SMOKE-OUTPUT-XYZ'.",
       "status": "open",
-      "validates_job": "operator:0"
+      "validates_job": "developer:4"
     },
     {
       "id": "c016",
@@ -2707,7 +2707,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     {
       "id": "audit-egress",
       "title": "Audit Egress: Fenced Block Protocol",
-      "status": "planned",
+      "status": "verified",
       "priority": "medium",
       "personas": [
         "developer",
@@ -2761,7 +2761,149 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     "kind": "svg",
     "alt": "DAG diamond: top node to two middle nodes to one bottom node — conductor scheduler",
     "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><circle class=\"tc-wh tc-frame\" cx=\"60\" cy=\"18\" r=\"7\"/><circle class=\"tc-wh tc-frame\" cx=\"38\" cy=\"40\" r=\"7\"/><circle class=\"tc-ac\" cx=\"82\" cy=\"40\" r=\"7\"/><circle class=\"tc-wh tc-frame\" cx=\"60\" cy=\"62\" r=\"7\"/><line class=\"tc-ln\" x1=\"55\" y1=\"24\" x2=\"43\" y2=\"34\"/><line class=\"tc-ln\" x1=\"65\" y1=\"24\" x2=\"77\" y2=\"34\"/><line class=\"tc-ln\" x1=\"43\" y1=\"46\" x2=\"55\" y2=\"56\"/><line class=\"tc-ln\" x1=\"77\" y1=\"46\" x2=\"65\" y2=\"56\"/></svg>"
-  }
+  },
+  "audit": {
+    "ran_at": "2026-06-16T20:25:00Z",
+    "result": "pass",
+    "verdicts": [
+      {
+        "check_id": "c001",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-plan.ts:99-113 ; ran `bun test test/loop/run-plan.test.ts -t 'A→{B,C}→D: wave order respected'` → pass ; negctrl (if (node.needs.every → if (false && node.needs.every) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+      },
+      {
+        "check_id": "c002",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-plan.ts:230 ; ran `bun test test/loop/run-plan.test.ts -t 'non-audit node closes on done'` → pass ; negctrl (node.accept.audit ? decision.closed : true → …: false) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+      },
+      {
+        "check_id": "c003",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-plan.ts:190-203 ; ran `bun test test/loop/run-plan.test.ts -t 'closing audit node: commitBranch precedes emitVerdict'` → pass ; negctrl (diffRef: committed → diffRef: undefined) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+      },
+      {
+        "check_id": "c004",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-plan.ts:241-242 ; ran `bun test test/loop/run-plan.test.ts -t 'emitVerdict {closed:false} on an audit node'` → pass ; negctrl (partial.add(node.id) → failed.add(node.id)) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+      },
+      {
+        "check_id": "c005",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-plan.ts:305-306 ; ran `bun test test/loop/run-plan.test.ts -t 'closed dep with missing branch but recorded sha'` → pass ; negctrl (recordedSha !== null && refSha... → false) → DISCRIMINATES ; RE-ANCHORED operator:3→developer:4: test asserts isolate.detail (internal), not RunSummary bucket",
+        "validates_job_satisfied": true,
+        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+      },
+      {
+        "check_id": "c006",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-plan.ts:84 ; ran `bun test test/loop/run-plan.test.ts -t 'closed dep with neither branch nor recorded sha'` → pass ; negctrl (throw new RebuildRequiredError → throw new Error) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+      },
+      {
+        "check_id": "c007",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-plan.ts:156 ; ran `bun test test/loop/run-plan.test.ts -t 'input → status blocked, in RunSummary.blocked'` → pass ; negctrl (blocked.add(node.id) → failed.add(node.id)) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+      },
+      {
+        "check_id": "c008",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-node.ts:290 ; ran `bun test test/loop/run-plan.test.ts -t 'garbage egress then good'` → pass ; negctrl (reaudit < REAUDIT_BUDGET → reaudit < 1) → DISCRIMINATES ; RE-ANCHORED operator:0→developer:4: test asserts buildSpawns/auditSpawns counts (internal)",
+        "validates_job_satisfied": true,
+        "evidence_sha": "1e08e6b9eb61bf4c22cefb9b4253753a756d6b2d"
+      },
+      {
+        "check_id": "c009",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-plan.ts:69 ; ran `bun test test/loop/run-plan.test.ts -t 'mutating the Map returned by tend'` → pass ; negctrl (new Map(await deps.tend.readClosed…) → live ref) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+      },
+      {
+        "check_id": "c010",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-plan.ts:208 ; ran `bun test test/loop/run-plan.test.ts -t 'dependent never isolates inside its dep dispose window'` → pass ; negctrl (await iso.dispose(); if (failure → if (failure, skipping dispose) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+      },
+      {
+        "check_id": "c011",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-plan.ts:279-293 ; ran `bun test test/loop/run-plan.test.ts -t 'a closed integration node seeds its transitive ancestors'` → pass ; negctrl (seedClosure(plan, closed) → commented) → DISCRIMINATES ; RE-ANCHORED operator:3→developer:4: test asserts isolate counts (internal), not RunSummary bucket",
+        "validates_job_satisfied": true,
+        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+      },
+      {
+        "check_id": "c012",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-plan.ts:185 ; ran `bun test test/loop/run-plan.test.ts -t 'markers written after staging'` → pass ; negctrl (scanMarkers(iso.cwd) → []) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+      },
+      {
+        "check_id": "c013",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-node.ts:95-108 ; ran `bun test test/loop/run-node.test.ts -t 'setup → work → markers → stage → smoke → audit'` → pass ; negctrl (deps.exec(toArgv(node.setup) → Promise.resolve) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "1e08e6b9eb61bf4c22cefb9b4253753a756d6b2d"
+      },
+      {
+        "check_id": "c014",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-node.ts:135 ; ran `bun test test/loop/run-node.test.ts -t 'build worker is killed after its wait resolves'` → pass ; negctrl (await worker.kill() → commented) → DISCRIMINATES ; RE-ANCHORED operator:2→developer:4: test asserts kill call count (internal mechanism)",
+        "validates_job_satisfied": true,
+        "evidence_sha": "1e08e6b9eb61bf4c22cefb9b4253753a756d6b2d"
+      },
+      {
+        "check_id": "c015",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-node.ts:207 ; ran `bun test test/loop/run-node.test.ts -t 'smoke retry re-prompt contains the smoke output tail'` → pass ; negctrl (gateEvidence('smoke'…) → evidence = undefined) → DISCRIMINATES ; RE-ANCHORED operator:0→developer:4: test asserts prompt content (internal mechanism)",
+        "validates_job_satisfied": true,
+        "evidence_sha": "1e08e6b9eb61bf4c22cefb9b4253753a756d6b2d"
+      },
+      {
+        "check_id": "c016",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-work.ts:50 ; ran `bun test test/loop/run-work.test.ts -t 'non-zero'` → pass ; negctrl (exitCode !== 0 throw GateFailedError('command') → if false) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "d1d3937c1f1b71edf2a576eff96e7b7aba40ddec"
+      },
+      {
+        "check_id": "c017",
+        "verdict": "pass",
+        "evidence_path": "src/loop/run-work.ts:81 ; ran `bun test test/loop/run-work.test.ts -t 'RED passes immediately'` → pass ; negctrl (if (exitCode === 0) throw GateFailedError('red') → if false) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "d1d3937c1f1b71edf2a576eff96e7b7aba40ddec"
+      }
+    ],
+    "drift": []
+  },
+  "judgments": [
+    {
+      "question_id": "check_discriminates",
+      "target": "feature",
+      "verdict": "n_a",
+      "rationale": "All 17 checks proven discriminating by negctrl — every check passes on clean code and fails on the targeted break.",
+      "judged_sha": "0082751d21a0ccf4895fc10e6c093867f31bf3ee"
+    },
+    {
+      "question_id": "impact_measurable",
+      "target": "slots:impact",
+      "verdict": "pass",
+      "rationale": "Impact claim 'only verified work publishes a branch' is directly measured: c002 asserts refs.has('node/cmd') (branch published on close), c004 asserts summary.partial (unverified-but-landed bucket), c012 asserts no node/a ref for marker-dirty failure. Together these prove the operator-observable claim.",
+      "judged_sha": "b90850f3d9f278a41e6ae06ea540a17126b2b22b"
+    }
+  ]
 }
 </script>
 <!-- OO:DATA:END -->

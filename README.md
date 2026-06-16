@@ -7,9 +7,15 @@ ledger, and a `node/<id>` branch published only for verified work. Agents produc
 
 > *Pleaching: the craft of training and interweaving living branches into a single structure.*
 
-Status: **building toward v1** — see [`docs/plan.md`](docs/plan.md). Doctrine:
-[`ENGINEERING.md`](ENGINEERING.md). Contract: [`docs/contract/plan-schema.md`](docs/contract/plan-schema.md).
-Why the design looks like this: [`docs/ledger.md`](docs/ledger.md).
+**Status — v1: the proof run closes end-to-end.** A multi-step feature builds through real claude
+workers, is audited by a real codex auditor, and is verified by real tend, reaching a full verified
+close (`docs/research/proof-run.md`, Run 3). The deterministic loop, all six seams, and both CLI faces
+are implemented and pass `bun run check` (187 tests). pleach now tracks its own development in a tend
+garden — [`docs/tend/`](docs/tend/) (dashboard: [`index.html`](index.html)).
+
+Build plan: [`docs/plan.md`](docs/plan.md) · Doctrine: [`ENGINEERING.md`](ENGINEERING.md) · Contract:
+[`docs/contract/plan-schema.md`](docs/contract/plan-schema.md) · Why the design looks like this:
+[`docs/ledger.md`](docs/ledger.md).
 
 ```
 faces/   cli                                  ← argv, exit codes

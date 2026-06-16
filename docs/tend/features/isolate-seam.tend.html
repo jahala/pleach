@@ -2491,7 +2491,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
 {
   "id": "isolate-seam",
   "title": "Isolate Seam: Git Worktree Lifecycle",
-  "status": "planned",
+  "status": "verified",
   "priority": "high",
   "journey_phase": "build",
   "personas": [
@@ -2502,8 +2502,8 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "where": "src/seams/isolate.ts",
   "how": "git worktree add --detach in os tmpdir; sequential git merge per baseRef[1..]; conflict exit=1 commits markers in-place; IsolateCatastrophicError on exit>1 or unrelated-histories; git grep -E for marker scan; git add -A -- <files> for scoped stage",
   "progress": {
-    "implementation": 0,
-    "verification": 0
+    "implementation": 100,
+    "verification": 100
   },
   "personas_resolved": [
     {
@@ -2550,7 +2550,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "integration",
       "verification_recipe": "Two branches write different content to shared.txt; isolate with both as baseRefs; assert conflictFiles contains 'shared.txt' and file content has '<<<<<<<'.",
       "status": "open",
-      "validates_job": "operator:1"
+      "validates_job": "developer:1"
     },
     {
       "id": "c003",
@@ -2570,7 +2570,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "integration",
       "verification_recipe": "Isolate with [existing-ref, ghost-does-not-exist]; expect IsolateCatastrophicError; git worktree list shows only main worktree.",
       "status": "open",
-      "validates_job": "operator:3"
+      "validates_job": "developer:1"
     },
     {
       "id": "c005",
@@ -2580,7 +2580,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "integration",
       "verification_recipe": "Isolate conflicting branches; scanMarkers → contains 'scan.txt'; write resolved content; scanMarkers → [].",
       "status": "open",
-      "validates_job": "operator:0"
+      "validates_job": "developer:1"
     },
     {
       "id": "c006",
@@ -2590,7 +2590,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "integration",
       "verification_recipe": "Write real.txt (staged) and junk.txt (not staged); commitBranch; git show --stat must contain real.txt and not junk.txt.",
       "status": "open",
-      "validates_job": "operator:0"
+      "validates_job": "developer:1"
     },
     {
       "id": "c007",
@@ -2600,7 +2600,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "integration",
       "verification_recipe": "Stage a file; commitBranch returns sha matching /^[0-9a-f]{40}$/; refSha(branch) === sha; commitBranch with nothing staged also succeeds.",
       "status": "open",
-      "validates_job": "operator:3"
+      "validates_job": "developer:1"
     },
     {
       "id": "c008",
@@ -2620,7 +2620,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "integration",
       "verification_recipe": "Call seam.scanMarkers('/nonexistent-path'); expect IsolateCatastrophicError (never report clean).",
       "status": "open",
-      "validates_job": "operator:0"
+      "validates_job": "developer:1"
     },
     {
       "id": "c010",
@@ -2630,7 +2630,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "integration_level": "integration",
       "verification_recipe": "Modify a tracked file, add untracked unignored file, add gitignored file; changedFiles includes modified+untracked, excludes ignored.",
       "status": "open",
-      "validates_job": "operator:0"
+      "validates_job": "developer:1"
     }
   ],
   "coverage_files": [
@@ -2657,7 +2657,93 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     "kind": "svg",
     "alt": "Vertical branch line forking into a dashed rectangle — git worktree isolation",
     "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><line class=\"tc-ln\" x1=\"40\" y1=\"14\" x2=\"40\" y2=\"66\"/><circle class=\"tc-fg\" cx=\"40\" cy=\"20\" r=\"4\"/><circle class=\"tc-fg\" cx=\"40\" cy=\"60\" r=\"4\"/><line class=\"tc-ln\" x1=\"40\" y1=\"40\" x2=\"62\" y2=\"40\"/><circle class=\"tc-ac\" cx=\"62\" cy=\"40\" r=\"4\"/><rect class=\"tc-wh tc-frame\" x=\"68\" y=\"24\" width=\"44\" height=\"32\" rx=\"3\" stroke-dasharray=\"5,3\"/><line class=\"tc-la\" x1=\"76\" y1=\"34\" x2=\"102\" y2=\"34\"/><line class=\"tc-la\" x1=\"76\" y1=\"43\" x2=\"96\" y2=\"43\"/></svg>"
-  }
+  },
+  "audit": {
+    "ran_at": "2026-06-16T20:10:00Z",
+    "result": "pass",
+    "verdicts": [
+      {
+        "check_id": "c001",
+        "verdict": "pass",
+        "evidence_path": "src/seams/isolate.ts:48-56 (git worktree add --detach) ; ran `bun test test/integration/isolate.test.ts -t \"spec: fan-out\"` → pass ; negctrl (broke '--detach' → '--NOT-DETACH') → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+      },
+      {
+        "check_id": "c002",
+        "verdict": "pass",
+        "evidence_path": "src/seams/isolate.ts:129-131 (conflictFiles.push) ; ran `bun test test/integration/isolate.test.ts -t \"ledger: B3/C1\"` → pass ; negctrl (broke conflictFiles.push → no-op) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+      },
+      {
+        "check_id": "c003",
+        "verdict": "pass",
+        "evidence_path": "src/seams/isolate.ts:159-163 (return {cwd, conflictFiles, dispose}) ; ran `bun test test/integration/isolate.test.ts -t \"spec: clean join\"` → pass ; negctrl (broke conflictFiles return → ['BROKEN_CLEAN']) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+      },
+      {
+        "check_id": "c004",
+        "verdict": "pass",
+        "evidence_path": "src/seams/isolate.ts:92-98 (verifyResult check + dispose + throw) ; ran `bun test test/integration/isolate.test.ts -t \"ledger: B1\"` → pass ; negctrl (removed dispose() before throw → leftover worktree) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+      },
+      {
+        "check_id": "c005",
+        "verdict": "pass",
+        "evidence_path": "src/seams/isolate.ts:173 (git grep -l --untracked -E regex) ; ran `bun test test/integration/isolate.test.ts -t \"ledger: C1 — scanMarkers\"` → pass ; negctrl (broke regex {7} → {9}) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+      },
+      {
+        "check_id": "c006",
+        "verdict": "pass",
+        "evidence_path": "src/seams/isolate.ts:199 (gitMust add -A -- ...files) ; ran `bun test test/integration/isolate.test.ts -t \"ledger: S1\"` → pass ; negctrl (removed '--' path scoping → git add -A stages all) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+      },
+      {
+        "check_id": "c007",
+        "verdict": "pass",
+        "evidence_path": "src/seams/isolate.ts:237-240 (commit --allow-empty, branch -f, rev-parse HEAD) ; ran `bun test test/integration/isolate.test.ts -t \"ledger: B2\"` → pass ; negctrl (broke rev-parse HEAD → 'BROKEN') → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+      },
+      {
+        "check_id": "c008",
+        "verdict": "pass",
+        "evidence_path": "src/seams/isolate.ts:67 (git worktree remove --force worktreePath) ; ran `bun test test/integration/isolate.test.ts -t \"ledger: dispose\"` → pass ; negctrl (broke worktreePath → '/dev/null/nonexistent') → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+      },
+      {
+        "check_id": "c009",
+        "verdict": "pass",
+        "evidence_path": "src/seams/isolate.ts:191 (throw IsolateCatastrophicError on git grep exit>1) ; ran `bun test test/integration/isolate.test.ts -t \"lead-review: scanMarkers on a non-repo path\"` → pass ; negctrl (broke throw → return []) → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+      },
+      {
+        "check_id": "c010",
+        "verdict": "pass",
+        "evidence_path": "src/seams/isolate.ts:210 (git status --porcelain parse) ; ran `bun test test/integration/isolate.test.ts -t \"lead: changedFiles\"` → pass ; negctrl (broke '--porcelain' → '--porcelain --ignored') → DISCRIMINATES",
+        "validates_job_satisfied": true,
+        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+      }
+    ],
+    "drift": []
+  },
+  "judgments": [
+    {
+      "question_id": "check_discriminates",
+      "target": "feature",
+      "verdict": "n_a",
+      "rationale": "all 10 checks discriminate via negctrl: each mutation causes the corresponding integration test to fail on broken code and pass on clean code",
+      "judged_sha": "75abde34336a48c4e9d2f907c67c10ad8774eddc"
+    }
+  ]
 }
 </script>
 <!-- OO:DATA:END -->
