@@ -183,12 +183,12 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     isolate: createIsolateSeam(exec, flags.repoRoot),
     lock: createLockSeam(),
     journal: createJournal(journalPath),
-    rctrl: createRctrlSeam(exec, {
+    runner: createRctrlSeam(exec, {
       bin: flags.rctrlBin,
       permissionMode: flags.permissionMode,
       ...(flags.allowedTools !== undefined ? { allowedTools: flags.allowedTools } : {}),
     }),
-    tend: createTendSeam(await createModuleTransport(flags.tendModule)),
+    ledger: createTendSeam(await createModuleTransport(flags.tendModule)),
   };
 
   process.stderr.write(`pleach: running ${plan.nodes.length} nodes (journal: ${journalPath})\n`);
