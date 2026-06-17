@@ -108,7 +108,7 @@ export async function runNode(
       }
 
       // ── work ────────────────────────────────────────────────────────────────
-      const worker = await deps.rctrl.spawnWorker({
+      const worker = await deps.runner.spawnWorker({
         provider: node.worker.provider,
         model: node.worker.model,
         cwd,
@@ -288,7 +288,7 @@ async function runAudit(
   const audit = node.accept.audit as NonNullable<Node['accept']['audit']>;
 
   for (let reaudit = 0; reaudit < REAUDIT_BUDGET; reaudit += 1) {
-    const worker = await deps.rctrl.spawnWorker({ provider: audit.provider, cwd });
+    const worker = await deps.runner.spawnWorker({ provider: audit.provider, cwd });
     let res: WorkerResult;
     try {
       await worker.send(buildAuditPrompt(audit.command));

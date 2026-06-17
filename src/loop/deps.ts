@@ -65,11 +65,11 @@ export interface Worker {
   kill(): Promise<void>;
 }
 
-export interface RctrlSeam {
+export interface RunnerSeam {
   spawnWorker(spec: { provider?: string; model?: string; cwd: string }): Promise<Worker>;
 }
 
-export interface TendSeam {
+export interface LedgerSeam {
   // id → verified commit SHA; null when tend has no SHA recorded (legacy /
   // out-of-band verification). The SHA is the durable resume base (ledger B1).
   readClosed(source: string): Promise<Map<string, string | null>>;
@@ -93,8 +93,8 @@ export interface JournalSeam {
 export interface ConductorDeps {
   exec: ExecFn;
   isolate: IsolateSeam;
-  rctrl: RctrlSeam;
-  tend: TendSeam;
+  runner: RunnerSeam;
+  ledger: LedgerSeam;
   lock: LockSeam;
   journal: JournalSeam;
 }

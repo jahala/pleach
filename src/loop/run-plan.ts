@@ -66,7 +66,7 @@ async function runUnderLock(
   await deps.journal.append({ event: 'run-start', goal: plan.goal, nodes: plan.nodes.length });
 
   // Defensive copy (M3) — never mutate what the seam returned.
-  const closed = new Map<string, string | null>(await deps.tend.readClosed(plan.source));
+  const closed = new Map<string, string | null>(await deps.ledger.readClosed(plan.source));
   seedClosure(plan, closed);
 
   // Startup reconciliation (B1/B2): every closed id a pending node depends on
@@ -159,14 +159,14 @@ async function runUnderLock(
         node: node.id,
         reason: verdict.evidence.blockedReason,
       });
-      await deps.tend.emitVerdict(verdict, plan.source);
+      await deps.ledger.emitVerdict(verdict, plan.source);
       return;
     }
 
     if (verdict.status !== 'done' || iso === undefined) {
       // failed / dead / timeout — emit for the record, no commit.
       failed.add(node.id);
-      await deps.tend.emitVerdict(verdict, plan.source);
+      await deps.ledger.emitVerdict(verdict, plan.source);
       if (iso) await iso.dispose();
       return;
     }
@@ -200,7 +200,7 @@ async function runUnderLock(
 
       // A1 dual close: audit nodes defer to tend; non-audit nodes the conductor
       // closes itself (tend has nothing to decide). Both commit first (B2).
-      decision = await deps.tend.emitVerdict(closingVerdict, plan.source);
+      decision = await deps.ledger.emitVerdict(closingVerdict, plan.source);
     } catch (err) {
       failure = err;
     }
@@ -223,7 +223,7 @@ async function runUnderLock(
         node: node.id,
         gate: err instanceof GateFailedError ? err.gate : 'commit',
       });
-      await deps.tend.emitVerdict(failVerdict, plan.source);
+      await deps.ledger.emitVerdict(failVerdict, plan.source);
       return;
     }
 
