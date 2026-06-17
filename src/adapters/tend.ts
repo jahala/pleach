@@ -90,3 +90,8 @@ export async function createModuleTransport(modulePath: string): Promise<TendTra
     emitVerdict: mod.emitVerdict as TendTransport['emitVerdict'],
   };
 }
+
+// Public adapter factory for pleach.config.ts — loads the ledger module + wraps it.
+export async function tendLedger(opts: { module: string }): Promise<LedgerSeam> {
+  return createTendSeam(await createModuleTransport(opts.module));
+}

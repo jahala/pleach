@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { rctrlRunner } from '../adapters/rctrl.ts';
+import { tendLedger } from '../adapters/tend.ts';
 import {
   LockHeldError,
   PlanInvalidError,
@@ -14,8 +16,6 @@ import { exec } from '../seams/exec.ts';
 import { createIsolateSeam } from '../seams/isolate.ts';
 import { createJournal } from '../seams/journal.ts';
 import { createLockSeam } from '../seams/lock.ts';
-import { createRctrlSeam } from '../seams/rctrl.ts';
-import { createModuleTransport, createTendSeam } from '../seams/tend.ts';
 
 const HELP = `pleach — deterministic conductor for DAGs of verified agent work
 
@@ -183,12 +183,12 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     isolate: createIsolateSeam(exec, flags.repoRoot),
     lock: createLockSeam(),
     journal: createJournal(journalPath),
-    runner: createRctrlSeam(exec, {
+    runner: rctrlRunner({
       bin: flags.rctrlBin,
       permissionMode: flags.permissionMode,
       ...(flags.allowedTools !== undefined ? { allowedTools: flags.allowedTools } : {}),
     }),
-    ledger: createTendSeam(await createModuleTransport(flags.tendModule)),
+    ledger: await tendLedger({ module: flags.tendModule }),
   };
 
   process.stderr.write(`pleach: running ${plan.nodes.length} nodes (journal: ${journalPath})\n`);

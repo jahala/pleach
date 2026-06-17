@@ -17,9 +17,9 @@
  *     the project root before the transport is called (ingester requires the root).
  */
 import { describe, expect, test } from 'bun:test';
+import type { TendTransport } from '../../src/adapters/tend.ts';
+import { createTendSeam } from '../../src/adapters/tend.ts';
 import type { Verdict } from '../../src/core/plan.ts';
-import type { TendTransport } from '../../src/seams/tend.ts';
-import { createTendSeam } from '../../src/seams/tend.ts';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
