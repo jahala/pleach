@@ -58,15 +58,17 @@ Authoritative context (read before substantial work):
 ## Architecture — strict downward dependencies
 
 ```
-faces/   cli.ts                                   ← argv, exit codes, stdout/stderr discipline
-loop/    run-plan.ts  run-node.ts  run-work.ts    ← the deterministic loop; composes injected seams
-seams/   rctrl.ts  tend.ts  isolate.ts  exec.ts  lock.ts  journal.ts   ← all I/O, thin
-core/    plan.ts  validate.ts  classify.ts  evidence.ts  errors.ts     ← pure, total
+faces/     cli.ts                                          ← argv, exit codes, stdout/stderr discipline
+loop/      run-plan.ts  run-node.ts  run-work.ts           ← the deterministic loop; composes injected seams + adapters
+adapters/  rctrl.ts  tend.ts  git.ts                       ← pluggable tool bridges (the runner + ledger ports)
+seams/     isolate.ts  exec.ts  lock.ts  journal.ts        ← pleach's own I/O, thin
+core/      plan.ts  validate.ts  classify.ts  evidence.ts  errors.ts   ← pure, total
 ```
 
-- `core/` imports nothing from the other layers. `seams/` import `core/`. `loop/` imports `core/` types
-  and receives seam *instances* as a `Deps` parameter (never imports seam modules directly — construction
-  happens in `faces/`). `faces/` wires everything.
+- `core/` imports nothing from the other layers. `seams/` and `adapters/` import `core/`; an `adapters/`
+  bridge may also use a `seam/` (e.g. the audited `exec`). `loop/` imports `core/` types and receives seam +
+  adapter *instances* as a `Deps` parameter (never imports those modules directly — construction happens in
+  `faces/`). `faces/` wires everything.
 - **Nothing reaches across layers.** A face never calls git; the loop never spawns a process; a seam
   never makes a scheduling decision.
 
