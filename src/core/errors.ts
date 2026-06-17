@@ -97,3 +97,13 @@ export class TendTransportError extends Error {
     this.detail = detail;
   }
 }
+
+export class LedgerError extends Error {
+  readonly name = 'LedgerError';
+  readonly detail: string;
+
+  constructor(detail: string) {
+    super(`ledger error: ${detail}`);
+    this.detail = detail;
+  }
+}
