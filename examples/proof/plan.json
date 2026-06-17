@@ -40,7 +40,7 @@
       "accept": {
         "smoke": "bun test",
         "audit": {
-          "command": "bun /Users/jahala/conductor/workspaces/feature-map/missoula/src/bin/tend.ts audit wordcount",
+          "command": "tend audit wordcount",
           "provider": "codex"
         }
       },
