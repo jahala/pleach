@@ -18,11 +18,8 @@ const PLEACH_MAIN = join(import.meta.dir, '../../src/main.ts');
 const PROOF_PROJECT = join(import.meta.dir, '../../examples/proof/project');
 const PROOF_PLAN = join(import.meta.dir, '../../examples/proof/plan.json');
 const FAKE_CLAUDE = join(import.meta.dir, '../fixtures/fake-claude.sh');
-const RCTRL_BIN =
-  process.env.PLEACH_RCTRL_BIN ?? '/Users/jahala/conductor/repos/.pleach-tools/rctrl';
-const TEND_MODULE =
-  process.env.PLEACH_TEND_MODULE ??
-  '/Users/jahala/conductor/workspaces/feature-map/missoula/src/core/bridge/ingester.ts';
+const RCTRL_BIN = process.env.PLEACH_RCTRL_BIN ?? '';
+const TEND_MODULE = process.env.PLEACH_TEND_MODULE ?? '';
 const MISSOULA_FILES = TEND_MODULE.replace('bridge/ingester.ts', 'files.js');
 
 async function exists(p: string): Promise<boolean> {
