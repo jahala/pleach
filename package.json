@@ -25,6 +25,9 @@
     "llm"
   ],
   "type": "module",
+  "bin": {
+    "pleach": "./src/main.ts"
+  },
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
