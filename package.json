@@ -29,7 +29,8 @@
     ".": "./src/main.ts",
     "./adapters/rctrl": "./src/adapters/rctrl.ts",
     "./adapters/tend": "./src/adapters/tend.ts",
-    "./adapters/git": "./src/adapters/git.ts"
+    "./adapters/git": "./src/adapters/git.ts",
+    "./config": "./src/faces/config.ts"
   },
   "bin": {
     "pleach": "./src/main.ts"
