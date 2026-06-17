@@ -1,6 +1,6 @@
 import { TendTransportError } from '../core/errors.ts';
 import type { Verdict } from '../core/plan.ts';
-import type { TendSeam } from '../loop/deps.ts';
+import type { LedgerSeam } from '../loop/deps.ts';
 
 // The bridge interface pleach requires from tend's ingester module.
 // readClosed returns Set (pre-T1) or Map (T1+); emitVerdict signature
@@ -36,7 +36,7 @@ function toProjectRoot(source: string): string {
 // fire concurrently (single-ingester invariant — ENGINEERING.md concurrency
 // invariants). The queue is FIFO: calls resolve in the order they were
 // enqueued.
-export function createTendSeam(transport: TendTransport): TendSeam {
+export function createTendSeam(transport: TendTransport): LedgerSeam {
   // The tail of the promise chain. Every new call chains off this tail so
   // calls never overlap and always execute in arrival order.
   let tail: Promise<unknown> = Promise.resolve();

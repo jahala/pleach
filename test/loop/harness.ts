@@ -7,10 +7,10 @@ import type {
   IsolateSeam,
   Isolation,
   JournalSeam,
+  LedgerSeam,
   LockHandle,
   LockSeam,
-  RctrlSeam,
-  TendSeam,
+  RunnerSeam,
   Worker,
   WorkerResult,
 } from '../../src/loop/deps.ts';
@@ -227,7 +227,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
 
   // ── rctrl ─────────────────────────────────────────────────────────────────
   const auditProvider = opts.auditProvider ?? 'codex';
-  const rctrl: RctrlSeam = {
+  const runner: RunnerSeam = {
     async spawnWorker(spec): Promise<Worker> {
       // Infer node from the cwd convention /wt/<node>/<n>; role by provider —
       // audit workers run a different provider (the diversity rule guarantees
@@ -268,7 +268,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   };
 
   // ── tend ────────────────────────────────────────────────────────────────────
-  const tend: TendSeam = {
+  const ledger: LedgerSeam = {
     async readClosed(_source): Promise<Map<string, string | null>> {
       // Return the SAME map instance the test holds — exercises M3 (loop must
       // defensively copy; mutating this map post-start must not affect the run).
@@ -302,7 +302,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     },
   };
 
-  const deps: ConductorDeps = { exec, isolate, rctrl, tend, lock, journal };
+  const deps: ConductorDeps = { exec, isolate, runner, ledger, lock, journal };
 
   return {
     deps,
