@@ -34,10 +34,11 @@ quarantine, retry) is deterministic code; agent output is parsed evidence, never
 ## Architecture
 
 ```
-faces/   cli.ts                                   ← argv, exit codes, stdout/stderr discipline
-loop/    run-plan · run-node · run-work           ← the deterministic loop; composes injected seams
-seams/   rctrl · tend · isolate · exec · lock · journal   ← all I/O, thin
-core/    plan · validate · classify · errors      ← pure, total
+faces/     cli.ts                                  ← argv, exit codes, stdout/stderr discipline
+loop/      run-plan · run-node · run-work          ← the deterministic loop; composes injected seams + adapters
+adapters/  rctrl · tend · git                      ← pluggable tool bridges (the runner + ledger ports)
+seams/     isolate · exec · lock · journal         ← pleach's own I/O, thin
+core/      plan · validate · classify · errors     ← pure, total
 ```
 
 Stack: Bun + `bun:test`, TypeScript strict, `zod` the only dependency, `biome`. Runtime substrate:
