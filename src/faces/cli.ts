@@ -8,6 +8,7 @@ import {
   TendTransportError,
 } from '../core/errors.ts';
 import { PlanSchema } from '../core/plan.ts';
+import { planJsonSchema } from '../core/schema-json.ts';
 import { validatePlan } from '../core/validate.ts';
 import type { ConductorDeps, RunSummary } from '../loop/deps.ts';
 import { runPlan } from '../loop/run-plan.ts';
@@ -22,6 +23,7 @@ const HELP = `pleach — deterministic conductor for DAGs of verified agent work
 Usage:
   pleach run <plan.json> [flags]     Execute a plan
   pleach validate <plan.json>        Parse + validate a plan; print the topo order
+  pleach schema                      Emit the plan contract as JSON Schema (for planners / codegen)
   pleach --help
 
 Flags (run):
@@ -158,6 +160,11 @@ async function readPlan(path: string) {
   return parsed.data;
 }
 
+function verbSchema(): number {
+  process.stdout.write(`${JSON.stringify(planJsonSchema(), null, 2)}\n`);
+  return 0;
+}
+
 async function verbValidate(planPath: string): Promise<number> {
   const plan = await readPlan(planPath);
   const { order } = validatePlan(plan);
@@ -220,6 +227,8 @@ export async function runCli(argv: readonly string[]): Promise<number> {
       process.stdout.write(HELP);
       return verb === undefined && !argv.includes('--help') && !argv.includes('-h') ? 2 : 0;
     }
+    if (verb === 'schema') return verbSchema();
+
     if (planPath === undefined) throw new UsageError(`${verb}: <plan.json> is required`);
 
     switch (verb) {
