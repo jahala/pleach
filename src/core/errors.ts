@@ -107,3 +107,15 @@ export class LedgerError extends Error {
     this.detail = detail;
   }
 }
+
+export class ConfigError extends Error {
+  readonly name = 'ConfigError';
+  readonly path: string;
+  readonly detail: string;
+
+  constructor(path: string, detail: string) {
+    super(`config error at '${path}': ${detail}`);
+    this.path = path;
+    this.detail = detail;
+  }
+}
