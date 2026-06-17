@@ -1,8 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { rctrlRunner } from '../adapters/rctrl.ts';
-import { tendLedger } from '../adapters/tend.ts';
 import {
+  ConfigError,
   LockHeldError,
   PlanInvalidError,
   RebuildRequiredError,
@@ -16,6 +15,7 @@ import { exec } from '../seams/exec.ts';
 import { createIsolateSeam } from '../seams/isolate.ts';
 import { createJournal } from '../seams/journal.ts';
 import { createLockSeam } from '../seams/lock.ts';
+import { resolveSeams } from './config.ts';
 
 const HELP = `pleach — deterministic conductor for DAGs of verified agent work
 
@@ -30,7 +30,10 @@ Flags (run):
   --timeout-ms N          Default per-attempt timeout when a node omits policy.timeoutMs (default: 30m)
   --journal PATH          Run journal JSONL (default: <repo-root>/.git/pleach/journal.jsonl)
   --rctrl-bin PATH        rctrl binary (default: $PLEACH_RCTRL_BIN or 'rctrl' on PATH)
-  --tend-module PATH      tend ingester module path (default: $PLEACH_TEND_MODULE; required)
+  --config PATH           pleach.config.ts selecting the runner + ledger
+                          (default: <repo-root>/pleach.config.ts if present)
+  --tend-module PATH      use the tend ledger via this ingester module ($PLEACH_TEND_MODULE);
+                          omit it (with no config) to run standalone on the git ledger (node/<id> branches)
   --allowed-tools LIST    Tool allowlist for claude workers (cannot cover MCP tools)
   --permission-mode MODE  Permission/approval mode for workers (default: bypassPermissions —
                           unattended workers can't answer prompts; safety is external). Rides
@@ -55,6 +58,7 @@ interface Flags {
   tendModule?: string;
   allowedTools?: string;
   permissionMode: string;
+  config?: string;
 }
 
 class UsageError extends Error {
@@ -109,6 +113,10 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         break;
       case '--rctrl-bin':
         flags.rctrlBin = takeValue(arg, next);
+        i += 1;
+        break;
+      case '--config':
+        flags.config = takeValue(arg, next);
         i += 1;
         break;
       case '--tend-module':
@@ -173,22 +181,23 @@ export function summaryExitCode(summary: RunSummary): number {
 
 async function verbRun(planPath: string, flags: Flags): Promise<number> {
   const plan = await readPlan(planPath);
-  if (flags.tendModule === undefined) {
-    throw new UsageError('--tend-module (or $PLEACH_TEND_MODULE) is required for run');
-  }
 
   const journalPath = flags.journal ?? join(flags.repoRoot, '.git', 'pleach', 'journal.jsonl');
+  const { runner, ledger } = await resolveSeams({
+    repoRoot: flags.repoRoot,
+    rctrlBin: flags.rctrlBin,
+    permissionMode: flags.permissionMode,
+    ...(flags.config !== undefined ? { config: flags.config } : {}),
+    ...(flags.allowedTools !== undefined ? { allowedTools: flags.allowedTools } : {}),
+    ...(flags.tendModule !== undefined ? { tendModule: flags.tendModule } : {}),
+  });
   const deps: ConductorDeps = {
     exec,
     isolate: createIsolateSeam(exec, flags.repoRoot),
     lock: createLockSeam(),
     journal: createJournal(journalPath),
-    runner: rctrlRunner({
-      bin: flags.rctrlBin,
-      permissionMode: flags.permissionMode,
-      ...(flags.allowedTools !== undefined ? { allowedTools: flags.allowedTools } : {}),
-    }),
-    ledger: await tendLedger({ module: flags.tendModule }),
+    runner,
+    ledger,
   };
 
   process.stderr.write(`pleach: running ${plan.nodes.length} nodes (journal: ${journalPath})\n`);
@@ -222,7 +231,11 @@ export async function runCli(argv: readonly string[]): Promise<number> {
         throw new UsageError(`unknown verb '${verb}'`);
     }
   } catch (err) {
-    if (err instanceof UsageError || err instanceof PlanInvalidError) {
+    if (
+      err instanceof UsageError ||
+      err instanceof PlanInvalidError ||
+      err instanceof ConfigError
+    ) {
       const detail = err instanceof PlanInvalidError ? err.reasons.join('\n  ') : err.message;
       process.stderr.write(`pleach: ${detail}\n`);
       return 2;
