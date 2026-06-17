@@ -46,18 +46,20 @@ supports the `data` verb for shell inspection.
 
 ### Verified tend invocation
 
+`tend` must be on your PATH; otherwise replace it with `bun /path/to/missoula/src/bin/tend.ts`.
+
 The following was run from the pleach repo root (project lives inside pleach's git tree,
 so negctrl's git-root resolution falls back to the pleach root — the negctrl exits 2
 "target file not found" but the audit still runs and emits the result fence):
 
 ```
-cd examples/proof/project && bun /Users/jahala/conductor/workspaces/feature-map/missoula/src/bin/tend.ts audit wordcount
+cd examples/proof/project && tend audit wordcount
 ```
 
 Output (stderr → stdout):
 
 ```
-Error: target file not found: /Users/jahala/conductor/repos/pleach/src/count.ts
+Error: target file not found: src/count.ts
 audit wordcount: 2 check(s)
   c1: partial [negctrl ran=false discriminated=false]
   c2: partial

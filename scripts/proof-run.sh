@@ -8,13 +8,13 @@
 #   - rctrl on PATH (or PLEACH_RCTRL_BIN set)
 #   - bun on PATH
 #   - tmux (rctrl's substrate)
-#   - The missoula tend checkout at the known path
+#   - The missoula tend checkout (path given in $PLEACH_TEND_MODULE)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLEACH_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-TEND_MODULE=/Users/jahala/conductor/workspaces/feature-map/missoula/src/core/bridge/ingester.ts
+TEND_MODULE="${PLEACH_TEND_MODULE:?set PLEACH_TEND_MODULE to your tend ingester path}"
 PROOF_DEST=/tmp/pleach-proof-wordcount
 RCTRL_BIN="${PLEACH_RCTRL_BIN:-rctrl}"
 MAX_CONCURRENCY="${2:-2}"
@@ -80,7 +80,7 @@ cat > "$RUNTIME_PLAN" <<PLAN
       "accept": {
         "smoke": "bun test",
         "audit": {
-          "command": "bun /Users/jahala/conductor/workspaces/feature-map/missoula/src/bin/tend.ts audit wordcount",
+          "command": "tend audit wordcount",
           "provider": "codex"
         }
       },

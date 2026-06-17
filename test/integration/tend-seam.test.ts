@@ -3,7 +3,7 @@
  *
  * Runs against the REAL missoula ingester module (not a mock). Skipped unless:
  *   - PLEACH_TEND_MODULE env is set (explicit path), OR
- *   - the default path /Users/jahala/conductor/workspaces/feature-map/missoula/src/core/bridge/ingester.ts exists
+ *   - the module path given in $PLEACH_TEND_MODULE exists
  *
  * Fixture construction mirrors missoula's own ingester.test.ts approach:
  *   - real tmp dir as project root
@@ -36,11 +36,12 @@ import { createModuleTransport, createTendSeam } from '../../src/seams/tend.ts';
 
 // ── Module path resolution ────────────────────────────────────────────────────
 
-const DEFAULT_MODULE_PATH =
-  '/Users/jahala/conductor/workspaces/feature-map/missoula/src/core/bridge/ingester.ts';
+const TEND_MODULE = process.env.PLEACH_TEND_MODULE ?? '';
 
-const MODULE_PATH = process.env.PLEACH_TEND_MODULE ?? DEFAULT_MODULE_PATH;
-
+const MODULE_PATH = TEND_MODULE;
+const MISSOULA_FILES = TEND_MODULE
+  ? TEND_MODULE.replace('core/bridge/ingester.ts', 'core/files.js')
+  : '';
 async function moduleExists(p: string): Promise<boolean> {
   try {
     await access(p);
@@ -108,9 +109,7 @@ describe.skipIf(shouldSkip)('createModuleTransport — real missoula ingester', 
   test('readClosed returns a Map (adapted), empty garden → empty Map', async () => {
     // Seed a minimal garden so readCatalog doesn't fail on missing files.
     // Mirror missoula's writeCatalog call with the bare minimum catalog.
-    const missoula = (await import(
-      '/Users/jahala/conductor/workspaces/feature-map/missoula/src/core/files.js' as string
-    )) as {
+    const missoula = (await import(MISSOULA_FILES)) as {
       writeCatalog: (catalog: unknown, root: string) => Promise<void>;
     };
 
@@ -134,9 +133,7 @@ describe.skipIf(shouldSkip)('createModuleTransport — real missoula ingester', 
   });
 
   test('readClosed returns a Map with verified feature present', async () => {
-    const missoula = (await import(
-      '/Users/jahala/conductor/workspaces/feature-map/missoula/src/core/files.js' as string
-    )) as {
+    const missoula = (await import(MISSOULA_FILES)) as {
       writeCatalog: (catalog: unknown, root: string) => Promise<void>;
       writeFeature: (feature: unknown, root: string) => Promise<void>;
     };
@@ -191,9 +188,7 @@ describe.skipIf(shouldSkip)('createModuleTransport — real missoula ingester', 
   });
 
   test('emitVerdict with failed Verdict → {closed:false}, nothing written', async () => {
-    const missoula = (await import(
-      '/Users/jahala/conductor/workspaces/feature-map/missoula/src/core/files.js' as string
-    )) as {
+    const missoula = (await import(MISSOULA_FILES)) as {
       writeCatalog: (catalog: unknown, root: string) => Promise<void>;
       writeFeature: (feature: unknown, root: string) => Promise<void>;
       readFeature: (id: string, root: string) => Promise<{ audit?: unknown; status: string }>;

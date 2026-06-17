@@ -30,8 +30,7 @@ import { createRctrlSeam as makeRctrl } from '../../src/seams/rctrl.ts';
 
 // ── binary resolution ────────────────────────────────────────────────────────
 
-const RCTRL_BIN =
-  process.env.PLEACH_RCTRL_BIN ?? '/Users/jahala/conductor/repos/.pleach-tools/rctrl';
+const RCTRL_BIN = process.env.PLEACH_RCTRL_BIN ?? '';
 
 const FAKE_CLAUDE = join(import.meta.dir, '../fixtures/fake-claude.sh');
 
