@@ -2,6 +2,28 @@
   "name": "pleach",
   "version": "0.0.1",
   "private": true,
+  "description": "Deterministic conductor for DAGs of verified agent work — isolates each plan node in a git worktree, enforces gates, and publishes a node/<id> branch only for verified work.",
+  "license": "MIT",
+  "author": "Jan Hallvard Larsen <jan@m-a-d.co>",
+  "homepage": "https://jahala.github.io/pleach/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jahala/pleach.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jahala/pleach/issues"
+  },
+  "keywords": [
+    "agents",
+    "ai-agents",
+    "conductor",
+    "dag",
+    "verification",
+    "git",
+    "bun",
+    "typescript",
+    "llm"
+  ],
   "type": "module",
   "scripts": {
     "test": "bun test",

@@ -1,0 +1,11 @@
+# Normalize line endings
+* text=auto
+
+# Generated tend garden polyglots — keep out of language stats and diffs
+docs/tend/** linguist-generated=true
+*.tend.html linguist-generated=true -diff
+
+# Vendored tooling and brand assets — not pleach's own source
+petals/** linguist-vendored=true
+.brand/** linguist-vendored=true
+.claude/** linguist-vendored=true
