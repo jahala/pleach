@@ -28,7 +28,8 @@
   "exports": {
     ".": "./src/main.ts",
     "./adapters/rctrl": "./src/adapters/rctrl.ts",
-    "./adapters/tend": "./src/adapters/tend.ts"
+    "./adapters/tend": "./src/adapters/tend.ts",
+    "./adapters/git": "./src/adapters/git.ts"
   },
   "bin": {
     "pleach": "./src/main.ts"
