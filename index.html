@@ -948,8 +948,8 @@ code {
         <div>
           <div class="beat-title">work</div>
           <p class="beat-desc">
-            rctrl drives the agent worker inside the worktree — one unit of agent work, isolated, observable.
-            This is the only beat the agent controls.
+            The configured agent adapter drives the worker inside the worktree — one unit of agent work, isolated, observable.
+            This is the only beat the agent controls. rctrl is the batteries-included adapter; a <code>pleach.config.ts</code> swaps in any other.
           </p>
           <span class="beat-cmd" aria-label="rctrl command example">rctrl run --node &lt;id&gt;</span>
         </div>
@@ -972,7 +972,7 @@ code {
         <div>
           <div class="beat-title">commit before emit</div>
           <p class="beat-desc">
-            The <code>node/&lt;id&gt;</code> branch is written to git before tend is notified.
+            The <code>node/&lt;id&gt;</code> branch is written to git before the ledger is notified.
             The source of truth is the git object store, not an API response that could fail mid-flight.
           </p>
         </div>
@@ -1151,7 +1151,7 @@ code {
         <div class="scope-col-title" id="scope-for-label">for</div>
         <ul class="scope-list" role="list">
           <li>Unattended multi-step agent builds where gates decide what lands</li>
-          <li>A plan already mapped in tend — a real DAG, not a vague list</li>
+          <li>A concrete plan — a real DAG of nodes, not a vague list (tend, a hand-authored JSON, or any planner)</li>
           <li>Work you will not review diff-by-diff yourself</li>
           <li>Projects where a bad node silently poisoning its dependents is not acceptable</li>
           <li>Teams that need audit evidence, not just a green suite</li>
@@ -1163,7 +1163,7 @@ code {
           <li>A single quick edit you'll review before merging</li>
           <li>Interactive pairing sessions where you're guiding each step</li>
           <li>Anything you'll hand-review anyway — the gates add overhead for no benefit</li>
-          <li>Projects without a concrete plan in tend first</li>
+          <li>Projects without a concrete plan (tend, a hand-authored JSON, or any other planner) first</li>
         </ul>
       </div>
     </div>
@@ -1182,7 +1182,7 @@ code {
     </div>
 
     <p class="start-family reveal d3">
-      Part of the plotplot garden — tend decides what to build, pleach conducts the verified branches, rctrl runs each unit.
+      Part of the plotplot garden — pleach runs standalone on git + any agent tool; tend and rctrl are the batteries-included reference adapters. Swap either via <code>pleach.config.ts</code>. <a href="docs/adapters.md" style="color:rgba(250,245,233,0.75)">Read the adapters guide →</a>
     </p>
 
     <div class="start-actions reveal d4">
@@ -1205,6 +1205,7 @@ code {
         <a href="docs/tend/overview.html">garden</a>
         <a href="ENGINEERING.md">doctrine</a>
         <a href="docs/contract/plan-schema.md">contract</a>
+        <a href="docs/adapters.md">adapters</a>
       </nav>
     </div>
   </div>
