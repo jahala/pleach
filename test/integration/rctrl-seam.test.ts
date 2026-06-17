@@ -23,10 +23,10 @@ import { randomBytes } from 'node:crypto';
 import { access, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { createRctrlSeam } from '../../src/adapters/rctrl.ts';
+import { createRctrlSeam as makeRctrl } from '../../src/adapters/rctrl.ts';
 import { WorkerSpawnError } from '../../src/core/errors.ts';
 import { exec } from '../../src/seams/exec.ts';
-import type { createRctrlSeam } from '../../src/seams/rctrl.ts';
-import { createRctrlSeam as makeRctrl } from '../../src/seams/rctrl.ts';
 
 // ── binary resolution ────────────────────────────────────────────────────────
 
