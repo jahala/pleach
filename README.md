@@ -17,17 +17,27 @@ are implemented and pass `bun run check` (187 tests). pleach tracks its own deve
 — [`docs/tend/`](docs/tend/) — and the landing page lives at
 [jahala.github.io/pleach](https://jahala.github.io/pleach/).
 
-## Quickstart
+## Install
+
+pleach is a Bun CLI; it is not on npm. It conducts **rctrl** (the agent-worker boundary) and **tend** (the verified ledger), so it also needs those plus `git >= 2.38` and `tmux` at run time.
+
+Run it without cloning (once this repo is public):
 
 ```sh
-bun install
-bun run check          # tsc --noEmit + biome + 187 tests
-
-# validate a plan, then run it (running needs a tend transport + the rctrl
-# binary — see CONTRIBUTING.md for the env vars and runtime substrate):
-bun src/main.ts validate examples/proof/plan.json
-bun src/main.ts run examples/proof/plan.json --tend-module <path-to-tend-ingester>
+bunx github:jahala/pleach validate plan.json
+bunx github:jahala/pleach run plan.json --tend-module <tend-ingester> --rctrl-bin <rctrl>
 ```
+
+Or clone and link a `pleach` command:
+
+```sh
+git clone https://github.com/jahala/pleach && cd pleach
+bun install && bun link    # puts `pleach` on your PATH
+bun run check              # tsc + biome + tests
+pleach run plan.json --tend-module <tend-ingester> --rctrl-bin <rctrl>
+```
+
+`--rctrl-bin` / `--tend-module` also read `$PLEACH_RCTRL_BIN` / `$PLEACH_TEND_MODULE`; see [`CONTRIBUTING.md`](CONTRIBUTING.md) for the runtime substrate.
 
 ```
 faces/   cli                                  ← argv, exit codes
