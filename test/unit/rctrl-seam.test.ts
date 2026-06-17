@@ -14,8 +14,8 @@
  *   - gemini gets neither (rctrl rejects both → would fail the spawn).
  */
 import { describe, expect, test } from 'bun:test';
+import { createRctrlSeam } from '../../src/adapters/rctrl.ts';
 import type { ExecFn } from '../../src/loop/deps.ts';
-import { createRctrlSeam } from '../../src/seams/rctrl.ts';
 
 // A real ExecFn that records every argv and returns a spawn-shaped success.
 // rctrl spawn's stdout must contain the --name value (the seam verifies it).

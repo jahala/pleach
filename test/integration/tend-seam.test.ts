@@ -30,9 +30,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { access } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createModuleTransport, createTendSeam } from '../../src/adapters/tend.ts';
 import { TendTransportError } from '../../src/core/errors.ts';
 import type { Verdict } from '../../src/core/plan.ts';
-import { createModuleTransport, createTendSeam } from '../../src/seams/tend.ts';
 
 // ── Module path resolution ────────────────────────────────────────────────────
 

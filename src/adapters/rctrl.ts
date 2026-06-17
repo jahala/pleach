@@ -1,5 +1,6 @@
 import { WorkerSeamError, WorkerSpawnError } from '../core/errors.ts';
-import type { ExecFn, Worker, WorkerResult } from '../loop/deps.ts';
+import type { ExecFn, RunnerSeam, Worker, WorkerResult } from '../loop/deps.ts';
+import { exec as defaultExec } from '../seams/exec.ts';
 
 // ── createRctrlSeam ──────────────────────────────────────────────────────────
 //
@@ -290,4 +291,9 @@ function extractFilesTouched(actions: unknown): string[] {
     }
   }
   return result;
+}
+
+// Public adapter factory for pleach.config.ts — wires the default audited exec.
+export function rctrlRunner(opts: RctrlSeamOpts): RunnerSeam {
+  return createRctrlSeam(defaultExec, opts);
 }

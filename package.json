@@ -25,6 +25,11 @@
     "llm"
   ],
   "type": "module",
+  "exports": {
+    ".": "./src/main.ts",
+    "./adapters/rctrl": "./src/adapters/rctrl.ts",
+    "./adapters/tend": "./src/adapters/tend.ts"
+  },
   "bin": {
     "pleach": "./src/main.ts"
   },
