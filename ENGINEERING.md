@@ -5,12 +5,13 @@ reference this file by path. Deviations require a written reason in the PR descr
 
 ## What pleach is
 
-pleach is the **deterministic conductor** between tend (the feature ledger that decides what "done"
-means) and rctrl (the execution boundary that runs one unit of agent work reliably). It consumes a
-`Plan` (a DAG of nodes), runs each node's work in an **isolated detached git worktree** merged from its
-dependencies' verified branches, enforces **gates** (smoke commands, conflict-marker checks,
-cross-provider audits), emits typed `Verdict`s to tend's deterministic ingester, and **publishes a
-`node/<id>` branch only for verified work** — so garbage cannot propagate down the DAG.
+pleach is the **deterministic conductor** for verified agent work. It consumes a `Plan` (a DAG of
+nodes), runs each node's work in an **isolated detached git worktree** merged from its dependencies'
+verified branches, enforces **gates** (smoke commands, conflict-marker checks, cross-provider audits),
+emits typed `Verdict`s to a verification **ledger**, and **publishes a `node/<id>` branch only for
+verified work** — so garbage cannot propagate down the DAG. It runs **standalone on git + any agent
+runner**; tend (the feature ledger) and rctrl (the execution boundary) are the batteries-included
+reference adapters, not requirements (see [`docs/adapters.md`](docs/adapters.md)).
 
 ```
 tend     decides what the garden should bear   (ledger of intent; the verified gate)
