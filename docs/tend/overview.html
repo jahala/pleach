@@ -2823,19 +2823,17 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     "src"
   ],
   "health_snapshot": {
-    "verdict": "red",
+    "verdict": "yellow",
     "reason_codes": [
-      "broken_refs",
       "stale_evidence",
-      "false_done",
       "unblocked"
     ],
     "truth": {
       "verified": 5,
       "total": 16,
-      "stale": 30,
+      "stale": 13,
       "mock_only": 0,
-      "false_done": 3,
+      "false_done": 0,
       "auditable": 9,
       "audited": 8
     },
@@ -2863,23 +2861,23 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       },
       "verified": {
         "count": 5,
-        "at_risk": 3
+        "at_risk": 0
       }
     },
     "coherence": {
-      "total": 43,
+      "total": 72,
       "groups": [
         {
-          "kind": "judgment_missing",
-          "label": "judgment refresh",
-          "count": 23,
+          "kind": "every_slot_has_check",
+          "label": "slot checks",
+          "count": 37,
           "route": "/tend brainstorm",
           "section": "spine"
         },
         {
-          "kind": "every_slot_has_check",
-          "label": "slot checks",
-          "count": 11,
+          "kind": "judgment_missing",
+          "label": "judgment refresh",
+          "count": 24,
           "route": "/tend brainstorm",
           "section": "spine"
         },
@@ -2889,10 +2887,17 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
           "count": 9,
           "route": "/tend change",
           "section": "spine"
+        },
+        {
+          "kind": "dek_stale",
+          "label": "deks",
+          "count": 2,
+          "route": "/tend narrate",
+          "section": "content"
         }
       ]
     },
-    "computed_at": "2026-06-18T08:23:12.903Z"
+    "computed_at": "2026-06-18T14:55:23.157Z"
   },
   "what": "pleach — a deterministic conductor that interweaves a DAG of agent-built work into one verified canopy: it isolates each plan node in its own git worktree, enforces gates, and publishes a branch only for work that mechanically passed them.",
   "why": "Stochastic agents can't be trusted to self-certify, and reviewing every diff defeats the point of delegating to them. pleach makes deterministic code — never agent prose — the sole authority on what counts as done, so a swarm can build unattended without garbage reaching the trunk.",
