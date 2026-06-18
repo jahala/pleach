@@ -46,18 +46,19 @@ describe('IsolateCatastrophicError', () => {
 
 describe('GateFailedError', () => {
   test('instanceof + fields — smoke gate', () => {
-    const e = new GateFailedError('smoke', 'exit 1\nsome output');
+    const e = new GateFailedError('smoke', 'exit 1\nsome output', 1);
     expect(e).toBeInstanceOf(GateFailedError);
     expect(e).toBeInstanceOf(Error);
     expect(e.name).toBe('GateFailedError');
     expect(e.gate).toBe('smoke');
     expect(e.evidence).toBe('exit 1\nsome output');
+    expect(e.exitCode).toBe(1);
   });
 
   test('all valid gate values accepted', () => {
     const gates = ['smoke', 'marker', 'red', 'green', 'command', 'setup'] as const;
     for (const gate of gates) {
-      const e = new GateFailedError(gate, 'evidence');
+      const e = new GateFailedError(gate, 'evidence', 0);
       expect(e.gate).toBe(gate);
     }
   });

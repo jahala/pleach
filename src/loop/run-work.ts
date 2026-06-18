@@ -47,7 +47,7 @@ export async function runWork(
       cwd,
       timeoutMs: opts.timeoutMs,
     });
-    if (exitCode !== 0) throw new GateFailedError('command', output);
+    if (exitCode !== 0) throw new GateFailedError('command', output, exitCode);
     return {
       finalMessage: output,
       filesTouched: [],
@@ -78,13 +78,13 @@ export async function runWork(
         });
         // RED must FAIL: a test that already passes means no failing test was
         // written (or a harness error) — the TDD guarantee is void.
-        if (exitCode === 0) throw new GateFailedError('red', output);
+        if (exitCode === 0) throw new GateFailedError('red', output, exitCode);
       } else if (phase.phase === 'green') {
         const { output, exitCode } = await exec(toArgv(work.test), {
           cwd,
           timeoutMs: opts.timeoutMs,
         });
-        if (exitCode !== 0) throw new GateFailedError('green', output);
+        if (exitCode !== 0) throw new GateFailedError('green', output, exitCode);
       }
     }
     // phases is non-empty by construction (zod array); last is set.
