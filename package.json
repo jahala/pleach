@@ -30,6 +30,7 @@
     "./adapters/umbel": "./src/adapters/umbel.ts",
     "./adapters/tend": "./src/adapters/tend.ts",
     "./adapters/git": "./src/adapters/git.ts",
+    "./adapters/scripted": "./src/adapters/scripted.ts",
     "./config": "./src/faces/config.ts"
   },
   "bin": {
