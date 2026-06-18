@@ -1,0 +1,17 @@
+{
+  "goal": "Agent work verified by a cross-provider audit — driven deterministically by a scripted runner (no LLM, no keys).",
+  "source": "examples/scripted-agent",
+  "nodes": [
+    {
+      "id": "implement",
+      "work": { "prompt": "Implement the wordcount function in wc.ts." },
+      "accept": { "audit": { "command": "echo audit", "provider": "codex" } }
+    },
+    {
+      "id": "harden",
+      "needs": ["implement"],
+      "work": { "prompt": "Harden wordcount with an edge-case test in wc.test.ts." },
+      "accept": { "audit": { "command": "echo audit", "provider": "codex" } }
+    }
+  ]
+}
