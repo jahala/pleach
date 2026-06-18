@@ -2483,14 +2483,14 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "tend_version": "0.4.0",
   "generated_at": "2026-06-13T16:23:40.018Z",
   "project_name": "Project Garden",
-  "dek_sha": "97ce3eab7fa2fed798601b5dcc3d8d7da2a68285"
+  "dek_sha": "5e7c8e0dcefad8f113f22b617fc396831302887b"
 }
 </script>
 
 <script id="oo-data" type="application/json">
 {
   "id": "rctrl-seam",
-  "title": "rctrl Seam: Agent Worker Bridge",
+  "title": "rctrl Runner Adapter: Agent Worker Bridge",
   "status": "planned",
   "priority": "high",
   "journey_phase": "build",
@@ -2499,7 +2499,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     "operator"
   ],
   "what": "Spawns rctrl-managed agent workers (claude, codex) over ExecFn arg-arrays, drives them with send/wait/kill, threads sinceMtime for race-free stop detection, gathers finalMessage+actions+diff after stop, and passes provider-specific flags (allowedTools for claude, permissionMode for claude+codex).",
-  "where": "src/seams/rctrl.ts",
+  "where": "src/adapters/rctrl.ts",
   "how": "rctrl spawn --name --cwd [--provider] [--model] [--allowed-tools] [--permission-mode] [--env K=V]; send --json captures sinceMtime; wait --json --since --timeout; read/actions/diff gathered on stop; WorkerSpawnError/WorkerSeamError on failures",
   "progress": {
     "implementation": 0,
@@ -2584,7 +2584,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     }
   ],
   "coverage_files": [
-    "src/seams/rctrl.ts"
+    "src/adapters/rctrl.ts"
   ],
   "solves": [
     "agent-output-as-truth",
@@ -2592,8 +2592,8 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   ],
   "impact": "Stochastic agents are driven through one reliable spawn->send->wait->kill boundary, with dead/timeout/blocked surfaced as typed reasons the loop can act on.",
   "fit": "The execution boundary between the deterministic loop and the vendor-churning agent providers; isolates rctrl/provider churn behind one seam.",
-  "dek": "rctrl-seam is the one channel between pleach's deterministic loop and a stochastic agent: spawn→send→wait→kill over the rctrl binary, with sinceMtime threading to make stop detection race-free and typed reasons — stop, dead, timeout, input, idle — so the loop never holds a slot on a hung or unresponsive worker.",
-  "narrative": "## One typed exit for every way an agent can stop\n\n`createRctrlSeam(exec, opts)` in `src/seams/rctrl.ts` exposes a single `spawnWorker` call that returns a `Worker` — three methods and a name. Every interaction with a stochastic agent flows through this interface; nothing else in the codebase touches rctrl directly. The [conductor loop](conductor-loop.tend.html) receives a seam factory at startup and calls `spawnWorker` per node; the [audit egress](audit-egress.tend.html) runs its cross-provider auditor through the exact same seam.\n\n`spawnWorker` assembles an `rctrl spawn` argv — `--name pl-<hex> --cwd` plus `--provider`, `--model`, `--allowed-tools` (claude only), `--permission-mode` (claude + codex), and any `--env K=V` pairs for test injection — and throws `WorkerSpawnError` on a non-zero exit or a missing name echo. From there the seam is stateful in exactly one way: a `sinceMtime` number captured from `send --json` output and threaded into the next `wait --json --since <mtime>`. This is the race-free stop detection the spec names: `sinceMtime` pins the pre-send filesystem snapshot, so a stop file written before the send cannot satisfy the wait, and after `wait` returns `stop` the seam advances `sinceMtime` to `Date.now()` — a second wait without a new send gets `timeout`, not a stale match on the same file.\n\n## Dead tmux session and hung workers never hold a slot\n\nThe six `wait` reasons (`stop`, `dead`, `timeout`, `aborted`, `input`, `idle`) split cleanly in `gatherWorkerResult`. Only `stop` triggers the three subsidiary calls: `rctrl read` for the untruncated `finalMessage` (ledger C4 — audit egress parses this text), `rctrl actions --json` for `filesEdited ∪ filesWritten` (deduplicated into `filesTouched`), and `rctrl diff`. Everything else returns an empty `finalMessage` and empty `filesTouched`. `input` and `idle` carry the rctrl `message` field so the loop can surface the blocking prompt text in the verdict before skipping dependents. A `dead` result — the tmux session killed out-of-band — surfaces immediately; a `timeout` fires when rctrl's own deadline expires and rctrl kills the process before returning. Neither path leaves the seam waiting. `kill` is tolerant of already-dead workers (non-zero exit is ignored), so the loop can always call it on teardown without a guard.\n\n[worker_lifecycle]",
+  "dek": "The bundled rctrl runner adapter is one channel between pleach's deterministic loop and a stochastic agent: spawn→send→wait→kill over the rctrl binary, with sinceMtime threading to make stop detection race-free and typed reasons — stop, dead, timeout, input, idle — so the loop never holds a slot on a hung or unresponsive worker. It satisfies the RunnerSeam port; a pleach.config.ts can swap in another runner.",
+  "narrative": "## One typed exit for every way an agent can stop\n\n`rctrlRunner(opts)` in `src/adapters/rctrl.ts` is the bundled runner adapter's public factory — over an exec-injectable `createRctrlSeam(exec, opts)` core — and returns a value satisfying the `RunnerSeam` port (`loop/deps.ts`): a single `spawnWorker` call yielding a `Worker` of three methods and a name. Every interaction with a stochastic agent flows through this port; nothing else in the codebase touches rctrl directly, and a `pleach.config.ts` can swap rctrl for any other runner. The [conductor loop](conductor-loop.tend.html) receives the runner at startup and calls `spawnWorker` per node; the [audit egress](audit-egress.tend.html) runs its cross-provider auditor through the exact same runner.\n\n`spawnWorker` assembles an `rctrl spawn` argv — `--name pl-<hex> --cwd` plus `--provider`, `--model`, `--allowed-tools` (claude only), `--permission-mode` (claude + codex), and any `--env K=V` pairs for test injection — and throws `WorkerSpawnError` on a non-zero exit or a missing name echo. From there the adapter is stateful in exactly one way: a `sinceMtime` number captured from `send --json` output and threaded into the next `wait --json --since <mtime>`. This is the race-free stop detection the spec names: `sinceMtime` pins the pre-send filesystem snapshot, so a stop file written before the send cannot satisfy the wait, and after `wait` returns `stop` the adapter advances `sinceMtime` to `Date.now()` — a second wait without a new send gets `timeout`, not a stale match on the same file.\n\n## Dead tmux session and hung workers never hold a slot\n\nThe six `wait` reasons (`stop`, `dead`, `timeout`, `aborted`, `input`, `idle`) split cleanly in `gatherWorkerResult`. Only `stop` triggers the three subsidiary calls: `rctrl read` for the untruncated `finalMessage` (ledger C4 — audit egress parses this text), `rctrl actions --json` for `filesEdited ∪ filesWritten` (deduplicated into `filesTouched`), and `rctrl diff`. Everything else returns an empty `finalMessage` and empty `filesTouched`. `input` and `idle` carry the rctrl `message` field so the loop can surface the blocking prompt text in the verdict before skipping dependents. A `dead` result — the tmux session killed out-of-band — surfaces immediately; a `timeout` fires when rctrl's own deadline expires and rctrl kills the process before returning. Neither path leaves the adapter waiting. `kill` is tolerant of already-dead workers (non-zero exit is ignored), so the loop can always call it on teardown without a guard.\n\n[worker_lifecycle]",
   "media": {
     "worker_lifecycle": {
       "kind": "svg",

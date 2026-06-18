@@ -2566,8 +2566,31 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
         }
       },
       {
+        "id": "pluggable-adapters",
+        "title": "Pluggable Adapters: Any Runner, Any Ledger",
+        "status": "planned",
+        "priority": "high",
+        "enables": [
+          "cli-run"
+        ],
+        "personas": [
+          "developer",
+          "operator"
+        ],
+        "solves": [
+          "logic-io-entanglement"
+        ],
+        "journey_phase": "build",
+        "what": "Generalizes pleach from the tend+rctrl pair into a standalone conductor: RunnerSeam/LedgerSeam ports (loop/deps.ts) with bundled adapters in src/adapters/ (rctrlRunner, tendLedger, gitLedger); resolve",
+        "thumbnail": {
+          "kind": "svg",
+          "alt": "A central port box with one solid adapter plugged in on the left and one dashed swappable adapter on the right — pluggable runner/ledger",
+          "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><rect class=\"tc-wh tc-frame\" x=\"46\" y=\"28\" width=\"28\" height=\"24\" rx=\"3\"/><rect class=\"tc-ac\" x=\"14\" y=\"32\" width=\"20\" height=\"16\" rx=\"3\"/><line class=\"tc-ln\" x1=\"34\" y1=\"40\" x2=\"46\" y2=\"40\"/><rect class=\"tc-wh tc-frame\" x=\"86\" y=\"32\" width=\"20\" height=\"16\" rx=\"3\" stroke-dasharray=\"4,2\"/><line class=\"tc-ln\" x1=\"74\" y1=\"40\" x2=\"86\" y2=\"40\"/></svg>"
+        }
+      },
+      {
         "id": "rctrl-seam",
-        "title": "rctrl Seam: Agent Worker Bridge",
+        "title": "rctrl Runner Adapter: Agent Worker Bridge",
         "status": "planned",
         "priority": "high",
         "personas": [
@@ -2589,7 +2612,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       },
       {
         "id": "tend-seam",
-        "title": "tend Seam: Ledger Bridge with Serial Queue",
+        "title": "tend Ledger Adapter: Ledger Bridge with Serial Queue",
         "status": "planned",
         "priority": "high",
         "personas": [
