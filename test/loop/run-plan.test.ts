@@ -345,6 +345,19 @@ describe('runPlan — lock + journal', () => {
   });
 });
 
+// ── dispose failure safety (audit finding #37) ───────────────────────────────
+// Node promises must NEVER reject. A dispose() throwing IsolateCatastrophicError
+// on a done node (after commitBranch + emitVerdict) must be journaled, not fatal.
+describe('runPlan — dispose failure is journaled, not run-fatal', () => {
+  test('dispose throw on a closed node is journaled; summary.closed contains the node', async () => {
+    const h = makeHarness({ disposeThrows: new Set(['A']) });
+    const p = plan({ nodes: [makeNode({ id: 'A' })] });
+    const summary = await runPlan(p, h.deps, { repoRoot: REPO, defaultTimeoutMs: 1000 });
+    expect(summary.closed).toContain('A');
+    expect(h.journal.some((e) => e.event === 'dispose-failed' && e.node === 'A')).toBe(true);
+  });
+});
+
 // ── lead review: the closed-before-dispose window ────────────────────────────
 // ledger: ordering invariant under CONCURRENCY. closed.set(A) must not become
 // visible to the scheduler while A's worktree is still being disposed — another

@@ -131,6 +131,8 @@ export interface HarnessOpts {
   // Awaited inside dispose(node) between 'dispose-start' and 'dispose' — lets a
   // test hold a worktree open to expose scheduling races.
   disposeDelay?: (nodeId: string) => Promise<void>;
+  // Node ids whose dispose() throws IsolateCatastrophicError (fault injection).
+  disposeThrows?: Set<string>;
 }
 
 export interface Harness {
@@ -199,6 +201,12 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
         async dispose() {
           log.push('dispose-start', node.id, cwd);
           if (opts.disposeDelay) await opts.disposeDelay(node.id);
+          if (opts.disposeThrows?.has(node.id)) {
+            throw new IsolateCatastrophicError(
+              'git worktree remove',
+              `dispose failed (harness): ${node.id}`,
+            );
+          }
           log.push('dispose', node.id, cwd);
         },
       };

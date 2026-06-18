@@ -1,4 +1,4 @@
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IsolateCatastrophicError } from '../core/errors.ts';
@@ -66,13 +66,19 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     const dispose = async (): Promise<void> => {
       const r = await git(exec, repoRoot, 'worktree', 'remove', '--force', worktreePath);
       // "is not a working tree" or "not found" are acceptable — already removed
-      if (
-        r.exitCode !== 0 &&
-        !r.output.includes('is not a working tree') &&
-        !r.output.includes('not found')
-      ) {
-        // tolerate already-removed silently — best effort
+      if (r.exitCode !== 0) {
+        if (!r.output.includes('is not a working tree') && !r.output.includes('not found')) {
+          throw new IsolateCatastrophicError(
+            'git worktree remove',
+            `exited ${r.exitCode}: ${r.output.trim()}`,
+          );
+        }
       }
+      // pleach created tmpBase via mkdtemp — we own it and must clean it up.
+      // fs.rm is correct here per engineering doctrine: "Programmatic cleanup of
+      // paths this code created uses git's own commands or fs.rm on paths we
+      // provably own."
+      await rm(tmpBase, { recursive: true, force: true });
     };
 
     const conflictFiles: string[] = [];
@@ -134,7 +140,14 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
         // (ledger B3/C1 rationale: cannot continue a multi-ref chain with an
         // unconcluded merge; markers stay in committed files; the scanMarkers gate
         // catches them before any verified branch is published)
-        await git(exec, worktreePath, 'add', '-A');
+        //
+        // Use -u (update tracked files only), not -A. The worktree is freshly
+        // created from a clean commit and a failed merge, so conflict markers
+        // land exclusively in already-tracked files. -u stages exactly those
+        // modifications without pulling in any untracked files that may exist
+        // in the worktree (e.g. from a prior iteration of the loop). This is
+        // scoped staging consistent with ledger S1/C2 doctrine.
+        await git(exec, worktreePath, 'add', '-u');
         await git(
           exec,
           worktreePath,
