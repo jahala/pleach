@@ -62,6 +62,19 @@ async function loadConfig(path: string, required: boolean): Promise<PleachConfig
     throw new ConfigError(path, 'export must be an object with runner and ledger fields');
   }
 
+  const r = (raw as Record<string, unknown>).runner as Record<string, unknown>;
+  const l = (raw as Record<string, unknown>).ledger as Record<string, unknown>;
+
+  if (typeof r.spawnWorker !== 'function') {
+    throw new ConfigError(path, 'runner must implement spawnWorker(spec)');
+  }
+  if (typeof l.readClosed !== 'function') {
+    throw new ConfigError(path, 'ledger must implement readClosed(source)');
+  }
+  if (typeof l.emitVerdict !== 'function') {
+    throw new ConfigError(path, 'ledger must implement emitVerdict(verdict, source)');
+  }
+
   return raw as PleachConfig;
 }
 

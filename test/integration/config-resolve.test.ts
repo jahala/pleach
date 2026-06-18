@@ -8,6 +8,8 @@ import { createRepo, makeBranch } from '../support/git-repo.ts';
 
 const CUSTOM_CONFIG = new URL('../fixtures/pleach.config.custom.ts', import.meta.url).pathname;
 const BAD_CONFIG = new URL('../fixtures/pleach.config.bad.ts', import.meta.url).pathname;
+const EMPTY_SEAMS_CONFIG = new URL('../fixtures/pleach.config.empty-seams.ts', import.meta.url)
+  .pathname;
 
 // ── tests ──────────────────────────────────────────────────────────────────────
 
@@ -70,6 +72,24 @@ test('resolveSeams: invalid config (missing ledger) → rejects with ConfigError
     await expect(
       resolveSeams({
         config: BAD_CONFIG,
+        repoRoot: repo.path,
+        umbelBin: 'umbel',
+        permissionMode: 'bypassPermissions',
+      }),
+    ).rejects.toThrow(ConfigError);
+  } finally {
+    await repo.cleanup();
+  }
+});
+
+// (e) config exports { runner: {}, ledger: {} } — shallow object check passes today,
+// but the seams lack required methods; loadConfig must reject with ConfigError.
+test('resolveSeams: config with empty-object seams → rejects with ConfigError (missing methods)', async () => {
+  const repo = await createRepo();
+  try {
+    await expect(
+      resolveSeams({
+        config: EMPTY_SEAMS_CONFIG,
         repoRoot: repo.path,
         umbelBin: 'umbel',
         permissionMode: 'bypassPermissions',
