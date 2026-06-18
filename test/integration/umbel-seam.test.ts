@@ -26,6 +26,7 @@ import { join } from 'node:path';
 import type { createUmbelSeam } from '../../src/adapters/umbel.ts';
 import { createUmbelSeam as makeUmbel } from '../../src/adapters/umbel.ts';
 import { WorkerSpawnError } from '../../src/core/errors.ts';
+import type { ExecFn, ExecResult } from '../../src/loop/deps.ts';
 import { exec } from '../../src/seams/exec.ts';
 
 // ── binary resolution ────────────────────────────────────────────────────────
@@ -134,9 +135,11 @@ describe.skipIf(!binPresent)('umbel seam integration', () => {
     }
   }, 60_000);
 
-  // ledger: D2 — two-turn conversation: second send/wait reflects turn 2
-  // (--since threading prevents stale-stop: wait re-arms after each turn).
-  test('two-turn conversation: sinceMtime threads correctly', async () => {
+  // ledger: D2 — two-turn happy path: second send/wait reaches turn 2 content.
+  // This test confirms the binary-level flow works but does NOT discriminate the
+  // sinceMtime threading invariant (fake-claude is deterministic regardless of
+  // --since). The unit-level spy test below owns that invariant.
+  test('happy-path two-turn flow', async () => {
     const seam = makeSeam();
     let worker: Awaited<ReturnType<Seam['spawnWorker']>> | undefined;
     try {
@@ -210,4 +213,107 @@ describe.skipIf(!binPresent)('umbel seam integration', () => {
       seam.spawnWorker({ cwd: '/nonexistent-pleach-cwd-xyz123' }),
     ).rejects.toBeInstanceOf(WorkerSpawnError);
   }, 15_000);
+});
+
+// ── unit: sinceMtime threading (no binary required) ───────────────────────────
+//
+// ledger: D2 — the race-free invariant: send --json captures sinceMtime; the
+// NEXT wait passes --since <that mtime>; after a 'stop' the adapter advances
+// sinceMtime to Date.now() so a second wait without a new send times out rather
+// than re-triggering on the same stop file.
+//
+// Uses a spy ExecFn (the sanctioned seam-injection pattern — createUmbelSeam
+// takes exec as its first parameter). The spy is a real function, not a mock:
+// it implements ExecFn correctly for every verb the adapter calls.
+describe('umbel seam — sinceMtime threading (spy exec, no binary)', () => {
+  const BIN = '/fake/umbel';
+  const CWD = '/tmp/spy-cwd';
+  const FIXED_MTIME = 123456789;
+
+  // Build a spy ExecFn that:
+  //   - spawn → success (echoes back the --name value so spawnWorker validates)
+  //   - send --json → {"sinceMtime": FIXED_MTIME}
+  //   - wait --json → {"reason":"stop"}
+  //   - read → "spy response"
+  //   - actions --json → minimal ActionManifest
+  //   - diff → "" (no diff → diff field omitted)
+  // All calls are appended to `calls` so assertions can inspect argv.
+  function makeSpyExec(calls: Array<readonly string[]>): ExecFn {
+    return async (argv): Promise<ExecResult> => {
+      calls.push(argv);
+      const verb = argv[1]; // argv[0] is BIN
+      if (verb === 'spawn') {
+        // Extract the --name value (follows '--name' flag)
+        const nameIdx = argv.indexOf('--name');
+        const name = nameIdx >= 0 ? argv[nameIdx + 1] : 'unknown';
+        return { exitCode: 0, output: `spawned: ${name}\n` };
+      }
+      if (verb === 'send') {
+        return { exitCode: 0, output: `{"sinceMtime":${FIXED_MTIME}}\n` };
+      }
+      if (verb === 'wait') {
+        return { exitCode: 0, output: '{"reason":"stop"}\n' };
+      }
+      if (verb === 'read') {
+        return { exitCode: 0, output: 'spy response\n' };
+      }
+      if (verb === 'actions') {
+        return {
+          exitCode: 0,
+          output:
+            '{"turnCount":1,"finalMessage":"spy response","filesEdited":[],"filesWritten":[]}\n',
+        };
+      }
+      if (verb === 'diff') {
+        return { exitCode: 0, output: '' };
+      }
+      if (verb === 'kill') {
+        return { exitCode: 0, output: '' };
+      }
+      return { exitCode: 0, output: '' };
+    };
+  }
+
+  test('wait argv contains --since <sinceMtime captured from send --json>', async () => {
+    const calls: Array<readonly string[]> = [];
+    const spyExec = makeSpyExec(calls);
+    const seam = makeUmbel(spyExec, { bin: BIN });
+
+    const worker = await seam.spawnWorker({ cwd: CWD });
+    await worker.send('hello');
+    await worker.wait({ timeoutMs: 5_000 });
+    await worker.kill();
+
+    // Find the wait call (verb === 'wait')
+    const waitCall = calls.find((a) => a[1] === 'wait');
+    expect(waitCall).toBeDefined();
+
+    // --since must appear and its value must equal FIXED_MTIME
+    const sinceIdx = (waitCall as readonly string[]).indexOf('--since');
+    expect(sinceIdx).toBeGreaterThan(-1);
+    expect((waitCall as readonly string[])[sinceIdx + 1]).toBe(String(FIXED_MTIME));
+  });
+
+  test('second wait (no new send) uses Date.now()-based sinceMtime, not FIXED_MTIME', async () => {
+    // After a stop, sinceMtime is reset to Date.now() — the second wait must
+    // NOT carry FIXED_MTIME (it must carry a fresh timestamp >= FIXED_MTIME).
+    const calls: Array<readonly string[]> = [];
+    const spyExec = makeSpyExec(calls);
+    const seam = makeUmbel(spyExec, { bin: BIN });
+
+    const worker = await seam.spawnWorker({ cwd: CWD });
+    await worker.send('hello');
+    await worker.wait({ timeoutMs: 5_000 }); // first wait: stop → sinceMtime = Date.now()
+    await worker.wait({ timeoutMs: 5_000 }); // second wait: must use the Date.now() baseline
+    await worker.kill();
+
+    const waitCalls = calls.filter((a) => a[1] === 'wait');
+    expect(waitCalls.length).toBe(2);
+
+    const sinceIdx2 = (waitCalls[1] as readonly string[]).indexOf('--since');
+    expect(sinceIdx2).toBeGreaterThan(-1);
+    const secondSince = Number((waitCalls[1] as readonly string[])[sinceIdx2 + 1]);
+    // Must be a real timestamp (> FIXED_MTIME) — not the stale send mtime.
+    expect(secondSince).toBeGreaterThan(FIXED_MTIME);
+  });
 });
