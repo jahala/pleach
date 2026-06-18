@@ -1,0 +1,24 @@
+{
+  "goal": "Isolation, gating, and quarantine over plain shell commands — no agent runner, no API keys.",
+  "source": "examples/command-dag",
+  "nodes": [
+    {
+      "id": "lib",
+      "work": { "command": "bash -lc \"echo 'echo ok' > build.sh\"" }
+    },
+    {
+      "id": "check",
+      "needs": ["lib"],
+      "work": { "command": "bash build.sh" }
+    },
+    {
+      "id": "broken",
+      "work": { "command": "bash -lc \"exit 1\"" }
+    },
+    {
+      "id": "dependent",
+      "needs": ["broken"],
+      "work": { "command": "bash -lc \"echo this should never run\"" }
+    }
+  ]
+}
