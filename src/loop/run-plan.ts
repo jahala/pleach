@@ -245,7 +245,7 @@ async function runUnderLock(
     const shouldClose = node.accept.audit ? decision.closed : true;
     if (shouldClose) {
       closed.set(node.id, sha);
-      baseRefForClosed.set(node.id, `node/${node.id}`);
+      baseRefForClosed.set(node.id, sha); // pin to the immutable commit SHA, not the movable branch
       await deps.journal.append({ event: 'closed', node: node.id, sha });
     } else {
       // tend declined to verify-close this audit node: the branch IS published
@@ -307,8 +307,11 @@ function seedClosure(plan: Plan, closed: Map<string, string | null>): void {
   }
 }
 
-// Resolve a closed id to a usable baseRef: node/<id> branch if present, else the
-// recorded SHA if it resolves, else null (→ rebuild required).
+// Resolve a closed id to a usable baseRef: node/<id> branch if present and
+// matches the recorded SHA, else the recorded SHA if it resolves, else null
+// (→ rebuild required). If the branch exists but points to a different SHA
+// than what the conductor recorded, the ref was force-moved (worker attack or
+// external push) — throw RebuildRequiredError immediately (C5 verify-before-use).
 async function resolveBaseRef(
   deps: ConductorDeps,
   repoRoot: string,
@@ -316,7 +319,19 @@ async function resolveBaseRef(
   recordedSha: string | null,
 ): Promise<string | null> {
   const branch = `node/${id}`;
-  if ((await deps.isolate.refSha(repoRoot, branch)) !== null) return branch;
+  const branchSha = await deps.isolate.refSha(repoRoot, branch);
+  if (branchSha !== null) {
+    if (recordedSha !== null && branchSha !== recordedSha) {
+      await deps.journal.append({
+        event: 'sha-mismatch',
+        node: id,
+        recordedSha,
+        foundSha: branchSha,
+      });
+      throw new RebuildRequiredError(id);
+    }
+    return branch;
+  }
   if (recordedSha !== null && (await deps.isolate.refSha(repoRoot, recordedSha)) !== null) {
     return recordedSha;
   }
