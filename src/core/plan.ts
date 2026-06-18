@@ -29,6 +29,8 @@ const Node = z.object({
     audit: z.object({
       command: z.string(),                                  // e.g. `tend audit <feature>` (intent-read + negctrl)
       provider: z.string(),                                 // MUST ≠ worker.provider — model diversity
+      // OPTIONAL — pin the auditor's model; the provider still MUST differ (diversity).
+      model: z.string().optional(),
     }).optional(),
   }).default({}),
   policy: z.object({
