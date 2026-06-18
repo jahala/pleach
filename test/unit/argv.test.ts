@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { toArgv } from '../../src/core/argv.ts';
+import { ArgvParseError } from '../../src/core/errors.ts';
 
 // ledger: SEC1 / D3 — plan command strings (work.command, accept.smoke, setup,
 // work.test) must reach ExecFn as a literal arg-array, never `sh -c <string>`.
@@ -65,7 +66,28 @@ describe('toArgv — escaping (no substitution)', () => {
 });
 
 describe('toArgv — total on malformed input', () => {
-  test('unterminated quote → throws (caller treats as a plan defect)', () => {
-    expect(() => toArgv('echo "unterminated')).toThrow();
+  // ledger: SEC1 / D3 — bare new Error is forbidden outside core/errors.ts (ENGINEERING.md §4)
+  test('unterminated double quote → throws ArgvParseError with the command preserved', () => {
+    const cmd = 'git commit -m "oops';
+    let caught: unknown;
+    try {
+      toArgv(cmd);
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(ArgvParseError);
+    expect((caught as ArgvParseError).command).toBe(cmd);
+  });
+
+  test('unterminated single quote → throws ArgvParseError with the command preserved', () => {
+    const cmd = "echo 'hello";
+    let caught: unknown;
+    try {
+      toArgv(cmd);
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(ArgvParseError);
+    expect((caught as ArgvParseError).command).toBe(cmd);
   });
 });
