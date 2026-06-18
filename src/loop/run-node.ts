@@ -337,10 +337,10 @@ function handleGate(
   err: GateFailedError,
 ): { settle?: RunNodeResult; evidence?: string } {
   const settle = settleRetryable(node, attempts, maxAttempts, {
-    gate: { ran: gateRanLabel(node, err), exitCode: gateExitCode(err) },
+    gate: { ran: gateRanLabel(node, err), exitCode: err.exitCode },
   });
   if (settle) return { settle };
-  return { evidence: gateEvidence(err.gate, gateExitCode(err), err.evidence) };
+  return { evidence: gateEvidence(err.gate, err.exitCode, err.evidence) };
 }
 
 // The label recorded in evidence.gate.ran. For command/red/green/setup the
@@ -359,13 +359,6 @@ function gateRanLabel(node: Node, err: GateFailedError): string {
     default:
       return err.gate;
   }
-}
-
-// GateFailedError does not carry the numeric exit code (its evidence is the
-// output). The gate.ran label distinguishes the gate; exitCode is -1 for gates
-// whose code isn't separately threaded (command/red/green carry it in prose).
-function gateExitCode(_err: GateFailedError): number {
-  return -1;
 }
 
 // Settle a retryable failure into a failed Verdict iff attempts are exhausted;

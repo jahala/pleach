@@ -392,6 +392,23 @@ describe('runNode — happy verdict shape', () => {
   });
 });
 
+// ledger: #39/#40 — command-gate verdict carries the real exit code, not -1
+describe('runNode — command gate exit code fidelity', () => {
+  test('command-gate failure records the real exit code (not -1) in verdict.evidence.gate', async () => {
+    const h = makeHarness({
+      execScript: () => ({ output: 'build failed', exitCode: 3 }),
+    });
+    const node = makeNode({
+      id: 'n',
+      work: { command: 'build thing' },
+      policy: { maxAttempts: 1, onDead: 'fail', reauditWhen: ['compacted'] },
+    });
+    const r = await runNode(node, ['base'], h.deps, { defaultTimeoutMs: DEF });
+    expect(r.verdict.status).toBe('failed');
+    expect(r.verdict.evidence.gate).toEqual({ ran: 'build thing', exitCode: 3 });
+  });
+});
+
 describe('runNode — timeout default threading', () => {
   test('node without policy.timeoutMs uses opts.defaultTimeoutMs for wait + exec', async () => {
     const seen: (number | undefined)[] = [];
