@@ -214,6 +214,50 @@ describe('runNode — gates', () => {
     expect(h.log.count('isolate', 'n')).toBe(1);
     expect(h.log.count('exec', undefined)).toBe(2); // setup re-execed each attempt
   });
+
+  // ledger: C3 — setup runs before the RED gate on a {test,phases} node.
+  // Without setup a fresh worktree may have no test runner, causing the RED
+  // gate to false-positive (runner error ≠ test failure). The fix is setup
+  // running once post-isolate, before any phase gate, so the environment is
+  // prepared when RED executes. This discriminating test verifies that ordering.
+  test('ledger: C3 — setup exec precedes RED gate exec on a {test,phases} node', async () => {
+    const execOrder: string[] = [];
+    const h = makeHarness({
+      execScript: (argv) => {
+        execOrder.push(argv.join(' '));
+        if (argv.join(' ') === 'runtests') {
+          // RED: first call must fail (exit 1 = good RED); subsequent call passes (GREEN).
+          const isFirstTestRun = execOrder.filter((e) => e === 'runtests').length === 1;
+          return {
+            output: isFirstTestRun ? 'no tests found' : 'all pass',
+            exitCode: isFirstTestRun ? 1 : 0,
+          };
+        }
+        return { output: '', exitCode: 0 };
+      },
+    });
+    const node = makeNode({
+      id: 'n',
+      work: {
+        test: 'runtests',
+        phases: [
+          { phase: 'red', prompt: 'write a failing test' },
+          { phase: 'impl', prompt: 'implement it' },
+          { phase: 'green', prompt: 'make it pass' },
+        ],
+      },
+      setup: 'install deps',
+    });
+    const r = await runNode(node, ['base'], h.deps, { defaultTimeoutMs: DEF });
+    expect(r.verdict.status).toBe('done');
+
+    // setup exec must precede the first RED gate exec
+    const setupAt = execOrder.indexOf('install deps');
+    const redAt = execOrder.indexOf('runtests');
+    expect(setupAt).toBeGreaterThanOrEqual(0);
+    expect(redAt).toBeGreaterThanOrEqual(0);
+    expect(setupAt).toBeLessThan(redAt);
+  });
 });
 
 describe('runNode — audit', () => {
