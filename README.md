@@ -21,7 +21,7 @@ are implemented and pass `bun run check` (191 tests). pleach tracks its own deve
 ## Install
 
 pleach is a Bun CLI; it is not on npm. It requires `git >= 2.38` at run time. The default
-`rctrlRunner` also needs `tmux` and the `rctrl` binary on your PATH — but the runner is
+`umbelRunner` also needs `tmux` and the `umbel` binary on your PATH — but the runner is
 pluggable (see [Adapters](#adapters)).
 
 Run it without cloning (once this repo is public):
@@ -43,7 +43,7 @@ pleach run plan.json
 ```
 faces/     cli                                  ← argv, exit codes
 loop/      run-plan · run-node · run-work       ← the deterministic loop
-adapters/  rctrl · tend · git                   ← pluggable tool bridges (runner/ledger)
+adapters/  umbel · tend · git                   ← pluggable tool bridges (runner/ledger)
 seams/     isolate · exec · lock · journal      ← pleach's own I/O
 core/      plan · validate · classify · errors  ← pure
 ```
@@ -55,18 +55,18 @@ pleach needs two seams to run: a **runner** (spawns and drives an agent per node
 can replace either with your own implementation of `RunnerSeam` or `LedgerSeam`.
 
 **Zero-config.** With no `pleach.config.ts` and no `--config` flag, pleach defaults to
-`rctrlRunner` + `gitLedger`. `gitLedger` is entirely local — it reads `node/*` branches from the
+`umbelRunner` + `gitLedger`. `gitLedger` is entirely local — it reads `node/*` branches from the
 git repo, no external ledger required. `pleach run plan.json` works standalone.
 
 **Selecting adapters explicitly.** Drop a `pleach.config.ts` at the repo root:
 
 ```ts
-import { rctrlRunner } from 'pleach/adapters/rctrl';
+import { umbelRunner } from 'pleach/adapters/umbel';
 import { gitLedger } from 'pleach/adapters/git';
 import type { PleachConfig } from 'pleach/config';
 
 export default {
-  runner: rctrlRunner({ bin: 'rctrl', permissionMode: 'bypassPermissions' }),
+  runner: umbelRunner({ bin: 'umbel', permissionMode: 'bypassPermissions' }),
   ledger: gitLedger({ repo: '.' }),
 } satisfies PleachConfig;
 ```
@@ -74,8 +74,8 @@ export default {
 Swap either line for your own adapter without touching the plan or any other config.
 
 **Opting into tend.** Pass `--tend-module <path-to-tend-ingester>` to replace `gitLedger` with the
-tend ledger. tend then owns verdict verification and the feature's close state. `--rctrl-bin` (or
-`$PLEACH_RCTRL_BIN`) selects the rctrl binary when using the default runner.
+tend ledger. tend then owns verdict verification and the feature's close state. `--umbel-bin` (or
+`$PLEACH_UMBEL_BIN`) selects the umbel binary when using the default runner.
 
 Full adapter contracts, the `RunnerSeam` and `LedgerSeam` interfaces, and a guide for writing your
 own: [`docs/adapters.md`](docs/adapters.md).
@@ -99,4 +99,4 @@ Build plan: [`docs/plan.md`](docs/plan.md) · Doctrine: [`ENGINEERING.md`](ENGIN
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/jahala)
 
 Not published to npm. MIT licensed ([`LICENSE`](LICENSE)). Part of the plot-plot garden suite alongside
-[tend](https://github.com/plot-plot) and rctrl.
+[tend](https://github.com/plot-plot) and umbel.

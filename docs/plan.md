@@ -26,13 +26,13 @@ builds, codex audits, tend's gate decides), surviving the A1/A2 traps it was cho
   trips, missing-baseRef → typed catastrophic error, setup-runs-before-gates.
 
 ## P2 — worker seam  `[repos: provo (R1 PR) → pleach]`
-- **R1 in rctrl (PR to provo, ledger-cited):** `wait --json` (+ `--since <mtime>`), `send --json`
+- **R1 in umbel (PR to provo, ledger-cited):** `wait --json` (+ `--since <mtime>`), `send --json`
   emitting `sinceMtime`, MCP `sinceMtime` wiring, `allowedTools` work-or-error per provider, exit-code
-  split input/idle. Each item RED-first in rctrl's own suite.
-- `src/seams/rctrl.ts` — `spawnWorker → Worker{send, wait, kill}`; `WorkerResult` assembled from
+  split input/idle. Each item RED-first in umbel's own suite.
+- `src/seams/umbel.ts` — `spawnWorker → Worker{send, wait, kill}`; `WorkerResult` assembled from
   `wait --json` + `read` (untruncated) + `actions` (files arrays) + `diff`; maps `input|idle` reasons
-  through *(D2)*. Integration tests: real `rctrl` binary + vendored fake worker binaries
-  (`test/fixtures/fake-worker.sh`, the rctrl fixture pattern). No mocks.
+  through *(D2)*. Integration tests: real `umbel` binary + vendored fake worker binaries
+  (`test/fixtures/fake-worker.sh`, the umbel fixture pattern). No mocks.
 
 ## P3 — ledger seam  `[repos: missoula (T1, tend agent) ∥ pleach]`
 - `src/seams/tend.ts` — `readClosed`/`emitVerdict` over the transport T1 exposes (package export or
@@ -59,7 +59,7 @@ builds, codex audits, tend's gate decides), surviving the A1/A2 traps it was cho
 - `src/faces/cli.ts` — `pleach run <plan.json> [--max-concurrency N] [--land <branch>] [--journal <path>]`,
   `pleach validate <plan.json>`; exit codes (0 all-closed; 1 failures; 2 usage/invalid plan; 3 lock held);
   stdout = the `RunSummary` JSON, stderr = narration. `--land` default OFF (human merges).
-- E2E: `pleach run` as a process — real git, real rctrl + fake workers, real tend transport, a 3-node
+- E2E: `pleach run` as a process — real git, real umbel + fake workers, real tend transport, a 3-node
   plan with one engineered failure+retry.
 
 ## P6 — integration & proof  `[repos: all three]`
@@ -73,7 +73,7 @@ builds, codex audits, tend's gate decides), surviving the A1/A2 traps it was cho
 
 ## Cross-repo dependency notes
 - P2 blocks on the R1 PR only for `--json`/`--since`; adapter skeleton + fixtures can start against
-  shipped rctrl.
+  shipped umbel.
 - P3's live transport blocks on the tend agent's T1; the missoula-source fallback unblocks pleach
   immediately.
 - The proof's generated-plan path blocks on T1 generator changes; the hand-written-plan path doesn't.

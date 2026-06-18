@@ -31,7 +31,7 @@ Flags (run):
   --max-concurrency N     Parallel node cap (default: 1)
   --timeout-ms N          Default per-attempt timeout when a node omits policy.timeoutMs (default: 30m)
   --journal PATH          Run journal JSONL (default: <repo-root>/.git/pleach/journal.jsonl)
-  --rctrl-bin PATH        rctrl binary (default: $PLEACH_RCTRL_BIN or 'rctrl' on PATH)
+  --umbel-bin PATH        umbel binary (default: $PLEACH_UMBEL_BIN or 'umbel' on PATH)
   --config PATH           pleach.config.ts selecting the runner + ledger
                           (default: <repo-root>/pleach.config.ts if present)
   --tend-module PATH      use the tend ledger via this ingester module ($PLEACH_TEND_MODULE);
@@ -56,7 +56,7 @@ interface Flags {
   maxConcurrency?: number;
   timeoutMs?: number;
   journal?: string;
-  rctrlBin: string;
+  umbelBin: string;
   tendModule?: string;
   allowedTools?: string;
   permissionMode: string;
@@ -71,7 +71,7 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
   const positionals: string[] = [];
   const flags: Flags = {
     repoRoot: process.cwd(),
-    rctrlBin: process.env.PLEACH_RCTRL_BIN ?? 'rctrl',
+    umbelBin: process.env.PLEACH_UMBEL_BIN ?? 'umbel',
     // Workers run unattended — default to bypassing in-worker permission prompts
     // (a curated allowlist can't cover MCP tools). Safety is external: disposable
     // worktree + cross-provider audit + gates. Override with --permission-mode.
@@ -113,8 +113,8 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         flags.journal = takeValue(arg, next);
         i += 1;
         break;
-      case '--rctrl-bin':
-        flags.rctrlBin = takeValue(arg, next);
+      case '--umbel-bin':
+        flags.umbelBin = takeValue(arg, next);
         i += 1;
         break;
       case '--config':
@@ -192,7 +192,7 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
   const journalPath = flags.journal ?? join(flags.repoRoot, '.git', 'pleach', 'journal.jsonl');
   const { runner, ledger } = await resolveSeams({
     repoRoot: flags.repoRoot,
-    rctrlBin: flags.rctrlBin,
+    umbelBin: flags.umbelBin,
     permissionMode: flags.permissionMode,
     ...(flags.config !== undefined ? { config: flags.config } : {}),
     ...(flags.allowedTools !== undefined ? { allowedTools: flags.allowedTools } : {}),

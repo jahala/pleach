@@ -5,9 +5,9 @@
 #   bash scripts/proof-run.sh [--skip-setup] [--max-concurrency N]
 #
 # Requires:
-#   - rctrl on PATH (or PLEACH_RCTRL_BIN set)
+#   - umbel on PATH (or PLEACH_UMBEL_BIN set)
 #   - bun on PATH
-#   - tmux (rctrl's substrate)
+#   - tmux (umbel's substrate)
 #   - The missoula tend checkout (path given in $PLEACH_TEND_MODULE)
 
 set -euo pipefail
@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLEACH_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TEND_MODULE="${PLEACH_TEND_MODULE:?set PLEACH_TEND_MODULE to your tend ingester path}"
 PROOF_DEST=/tmp/pleach-proof-wordcount
-RCTRL_BIN="${PLEACH_RCTRL_BIN:-rctrl}"
+UMBEL_BIN="${PLEACH_UMBEL_BIN:-umbel}"
 MAX_CONCURRENCY="${2:-2}"
 SKIP_SETUP=0
 
@@ -30,7 +30,7 @@ done
 echo "=== pleach proof run ===" >&2
 echo "  repo-root: $PROOF_DEST" >&2
 echo "  tend-module: $TEND_MODULE" >&2
-echo "  rctrl: $RCTRL_BIN" >&2
+echo "  umbel: $UMBEL_BIN" >&2
 echo "  max-concurrency: $MAX_CONCURRENCY" >&2
 echo "" >&2
 
@@ -106,6 +106,6 @@ bun "$PLEACH_ROOT/src/main.ts" run "$RUNTIME_PLAN" \
   --repo-root "$PROOF_DEST" \
   --max-concurrency "$MAX_CONCURRENCY" \
   --tend-module "$TEND_MODULE" \
-  --rctrl-bin "$RCTRL_BIN" \
+  --umbel-bin "$UMBEL_BIN" \
   --journal "$JOURNAL" \
   --permission-mode bypassPermissions

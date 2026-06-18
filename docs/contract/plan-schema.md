@@ -1,10 +1,10 @@
 # `@agent-contract/plan` v1.1.1 — canonical text
 
 This repo is the contract's home. `src/core/plan.ts` must match the fenced block below byte-for-byte
-(drift-tested). tend and rctrl vendor from this file. Schema changes happen here first — doc + source +
+(drift-tested). tend and umbel vendor from this file. Schema changes happen here first — doc + source +
 drift test in one commit, with an entry in [`CHANGES.md`](CHANGES.md).
 
-Provenance: v0.3 §1 of `tend-rctrl-build-spec.md` (ratified) + the v1.1 verification deltas
+Provenance: v0.3 §1 of `tend-umbel-build-spec.md` (ratified) + the v1.1 verification deltas
 (`docs/ledger.md`): id charset (SEC3), `setup` (C3), `policy.timeoutMs` (D1), `Verdict.status +=
 'blocked'` (D2), inert-field annotations (D6), `diffRef` required-on-close (B1/B2). Proposed to the tend
 side in `missoula/docs/internal/bridge/plan-schema-v1.1-proposed.md`; amendments from their ratification
@@ -112,7 +112,7 @@ export interface TendSeam {
   readClosed(source: string): Promise<Map<string, string | null>>;   // id → verified commit SHA (null = legacy)
   emitVerdict(v: Verdict, source: string): Promise<{ closed: boolean }>;
 }
-export interface RctrlSeam {
+export interface UmbelSeam {
   spawnWorker(spec: { provider?: string; model?: string; cwd: string }): Promise<Worker>;
 }
 export interface Worker {

@@ -2539,7 +2539,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
           "agent-output-as-truth"
         ],
         "journey_phase": "build",
-        "what": "Execute a plan.json through the deterministic conductor loop, driving agent workers via rctrl and recording verdicts in tend's gated ledger. Exits 0 only when every node closes verified; partial/faile",
+        "what": "Execute a plan.json through the deterministic conductor loop, driving agent workers via umbel and recording verdicts in tend's gated ledger. Exits 0 only when every node closes verified; partial/faile",
         "thumbnail": {
           "kind": "svg",
           "alt": "Run triangle flowing into a forking branch — pleach run executor",
@@ -2617,8 +2617,8 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
         }
       },
       {
-        "id": "rctrl-seam",
-        "title": "rctrl Seam: Agent Worker Bridge",
+        "id": "umbel-seam",
+        "title": "umbel Seam: Agent Worker Bridge",
         "status": "planned",
         "priority": "high",
         "personas": [
@@ -2631,10 +2631,10 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
         ],
         "journey_phase": "build",
         "is_subpage": true,
-        "what": "Spawns rctrl-managed agent workers (claude, codex) over ExecFn arg-arrays, drives them with send/wait/kill, threads sinceMtime for race-free stop detection, gathers finalMessage+actions+diff after sto",
+        "what": "Spawns umbel-managed agent workers (claude, codex) over ExecFn arg-arrays, drives them with send/wait/kill, threads sinceMtime for race-free stop detection, gathers finalMessage+actions+diff after sto",
         "thumbnail": {
           "kind": "svg",
-          "alt": "Square loop and circle agent joined by a two-way arrow channel — rctrl spawn/send bridge",
+          "alt": "Square loop and circle agent joined by a two-way arrow channel — umbel spawn/send bridge",
           "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><rect class=\"tc-wh tc-frame\" x=\"16\" y=\"24\" width=\"34\" height=\"32\" rx=\"3\"/><circle class=\"tc-ac\" cx=\"90\" cy=\"40\" r=\"16\"/><line class=\"tc-ln\" x1=\"50\" y1=\"36\" x2=\"72\" y2=\"32\"/><line class=\"tc-ln\" x1=\"72\" y1=\"32\" x2=\"68\" y2=\"26\"/><line class=\"tc-ln\" x1=\"72\" y1=\"48\" x2=\"50\" y2=\"44\"/><line class=\"tc-ln\" x1=\"50\" y1=\"44\" x2=\"54\" y2=\"38\"/></svg>"
         }
       },

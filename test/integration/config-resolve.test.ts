@@ -18,7 +18,7 @@ test('resolveSeams: explicit config path → custom ledger selected (sentinel ke
     const { ledger } = await resolveSeams({
       config: CUSTOM_CONFIG,
       repoRoot: repo.path,
-      rctrlBin: 'rctrl',
+      umbelBin: 'umbel',
       permissionMode: 'bypassPermissions',
     });
     const closed = await ledger.readClosed('x');
@@ -36,7 +36,7 @@ test('resolveSeams: no config → gitLedger default, node/foo branch is returned
 
     const { ledger } = await resolveSeams({
       repoRoot: repo.path,
-      rctrlBin: 'rctrl',
+      umbelBin: 'umbel',
       permissionMode: 'bypassPermissions',
     });
     const closed = await ledger.readClosed('x');
@@ -54,7 +54,7 @@ test('resolveSeams: missing config file → rejects with ConfigError', async () 
       resolveSeams({
         config: '/no/such/pleach.config.ts',
         repoRoot: repo.path,
-        rctrlBin: 'rctrl',
+        umbelBin: 'umbel',
         permissionMode: 'bypassPermissions',
       }),
     ).rejects.toThrow(ConfigError);
@@ -71,7 +71,7 @@ test('resolveSeams: invalid config (missing ledger) → rejects with ConfigError
       resolveSeams({
         config: BAD_CONFIG,
         repoRoot: repo.path,
-        rctrlBin: 'rctrl',
+        umbelBin: 'umbel',
         permissionMode: 'bypassPermissions',
       }),
     ).rejects.toThrow(ConfigError);

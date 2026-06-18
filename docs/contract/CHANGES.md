@@ -12,4 +12,4 @@
   (`<feature>.<step>`). `Verdict.evidence.blockedReason` added (the blocking prompt text). Binding
   prose added: setup-failure semantics, 30m timeout default + blocked-preempts-timeout, resolved-provider
   diversity check, single-writer-during-run, ingester-enforced diffRef, advisory evidenceSha, work-union
-  mapping pin. Ratification record: missoula docs/internal/bridge/tend-rctrl-v1.1-ratification.md.
+  mapping pin. Ratification record: missoula docs/internal/bridge/tend-umbel-v1.1-ratification.md.

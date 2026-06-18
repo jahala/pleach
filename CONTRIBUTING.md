@@ -28,7 +28,7 @@ Enforced in review (and most by CI). Full detail in `ENGINEERING.md`:
 
 | Env var | What |
 |---|---|
-| `PLEACH_RCTRL_BIN` | path to the `rctrl` binary |
+| `PLEACH_UMBEL_BIN` | path to the `umbel` binary |
 | `PLEACH_TEND_MODULE` | path to a tend ingester module |
 
 They also need `git >= 2.38` and `tmux` on PATH. With the vars unset those suites skip — which is exactly how CI runs.

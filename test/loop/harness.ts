@@ -225,7 +225,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     },
   };
 
-  // ── rctrl ─────────────────────────────────────────────────────────────────
+  // ── umbel ─────────────────────────────────────────────────────────────────
   const auditProvider = opts.auditProvider ?? 'codex';
   const runner: RunnerSeam = {
     async spawnWorker(spec): Promise<Worker> {

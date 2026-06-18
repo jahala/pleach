@@ -1,22 +1,22 @@
-# tend ⇄ conductor ⇄ rctrl — verification report & build plan
+# tend ⇄ conductor ⇄ umbel — verification report & build plan
 
-**Status: verification round, post-ratification.** The build-spec v0.3 (`missoula/docs/bridge/tend-rctrl-build-spec.md`)
+**Status: verification round, post-ratification.** The build-spec v0.3 (`missoula/docs/bridge/tend-umbel-build-spec.md`)
 was ratified "build-ready" after five rounds. This document is the result of a three-way verification —
-spec ⟷ tend's actually-built bridge code ⟷ rctrl's actually-shipped surface — plus an adversarial attack
+spec ⟷ tend's actually-built bridge code ⟷ umbel's actually-shipped surface — plus an adversarial attack
 on the conductor loop. **Verdict: the spec's git/concurrency core is sound (several attacks refuted), but
 the system as specced+built cannot complete a multi-step feature, cannot resume across runs, and can
 commit unresolved conflict markers into verified branches.** The defects below must be ratified through
 the bridge channel (a v0.4 / conductor-spec v1.0) before the first conductor commit. Every defect becomes
 a failing test first.
 
-Naming (proposed, npm-checked — see §6): conductor → **pleach**, rctrl → **rootstock**. The working names are used below for clarity.
+Naming (proposed, npm-checked — see §6): conductor → **pleach**, umbel → **rootstock**. The working names are used below for clarity.
 
 ---
 
 ## 1. Defect ledger
 
 Severity: ⛔ blocker · ⚠ serious · ◦ minor. Source: [adv] adversarial review, [code] verified against tend's
-built bridge, [rctrl] verified against rctrl source, [me] prior whole-system analysis.
+built bridge, [umbel] verified against umbel source, [me] prior whole-system analysis.
 
 ### Class A — semantic deadlocks (the loop cannot complete honest work)
 
@@ -92,10 +92,10 @@ checkpoint but have different lifetimes and trust domains.**
   `Node.setup?: string` (schema addition) run once post-isolate; RED must distinguish "test collected and
   failed" from "harness errored" (baseline dry-run).
 
-- **C4 ⚠ [adv + rctrl] Audit-parse failure burns a good node.** `AuditResultSchema.parse` throws inside
+- **C4 ⚠ [adv + umbel] Audit-parse failure burns a good node.** `AuditResultSchema.parse` throws inside
   `runNode`'s catch; `classify()` has no row for it — a mis-formatted audit message fails a build that
-  passed its gates. Truncation makes it worse — but **rctrl already ships the fix surface**:
-  `rctrl_read full=true` (`mcp.ts:114`, marker at `truncate.ts:84`); the CLI `read` never truncates.
+  passed its gates. Truncation makes it worse — but **umbel already ships the fix surface**:
+  `umbel_read full=true` (`mcp.ts:114`, marker at `truncate.ts:84`); the CLI `read` never truncates.
   **Fix:** seam reads finalMessage untruncated (mandatory); distinct `AuditParseError` taxonomy row that
   re-runs *only the audit worker*, bounded separately.
 
@@ -109,13 +109,13 @@ checkpoint but have different lifetimes and trust domains.**
 
 - **D1 ⚠ [adv] No timeouts anywhere.** `Node` has no timeout field; no `exec()` call passes `timeoutMs`;
   `Worker.wait()` takes none. A hung worker or hung smoke command deadlocks the run (consumes a slot
-  forever). rctrl's default wait is 30 min (`operations/wait.ts:86`). **Fix:** `policy.timeoutMs`
+  forever). umbel's default wait is 30 min (`operations/wait.ts:86`). **Fix:** `policy.timeoutMs`
   (schema addition), threaded through wait and every exec.
-- **D2 ⚠ [me + rctrl] Needs-input has no policy.** rctrl `wait` can settle `'input'`/`'idle'`
+- **D2 ⚠ [me + umbel] Needs-input has no policy.** umbel `wait` can settle `'input'`/`'idle'`
   (`operations/wait.ts:35`) but the seam's reason enum omits both. Compounding: `allowedTools` is a
   **silent no-op on codex/gemini/opencode** — and the audit provider is hardcoded `'codex'`
   (`generator.ts:56`). **Fix:** seam maps `input|idle`; v1 policy = kill + distinct `'blocked'` status
-  (human attaches); rctrl makes `allowedTools` work-or-error per provider (see §3).
+  (human attaches); umbel makes `allowedTools` work-or-error per provider (see §3).
 - **D3 ◦ [adv] No plan validation** — cycles/unknown `needs`/duplicate ids silently skip or corrupt;
   `Node.id` is an unvalidated string interpolated into shell (`node/<id>`). **Fix:** `validatePlan`
   (toposort, uniqueness, id regex `^[A-Za-z0-9_.:-]+$`) before the loop; exec via arg-arrays
@@ -123,7 +123,7 @@ checkpoint but have different lifetimes and trust domains.**
 - **D4 ◦ [code] Generator omissions vs spec:** multi-`needs` "resolve any merge conflicts" prose not
   implemented (`stepToNeeds`, `generator.ts:127-133`); spec §2 `TendSeam.emitVerdict` signature diverges
   from code (`(v, source)`, `ingester.ts:109-112`) — reconcile spec to code.
-- **D5 ◦ [me] Evidence = extractor quality.** `filesTouched` comes from rctrl's ActionManifest
+- **D5 ◦ [me] Evidence = extractor quality.** `filesTouched` comes from umbel's ActionManifest
   (`filesRead/filesEdited/filesWritten`, `providers/types.ts:33-62`); codex/gemini/opencode extraction is
   explicitly unverified. Codex (the auditor) first.
 - **D6 ◦ [adv] Dead config fields** — `policy.budget` unenforced, `reauditWhen` dormant (telemetry empty
@@ -167,12 +167,12 @@ concurrency-invariant + junk-staging + marker tests) → seam stubs → `runPlan
 ladder, timeouts, lockfile, reconciliation) → live seams → **the proof run** (one honest-partial,
 multi-step feature — chosen precisely because it trips A1+A2 if they're mis-fixed).
 
-## 3. rctrl change plan
+## 3. umbel change plan
 
 Phase R1 — seam blockers (before the conductor's live-seam step):
 1. **`wait --json`**: structured `{reason, message, paneSnapshot?}` on stdout (CLI is the seam's
    transport; exit codes alone conflate input/idle — both 126 today).
-2. **MCP `sinceMtime` hole**: add to `VerbSchemas.wait`, thread through `rctrl_wait` (keystone-correctness
+2. **MCP `sinceMtime` hole**: add to `VerbSchemas.wait`, thread through `umbel_wait` (keystone-correctness
    fix regardless of the bridge).
 3. **`allowedTools` honest-or-error**: hard error on providers where it's unimplemented (codex/gemini/
    opencode) instead of silent no-op; investigate codex's native sandbox/approval flags as the real
@@ -224,7 +224,7 @@ word entirely; **arbor** is taken (a build CLI), `arbor-cli` is a version-contro
 installer library is famously `@npmcli/arborist` — muddy. Also taken: graft, sow, stake, cane, cloche,
 twine, tendril, dibber, drill, obelisk, pergola, orchard, coppice, holdfast, scion, espalier (placeholder
 squat). **Free on npm:** `pleach`, `rootstock`, `parterre`, `copse`, `almanac`, `withy`, `sward`,
-`furrow`, `plotplot` (the suite name itself!), and — notably — `rctrl`.
+`furrow`, `plotplot` (the suite name itself!), and — notably — `umbel`.
 
 Recommended pairing:
 
@@ -233,13 +233,13 @@ Recommended pairing:
   interweaving branches — git branches of living work — into one verified canopy, with gates as the
   pruning. Short, verby (`pleach run plan.json`), pronounceable ("pleech"), and a more precise metaphor
   than arbor was.
-- **rctrl → `rootstock`** (FREE) — the hardy, neutral stock any vendor's scion is grafted onto: the stock
+- **umbel → `rootstock`** (FREE) — the hardy, neutral stock any vendor's scion is grafted onto: the stock
   provides the reliability, the scion varieties (providers) churn season to season, and the graft union
   (the adapter) absorbs the difference. This is the positioning thesis ("anchor identity to the contract,
   not the substrate; adapters absorb vendor churn") rendered as horticulture. Caveat to weigh: Rootstock
   (RSK) is a known Bitcoin sidechain brand — different category, but it pollutes search. Fallbacks:
   **`withy`** (the flexible willow tie binding a plant to its stake — obscure but free and short), or
-  simply **keep `rctrl`** (free on npm) and let the suite story live at the pleach/tend layer.
+  simply **keep `umbel`** (free on npm) and let the suite story live at the pleach/tend layer.
 
 Suite note: `tend` itself is taken on npm (hence `tend-cli`), so a consistent alternative is claiming the
 free **`plotplot`** scope and shipping `@plotplot/pleach`, `@plotplot/rootstock`, `@plotplot/tend` with

@@ -2497,8 +2497,8 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "personas": [
     "operator"
   ],
-  "what": "Execute a plan.json through the deterministic conductor loop, driving agent workers via rctrl and recording verdicts in tend's gated ledger. Exits 0 only when every node closes verified; partial/failed/blocked/skipped maps to exit 1.",
-  "why": "The primary value of pleach: bridging tend's feature map to rctrl's worker execution with enforced gates (smoke, conflict-marker scan, cross-provider audit) and deterministic DAG ordering.",
+  "what": "Execute a plan.json through the deterministic conductor loop, driving agent workers via umbel and recording verdicts in tend's gated ledger. Exits 0 only when every node closes verified; partial/failed/blocked/skipped maps to exit 1.",
+  "why": "The primary value of pleach: bridging tend's feature map to umbel's worker execution with enforced gates (smoke, conflict-marker scan, cross-provider audit) and deterministic DAG ordering.",
   "where": "src/faces/cli.ts; src/main.ts",
   "how": "parseFlags → readPlan (Zod) → construct ConductorDeps from seams → runPlan → summaryExitCode; JSON RunSummary on stdout; errors → stderr + typed exit code",
   "progress": {
@@ -2523,11 +2523,11 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "checks": [
     {
       "id": "c001",
-      "description": "All nodes close verified → exit 0; RunSummary.closed contains all node IDs; failed/blocked/skipped empty. (inferred from test/e2e/cli.test.ts — requires real rctrl binary + missoula module)",
+      "description": "All nodes close verified → exit 0; RunSummary.closed contains all node IDs; failed/blocked/skipped empty. (inferred from test/e2e/cli.test.ts — requires real umbel binary + missoula module)",
       "validates": "what",
       "method": "synthetic-test",
       "integration_level": "e2e",
-      "verification_recipe": "Run `pleach run examples/proof/plan.json --tend-module <missoula> --rctrl-bin <rctrl>`; expect exit 0 and summary.closed.length === plan.nodes.length.",
+      "verification_recipe": "Run `pleach run examples/proof/plan.json --tend-module <missoula> --umbel-bin <umbel>`; expect exit 0 and summary.closed.length === plan.nodes.length.",
       "status": "open",
       "validates_job": "operator:0"
     },
@@ -2573,7 +2573,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     },
     {
       "id": "c006",
-      "description": "Retry ladder: flaky command node (fails once) retries and closes; node/id branch published with retry evidence. (inferred from test/e2e/cli.test.ts — requires real rctrl + missoula)",
+      "description": "Retry ladder: flaky command node (fails once) retries and closes; node/id branch published with retry evidence. (inferred from test/e2e/cli.test.ts — requires real umbel + missoula)",
       "validates": "what",
       "method": "synthetic-test",
       "integration_level": "e2e",
@@ -2650,8 +2650,8 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       }
     },
     {
-      "id": "rctrl-seam",
-      "title": "rctrl Runner Adapter: Agent Worker Bridge",
+      "id": "umbel-seam",
+      "title": "umbel Runner Adapter: Agent Worker Bridge",
       "status": "planned",
       "priority": "high",
       "personas": [
@@ -2664,10 +2664,10 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       ],
       "journey_phase": "build",
       "is_subpage": true,
-      "what": "Spawns rctrl-managed agent workers (claude, codex) over ExecFn arg-arrays, drives them with send/wait/kill, threads sinceMtime for race-free stop detection, gathers finalMessage+actions+diff after sto",
+      "what": "Spawns umbel-managed agent workers (claude, codex) over ExecFn arg-arrays, drives them with send/wait/kill, threads sinceMtime for race-free stop detection, gathers finalMessage+actions+diff after sto",
       "thumbnail": {
         "kind": "svg",
-        "alt": "Square loop and circle agent joined by a two-way arrow channel — rctrl spawn/send bridge",
+        "alt": "Square loop and circle agent joined by a two-way arrow channel — umbel spawn/send bridge",
         "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><rect class=\"tc-wh tc-frame\" x=\"16\" y=\"24\" width=\"34\" height=\"32\" rx=\"3\"/><circle class=\"tc-ac\" cx=\"90\" cy=\"40\" r=\"16\"/><line class=\"tc-ln\" x1=\"50\" y1=\"36\" x2=\"72\" y2=\"32\"/><line class=\"tc-ln\" x1=\"72\" y1=\"32\" x2=\"68\" y2=\"26\"/><line class=\"tc-ln\" x1=\"72\" y1=\"48\" x2=\"50\" y2=\"44\"/><line class=\"tc-ln\" x1=\"50\" y1=\"44\" x2=\"54\" y2=\"38\"/></svg>"
       }
     },
@@ -2698,7 +2698,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     "conductor-loop",
     "isolate-seam",
     "lock-journal",
-    "rctrl-seam",
+    "umbel-seam",
     "tend-seam"
   ],
   "coverage_files": [
@@ -2716,7 +2716,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "impact": "One command turns a tend plan into verified branches; the exit code alone tells the operator whether to trust the run or intervene.",
   "fit": "pleach's primary entry point — the operator's surface over the conductor loop.",
   "dek": "pleach run <plan.json> is the operator's handoff point: it parses the plan, wires the seams, fires the conductor loop, and exits with a code that tells the whole story. Exit 0 means every node closed verified; anything less drops to 1, and the RunSummary names the exact buckets.",
-  "narrative": "## One command, one truth\n\nIt's late. An operator queues a six-node plan before bed: claude builds the leaves, a second provider audits the integration node, and a ledger decides what counts as verified. They won't read every diff. The only glance they get is the exit code.\n\n`pleach run plan.json` is what they type — standalone, on git + the bundled rctrl runner + the git ledger. To verify through tend instead, they add `--tend-module ./missoula/dist/tend-ingester.js`; to wire any other runner or ledger, they drop a `pleach.config.ts`. `src/main.ts` delegates immediately to `src/faces/cli.ts:runCli`, which parses flags, reads the plan, resolves the seams, and calls `runPlan` — then maps the result to a process exit via the pure `summaryExitCode` function.\n\n## Wiring is policy, not plumbing\n\n`parseFlags` resolves nine flags from argv and env. `--permission-mode` defaults to `bypassPermissions` because unattended workers cannot answer prompts — safety is external (disposable worktree, cross-provider audit, gate ladder). The ledger is not pinned: with no `--tend-module` and no `pleach.config.ts`, pleach runs standalone on `gitLedger` (the `node/*` branches are the record); `--tend-module` opts into the tend ledger; `--config <path>` points at an explicit config.\n\n`readPlan` is the only gatekeep before deps come alive. It reads the file, parses JSON, then runs `PlanSchema.safeParse` — a Zod structural check. A malformed plan throws `PlanInvalidError` with every failing path and message, exits 2, and nothing else runs. The plan that enters `runPlan` is schema-valid.\n\nThe runner and ledger come from `src/faces/config.ts:resolveSeams` — a `pleach.config.ts` if present, else the default `rctrlRunner` plus `tendLedger` (when `--tend-module` is set) or `gitLedger`. `verbRun` then assembles `ConductorDeps` from pleach's own I/O seams (`createIsolateSeam`, `createLockSeam`, `createJournal`, `exec`) and the resolved runner + ledger. The [conductor loop](conductor-loop.tend.html) receives a `ConductorDeps` object and never touches the filesystem or CLI args directly. The CLI is pure wiring; the engine is pure logic.\n\n## Exit code is the contract\n\n`summaryExitCode` is a four-field boolean: if `failed`, `partial`, `blocked`, and `skipped` are all empty, return 0. Otherwise return 1. `partial` is not success — a node whose work landed but whose ledger verification was declined gets no free pass. The `RunSummary` JSON on stdout carries the per-bucket breakdown for any script that needs to tell them apart.\n\nErrors outside the loop collapse to typed exits: `LockHeldError` → 3 (another conductor holds this repo); `UsageError`, `PlanInvalidError`, or `ConfigError` → 2; `RebuildRequiredError` or `TendTransportError` → 1. Nothing falls through silently.\n\nLanding is manual by design — verified work publishes as `node/<id>` branches; the HELP text says so explicitly. There is no `--land` flag. The operator merges `node/<feature>` themselves. The sibling verbs round out the surface: [pleach validate](cli-validate.tend.html) checks plan structure without running anything, and `pleach schema` emits the plan contract as JSON Schema for planners. The [conductor loop](conductor-loop.tend.html) is the engine `run` drives; the [isolate](isolate-seam.tend.html), [rctrl](rctrl-seam.tend.html), and [tend](tend-seam.tend.html) seams are the bundled adapters it wires into deps (see `docs/adapters.md` for swapping them). The [project bet](../overview.html) is why those seams exist at all.",
+  "narrative": "## One command, one truth\n\nIt's late. An operator queues a six-node plan before bed: claude builds the leaves, a second provider audits the integration node, and a ledger decides what counts as verified. They won't read every diff. The only glance they get is the exit code.\n\n`pleach run plan.json` is what they type — standalone, on git + the bundled umbel runner + the git ledger. To verify through tend instead, they add `--tend-module ./missoula/dist/tend-ingester.js`; to wire any other runner or ledger, they drop a `pleach.config.ts`. `src/main.ts` delegates immediately to `src/faces/cli.ts:runCli`, which parses flags, reads the plan, resolves the seams, and calls `runPlan` — then maps the result to a process exit via the pure `summaryExitCode` function.\n\n## Wiring is policy, not plumbing\n\n`parseFlags` resolves nine flags from argv and env. `--permission-mode` defaults to `bypassPermissions` because unattended workers cannot answer prompts — safety is external (disposable worktree, cross-provider audit, gate ladder). The ledger is not pinned: with no `--tend-module` and no `pleach.config.ts`, pleach runs standalone on `gitLedger` (the `node/*` branches are the record); `--tend-module` opts into the tend ledger; `--config <path>` points at an explicit config.\n\n`readPlan` is the only gatekeep before deps come alive. It reads the file, parses JSON, then runs `PlanSchema.safeParse` — a Zod structural check. A malformed plan throws `PlanInvalidError` with every failing path and message, exits 2, and nothing else runs. The plan that enters `runPlan` is schema-valid.\n\nThe runner and ledger come from `src/faces/config.ts:resolveSeams` — a `pleach.config.ts` if present, else the default `umbelRunner` plus `tendLedger` (when `--tend-module` is set) or `gitLedger`. `verbRun` then assembles `ConductorDeps` from pleach's own I/O seams (`createIsolateSeam`, `createLockSeam`, `createJournal`, `exec`) and the resolved runner + ledger. The [conductor loop](conductor-loop.tend.html) receives a `ConductorDeps` object and never touches the filesystem or CLI args directly. The CLI is pure wiring; the engine is pure logic.\n\n## Exit code is the contract\n\n`summaryExitCode` is a four-field boolean: if `failed`, `partial`, `blocked`, and `skipped` are all empty, return 0. Otherwise return 1. `partial` is not success — a node whose work landed but whose ledger verification was declined gets no free pass. The `RunSummary` JSON on stdout carries the per-bucket breakdown for any script that needs to tell them apart.\n\nErrors outside the loop collapse to typed exits: `LockHeldError` → 3 (another conductor holds this repo); `UsageError`, `PlanInvalidError`, or `ConfigError` → 2; `RebuildRequiredError` or `TendTransportError` → 1. Nothing falls through silently.\n\nLanding is manual by design — verified work publishes as `node/<id>` branches; the HELP text says so explicitly. There is no `--land` flag. The operator merges `node/<feature>` themselves. The sibling verbs round out the surface: [pleach validate](cli-validate.tend.html) checks plan structure without running anything, and `pleach schema` emits the plan contract as JSON Schema for planners. The [conductor loop](conductor-loop.tend.html) is the engine `run` drives; the [isolate](isolate-seam.tend.html), [umbel](umbel-seam.tend.html), and [tend](tend-seam.tend.html) seams are the bundled adapters it wires into deps (see `docs/adapters.md` for swapping them). The [project bet](../overview.html) is why those seams exist at all.",
   "thumbnail": {
     "kind": "svg",
     "alt": "Run triangle flowing into a forking branch — pleach run executor",
