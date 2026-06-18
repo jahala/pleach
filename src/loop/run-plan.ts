@@ -1,7 +1,7 @@
 import { GateFailedError, RebuildRequiredError } from '../core/errors.ts';
 import type { Node, Plan, Verdict } from '../core/plan.ts';
 import { validatePlan } from '../core/validate.ts';
-import type { ConductorDeps, RunSummary } from './deps.ts';
+import type { ConductorDeps, Isolation, RunSummary } from './deps.ts';
 import { type RunNodeResult, runNode } from './run-node.ts';
 
 // ── run-plan: the scheduler ──────────────────────────────────────────────────
@@ -135,6 +135,21 @@ async function runUnderLock(
     await settle(node, outcome);
   }
 
+  // Node promises NEVER reject (run-plan.ts:115). A dispose() failure must not
+  // propagate — the work is already committed and the verdict emitted. Journal it
+  // and continue so the run summary reflects the correct closed/failed state.
+  async function disposeOrJournal(iso: Isolation, nodeId: string): Promise<void> {
+    try {
+      await iso.dispose();
+    } catch (err) {
+      await deps.journal.append({
+        event: 'dispose-failed',
+        node: nodeId,
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   // Commit-before-emit + dual-close, then dispose — all inside this promise so
   // the closed.set happens-before dispose, and dispose happens-before any
   // dependent's isolate (the scheduler only schedules dependents after closed).
@@ -167,7 +182,7 @@ async function runUnderLock(
       // failed / dead / timeout — emit for the record, no commit.
       failed.add(node.id);
       await deps.ledger.emitVerdict(verdict, plan.source);
-      if (iso) await iso.dispose();
+      if (iso) await disposeOrJournal(iso, node.id);
       return;
     }
 
@@ -205,7 +220,7 @@ async function runUnderLock(
       failure = err;
     }
 
-    await iso.dispose();
+    await disposeOrJournal(iso, node.id);
 
     if (failure !== undefined || sha === undefined || decision === undefined) {
       const err = failure;
