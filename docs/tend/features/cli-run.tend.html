@@ -2483,7 +2483,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "tend_version": "0.4.0",
   "generated_at": "2026-06-13T16:23:15.741Z",
   "project_name": "Project Garden",
-  "dek_sha": "1b625eae333204acc71841587a4dcede462488b2"
+  "dek_sha": "a22efb99d7f4cbf6bcb85a9d17b2d8fe9f6909e4"
 }
 </script>
 
@@ -2497,8 +2497,8 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "personas": [
     "operator"
   ],
-  "what": "Execute a plan.json through the deterministic conductor loop, driving agent workers via umbel and recording verdicts in tend's gated ledger. Exits 0 only when every node closes verified; partial/failed/blocked/skipped maps to exit 1.",
-  "why": "The primary value of pleach: bridging tend's feature map to umbel's worker execution with enforced gates (smoke, conflict-marker scan, cross-provider audit) and deterministic DAG ordering.",
+  "what": "Execute a plan.json through the deterministic conductor loop, driving workers via the configured runner (umbel by default) and recording verdicts in the configured ledger (git ledger by default; tend when `--tend-module` is given). Exits 0 only when every node closes verified; partial/failed/blocked/skipped maps to exit 1.",
+  "why": "The primary value of pleach: running a plan behind enforced gates (smoke, conflict-marker scan, cross-provider audit) with deterministic DAG ordering on git + any runner — tend and umbel are the batteries-included defaults, not requirements.",
   "where": "src/faces/cli.ts; src/main.ts",
   "how": "parseFlags → readPlan (Zod) → construct ConductorDeps from seams → runPlan → summaryExitCode; JSON RunSummary on stdout; errors → stderr + typed exit code",
   "progress": {
@@ -2518,7 +2518,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       ]
     }
   ],
-  "entry_condition": "Operator invokes `pleach run <plan.json> --tend-module <path>` with a readable plan file",
+  "entry_condition": "Operator invokes `pleach run <plan.json>`; optionally with `--tend-module <path>` (else the git ledger) and/or `--config <path>` (else the default umbel runner + ledger selection)",
   "exit_condition": "JSON RunSummary on stdout; exit 0 (all closed), 1 (any partial/failed/blocked/skipped), 2 (usage/parse error), 3 (lock held)",
   "checks": [
     {
@@ -2650,28 +2650,6 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       }
     },
     {
-      "id": "umbel-seam",
-      "title": "umbel Runner Adapter: Agent Worker Bridge",
-      "status": "planned",
-      "priority": "high",
-      "personas": [
-        "developer",
-        "operator"
-      ],
-      "solves": [
-        "agent-output-as-truth",
-        "logic-io-entanglement"
-      ],
-      "journey_phase": "build",
-      "is_subpage": true,
-      "what": "Spawns umbel-managed agent workers (claude, codex) over ExecFn arg-arrays, drives them with send/wait/kill, threads sinceMtime for race-free stop detection, gathers finalMessage+actions+diff after sto",
-      "thumbnail": {
-        "kind": "svg",
-        "alt": "Square loop and circle agent joined by a two-way arrow channel — umbel spawn/send bridge",
-        "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><rect class=\"tc-wh tc-frame\" x=\"16\" y=\"24\" width=\"34\" height=\"32\" rx=\"3\"/><circle class=\"tc-ac\" cx=\"90\" cy=\"40\" r=\"16\"/><line class=\"tc-ln\" x1=\"50\" y1=\"36\" x2=\"72\" y2=\"32\"/><line class=\"tc-ln\" x1=\"72\" y1=\"32\" x2=\"68\" y2=\"26\"/><line class=\"tc-ln\" x1=\"72\" y1=\"48\" x2=\"50\" y2=\"44\"/><line class=\"tc-ln\" x1=\"50\" y1=\"44\" x2=\"54\" y2=\"38\"/></svg>"
-      }
-    },
-    {
       "id": "tend-seam",
       "title": "tend Ledger Adapter: Ledger Bridge with Serial Queue",
       "status": "planned",
@@ -2691,6 +2669,28 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
         "kind": "svg",
         "alt": "Funnel of three lines converging to a single line into a ledger bar — serial queue to one writer",
         "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><line class=\"tc-ln\" x1=\"18\" y1=\"22\" x2=\"56\" y2=\"38\"/><line class=\"tc-ln\" x1=\"18\" y1=\"40\" x2=\"56\" y2=\"40\"/><line class=\"tc-ln\" x1=\"18\" y1=\"58\" x2=\"56\" y2=\"42\"/><line class=\"tc-ln\" x1=\"56\" y1=\"40\" x2=\"72\" y2=\"40\"/><rect class=\"tc-ac\" x=\"72\" y=\"28\" width=\"40\" height=\"24\" rx=\"3\"/><line class=\"tc-la\" x1=\"78\" y1=\"36\" x2=\"104\" y2=\"36\"/><line class=\"tc-la\" x1=\"78\" y1=\"42\" x2=\"104\" y2=\"42\"/><line class=\"tc-la\" x1=\"78\" y1=\"48\" x2=\"98\" y2=\"48\"/></svg>"
+      }
+    },
+    {
+      "id": "umbel-seam",
+      "title": "umbel Runner Adapter: Agent Worker Bridge",
+      "status": "planned",
+      "priority": "high",
+      "personas": [
+        "developer",
+        "operator"
+      ],
+      "solves": [
+        "agent-output-as-truth",
+        "logic-io-entanglement"
+      ],
+      "journey_phase": "build",
+      "is_subpage": true,
+      "what": "Spawns umbel-managed agent workers (claude, codex) over ExecFn arg-arrays, drives them with send/wait/kill, threads sinceMtime for race-free stop detection, gathers finalMessage+actions+diff after sto",
+      "thumbnail": {
+        "kind": "svg",
+        "alt": "Square loop and circle agent joined by a two-way arrow channel — umbel spawn/send bridge",
+        "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><rect class=\"tc-wh tc-frame\" x=\"16\" y=\"24\" width=\"34\" height=\"32\" rx=\"3\"/><circle class=\"tc-ac\" cx=\"90\" cy=\"40\" r=\"16\"/><line class=\"tc-ln\" x1=\"50\" y1=\"36\" x2=\"72\" y2=\"32\"/><line class=\"tc-ln\" x1=\"72\" y1=\"32\" x2=\"68\" y2=\"26\"/><line class=\"tc-ln\" x1=\"72\" y1=\"48\" x2=\"50\" y2=\"44\"/><line class=\"tc-ln\" x1=\"50\" y1=\"44\" x2=\"54\" y2=\"38\"/></svg>"
       }
     }
   ],
