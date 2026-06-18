@@ -9,7 +9,7 @@ import {
 } from '../core/errors.ts';
 import { PlanSchema } from '../core/plan.ts';
 import { planJsonSchema } from '../core/schema-json.ts';
-import { validatePlan } from '../core/validate.ts';
+import { nodeSummaries, validatePlan } from '../core/validate.ts';
 import type { ConductorDeps, RunSummary } from '../loop/deps.ts';
 import { runPlan } from '../loop/run-plan.ts';
 import { exec } from '../seams/exec.ts';
@@ -167,8 +167,10 @@ function verbSchema(): number {
 
 async function verbValidate(planPath: string): Promise<number> {
   const plan = await readPlan(planPath);
-  const { order } = validatePlan(plan);
-  process.stdout.write(`${JSON.stringify({ valid: true, order })}\n`);
+  const { order, waves } = validatePlan(plan);
+  process.stdout.write(
+    `${JSON.stringify({ valid: true, order, waves, nodes: nodeSummaries(plan) })}\n`,
+  );
   return 0;
 }
 
