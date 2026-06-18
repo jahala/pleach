@@ -8,6 +8,16 @@ export class PlanInvalidError extends Error {
   }
 }
 
+export class ArgvParseError extends Error {
+  readonly name = 'ArgvParseError';
+  readonly command: string;
+
+  constructor(command: string, detail: string) {
+    super(`argv parse error: ${detail}: ${command}`);
+    this.command = command;
+  }
+}
+
 export class LockHeldError extends Error {
   readonly name = 'LockHeldError';
   readonly path: string;

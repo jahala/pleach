@@ -1,3 +1,5 @@
+import { ArgvParseError } from './errors.ts';
+
 // Split a plan command string into a literal argv (ledger SEC1 / D3). Plans are
 // trusted input, but the contract forbids `sh -c <string>` interpolation
 // anywhere — every exec is an arg-array. This is a POSIX-style word splitter:
@@ -54,9 +56,7 @@ export function toArgv(command: string): string[] {
   }
 
   if (quote !== null) {
-    throw new Error(
-      `unterminated ${quote === '"' ? 'double' : 'single'} quote in command: ${command}`,
-    );
+    throw new ArgvParseError(command, `unterminated ${quote === '"' ? 'double' : 'single'} quote`);
   }
 
   if (hasToken) argv.push(current);
