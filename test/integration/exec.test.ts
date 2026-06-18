@@ -62,3 +62,18 @@ test('lead-review: nonexistent cwd resolves with exitCode 127, does not reject',
   expect(r.exitCode).toBe(127);
   expect(r.output.length).toBeGreaterThan(0);
 });
+
+// TextDecoder flush: a trailing incomplete multi-byte UTF-8 sequence must not be silently dropped.
+// printf '\xe2\x82' emits the first 2 bytes of '€' (U+20AC, 3 bytes: e2 82 ac).
+// A decoder used with { stream: true } buffers these bytes waiting for the final byte — without
+// an explicit flush call the buffered bytes are silently dropped and output is empty.
+// After the fix (decoder.decode() with no args flushes the buffer) output is non-empty
+// (U+FFFD replacement character for the incomplete sequence). ledger: D1
+test('TextDecoder flush: trailing incomplete UTF-8 sequence is not silently dropped', async () => {
+  // Two-byte prefix of the three-byte '€' codepoint (U+20AC: e2 82 ac)
+  const result = await exec(['bash', '-c', "printf '\\xe2\\x82'"], { cwd: '/tmp' });
+  expect(result.exitCode).toBe(0);
+  // Without the decoder flush the buffered bytes are dropped → output is ''.
+  // With the flush, the incomplete sequence resolves to U+FFFD (replacement character).
+  expect(result.output.length).toBeGreaterThan(0);
+});

@@ -44,6 +44,7 @@ export const exec: ExecFn = async (argv, opts) => {
       if (done) break;
       output += decoder.decode(value, { stream: true });
     }
+    output += decoder.decode(); // flush any buffered incomplete multi-byte sequence
   };
 
   const drainDone = Promise.all([drainStream(proc.stdout), drainStream(proc.stderr)]);
