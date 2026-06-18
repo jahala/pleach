@@ -113,4 +113,7 @@ export interface RunSummary {
   // Nodes whose worker settled at a permission prompt (Verdict status
   // 'blocked') — neither failed-retryable nor closed; a human attaches.
   blocked: string[];
+  // Nodes already verified in the ledger before this run — skipped, not re-run.
+  // Re-running a plan resumes: only unbuilt or previously-failed nodes execute.
+  alreadyVerified: string[];
 }
