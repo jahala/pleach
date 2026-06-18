@@ -64,7 +64,35 @@ function makeFailedVerdict(node: string): Verdict {
   };
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+// ── Tests — no external module needed ────────────────────────────────────────
+//
+// These two tests exercise createModuleTransport's error contract using only
+// local tmp files and a fixed nonexistent path. They do NOT need the real
+// missoula ingester and run unconditionally in CI.
+
+test('createModuleTransport: rejects a path with a missing export — throws TendTransportError', async () => {
+  // A module that exists but exports nothing useful.
+  // We create a temp file with no readClosed/emitVerdict exports.
+  const { writeFile, mkdtemp } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const tmpDir = await mkdtemp(join(tmpdir(), 'pleach-bad-module-'));
+  const badPath = join(tmpDir, 'bad.ts');
+  await writeFile(badPath, 'export const notATransport = 42;\n');
+  try {
+    await expect(createModuleTransport(badPath)).rejects.toBeInstanceOf(TendTransportError);
+  } finally {
+    const { rm } = await import('node:fs/promises');
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('createModuleTransport: rejects a non-existent path — throws TendTransportError', async () => {
+  await expect(createModuleTransport('/nonexistent/path/ingester.ts')).rejects.toBeInstanceOf(
+    TendTransportError,
+  );
+});
+
+// ── Tests — real missoula ingester (skipped without PLEACH_TEND_MODULE) ───────
 
 const shouldSkip = !(await moduleExists(MODULE_PATH));
 
@@ -82,28 +110,6 @@ describe.skipIf(shouldSkip)('createModuleTransport — real missoula ingester', 
   afterEach(async () => {
     const { rm } = await import('node:fs/promises');
     await rm(root, { recursive: true, force: true });
-  });
-
-  test('rejects a path with a missing export — throws TendTransportError', async () => {
-    // A module that exists but exports nothing useful.
-    // We create a temp file with no readClosed/emitVerdict exports.
-    const { writeFile, mkdtemp } = await import('node:fs/promises');
-    const { tmpdir } = await import('node:os');
-    const tmpDir = await mkdtemp(join(tmpdir(), 'pleach-bad-module-'));
-    const badPath = join(tmpDir, 'bad.ts');
-    await writeFile(badPath, 'export const notATransport = 42;\n');
-    try {
-      await expect(createModuleTransport(badPath)).rejects.toBeInstanceOf(TendTransportError);
-    } finally {
-      const { rm } = await import('node:fs/promises');
-      await rm(tmpDir, { recursive: true, force: true });
-    }
-  });
-
-  test('rejects a non-existent path — throws TendTransportError', async () => {
-    await expect(createModuleTransport('/nonexistent/path/ingester.ts')).rejects.toBeInstanceOf(
-      TendTransportError,
-    );
   });
 
   test('readClosed returns a Map (adapted), empty garden → empty Map', async () => {
