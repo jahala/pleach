@@ -2617,7 +2617,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     {
       "id": "cli-validate",
       "title": "pleach validate: Structural Plan Validation",
-      "status": "verified",
+      "status": "in-progress",
       "priority": "medium",
       "dependencies": [
         "cli-run"
@@ -2641,7 +2641,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     {
       "id": "conductor-loop",
       "title": "Conductor Loop: DAG Scheduler and Per-Node Ladder",
-      "status": "verified",
+      "status": "in-progress",
       "priority": "high",
       "personas": [
         "operator",
@@ -2817,6 +2817,17 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
         "alt": "A central port box with one solid adapter plugged in on the left and one dashed swappable adapter on the right — pluggable runner/ledger",
         "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><rect class=\"tc-wh tc-frame\" x=\"46\" y=\"28\" width=\"28\" height=\"24\" rx=\"3\"/><rect class=\"tc-ac\" x=\"14\" y=\"32\" width=\"20\" height=\"16\" rx=\"3\"/><line class=\"tc-ln\" x1=\"34\" y1=\"40\" x2=\"46\" y2=\"40\"/><rect class=\"tc-wh tc-frame\" x=\"86\" y=\"32\" width=\"20\" height=\"16\" rx=\"3\" stroke-dasharray=\"4,2\"/><line class=\"tc-ln\" x1=\"74\" y1=\"40\" x2=\"86\" y2=\"40\"/></svg>"
       }
+    },
+    {
+      "id": "scripted-runner",
+      "title": "Scripted runner — deterministic, no-LLM execution",
+      "status": "in-progress",
+      "dependencies": [
+        "pluggable-adapters",
+        "conductor-loop"
+      ],
+      "journey_phase": "build",
+      "what": "A deterministic RunnerSeam (src/adapters/scripted.ts) that applies canned worktree changes per build prompt and returns a canned cross-provider AuditResult — no LLM, no API keys, no network. Paired wi"
     }
   ],
   "source_dirs": [
@@ -2826,30 +2837,34 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     "verdict": "yellow",
     "reason_codes": [
       "stale_evidence",
-      "unblocked"
+      "false_done",
+      "blocked",
+      "unblocked",
+      "unbound_persona"
     ],
     "truth": {
-      "verified": 5,
-      "total": 16,
-      "stale": 13,
+      "verified": 3,
+      "total": 17,
+      "stale": 11,
       "mock_only": 0,
-      "false_done": 0,
-      "auditable": 9,
-      "audited": 8
+      "false_done": 1,
+      "auditable": 10,
+      "audited": 5
     },
     "flow": {
-      "ready_now": 4,
-      "blocked": 0
+      "ready_now": 5,
+      "blocked": 2,
+      "bottleneck_feature_id": "cli-run"
     },
     "value": {
       "highest_value_unblocked": "cli-run",
       "weakest_opportunity_coverage": "silent-contract-drift"
     },
     "lifecycle": {
-      "total": 9,
+      "total": 10,
       "planned": {
-        "count": 4,
-        "blocked": 0
+        "count": 7,
+        "blocked": 2
       },
       "building": {
         "count": 0,
@@ -2860,44 +2875,58 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
         "blocked": 0
       },
       "verified": {
-        "count": 5,
-        "at_risk": 0
+        "count": 3,
+        "at_risk": 1
       }
     },
     "coherence": {
-      "total": 71,
+      "total": 54,
       "groups": [
         {
-          "kind": "every_slot_has_check",
-          "label": "slot checks",
-          "count": 37,
+          "kind": "judgment_missing",
+          "label": "judgment refresh",
+          "count": 26,
           "route": "/tend brainstorm",
           "section": "spine"
         },
         {
-          "kind": "judgment_missing",
-          "label": "judgment refresh",
-          "count": 24,
+          "kind": "every_slot_has_check",
+          "label": "slot checks",
+          "count": 12,
           "route": "/tend brainstorm",
           "section": "spine"
         },
         {
           "kind": "how_decisions_trail",
           "label": "slot coherence",
-          "count": 9,
+          "count": 10,
           "route": "/tend change",
           "section": "spine"
         },
         {
-          "kind": "dek_stale",
-          "label": "deks",
+          "kind": "unplanned_check",
+          "label": "Unplanned check",
+          "count": 3,
+          "route": "/tend validate",
+          "section": "spine"
+        },
+        {
+          "kind": "feature_has_persona",
+          "label": "spine bindings",
+          "count": 2,
+          "route": "/tend position",
+          "section": "spine"
+        },
+        {
+          "kind": "thumbnail_missing",
+          "label": "thumbnails",
           "count": 1,
           "route": "/tend narrate",
           "section": "content"
         }
       ]
     },
-    "computed_at": "2026-06-18T15:19:46.116Z"
+    "computed_at": "2026-06-18T19:35:31.999Z"
   },
   "what": "pleach — a deterministic conductor that interweaves a DAG of agent-built work into one verified canopy: it isolates each plan node in its own git worktree, enforces gates, and publishes a branch only for work that mechanically passed them.",
   "why": "Stochastic agents can't be trusted to self-certify, and reviewing every diff defeats the point of delegating to them. pleach makes deterministic code — never agent prose — the sole authority on what counts as done, so a swarm can build unattended without garbage reaching the trunk.",

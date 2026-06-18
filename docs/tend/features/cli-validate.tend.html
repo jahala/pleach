@@ -2483,7 +2483,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "tend_version": "0.4.0",
   "generated_at": "2026-06-13T16:23:21.071Z",
   "project_name": "Project Garden",
-  "dek_sha": "dce2253c0626016f957332d84224ecdd1fe950a2"
+  "dek_sha": "07877eebb88679921781dc6f97c0ce4bcd3cfa3d"
 }
 </script>
 
@@ -2491,19 +2491,19 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
 {
   "id": "cli-validate",
   "title": "pleach validate: Structural Plan Validation",
-  "status": "verified",
+  "status": "in-progress",
   "priority": "medium",
   "journey_phase": "verify",
   "personas": [
     "operator",
     "developer"
   ],
-  "what": "Parse a plan.json, enforce structural invariants (duplicate IDs, unknown needs references, provider diversity rule), and detect cycles via Kahn's toposort. On success prints {valid:true, order:[...]} to stdout.",
+  "what": "Parse a plan.json, enforce structural invariants (duplicate IDs, unknown needs references, provider diversity rule), and detect cycles via Kahn's toposort. On success prints {valid:true, order:[...]} to stdout. The output also includes execution waves (parallel batches) and a per-node summary (work-type + gates), so an author can see what a plan will do before running it.",
   "where": "src/faces/cli.ts; src/core/validate.ts; src/core/plan.ts",
-  "how": "readPlan (Zod parse) → validatePlan (structural checks + Kahn toposort) → print JSON → exit 0; any error → stderr + exit 2",
+  "how": "readPlan (Zod parse) → validatePlan (structural checks + Kahn toposort) → print JSON → exit 0; any error → stderr + exit 2; validatePlan also returns waves (level-order Kahn on a copy of the in-degree map, so order is unchanged); nodeSummaries projects each node's work-type + declared gates; verbValidate emits {valid, order, waves, nodes}",
   "progress": {
-    "implementation": 100,
-    "verification": 100
+    "implementation": 0,
+    "verification": 0
   },
   "personas_resolved": [
     {
@@ -2591,6 +2591,36 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "verification_recipe": "Run `pleach frobnicate x.json`; expect exit 2. Run `pleach`; expect exit 2 and stdout contains 'pleach'.",
       "status": "open",
       "validates_job": "developer:1"
+    },
+    {
+      "id": "c007",
+      "description": "validatePlan returns execution waves: a diamond A->{B,C}->D yields [[A],[B,C],[D]]; order stays a valid linearisation.",
+      "validates": "what",
+      "method": "synthetic-test",
+      "integration_level": "unit",
+      "verification_recipe": "validatePlan(diamond).waves === [[A],[B,C],[D]] (test/unit/validate-describe.test.ts).",
+      "status": "open",
+      "validates_job": "developer:1"
+    },
+    {
+      "id": "c008",
+      "description": "nodeSummaries reports each node's work-type (command/prompt/phases) and only the gates it declares (setup/smoke/audit:<provider>).",
+      "validates": "what",
+      "method": "synthetic-test",
+      "integration_level": "unit",
+      "verification_recipe": "nodeSummaries(plan) entries have correct work + gates (test/unit/validate-describe.test.ts).",
+      "status": "open",
+      "validates_job": "developer:1"
+    },
+    {
+      "id": "c009",
+      "description": "pleach validate stdout JSON includes waves and nodes in addition to {valid, order}.",
+      "validates": "what",
+      "method": "synthetic-test",
+      "integration_level": "e2e",
+      "verification_recipe": "pleach validate <plan> -> stdout JSON has waves (array) + nodes (per-node summary).",
+      "status": "open",
+      "validates_job": "developer:1"
     }
   ],
   "coverage_files": [
@@ -2608,56 +2638,6 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "fit": "The pre-flight check for `pleach run`; shares the schema + validatePlan core.",
   "dek": "`pleach validate plan.json` runs every structural invariant against a plan before a single agent is spawned — catching cycles, ghost references, and provider collisions in milliseconds so an unattended run never starts on a plan that can't close.",
   "narrative": "## Structural bugs are cheaper to catch here than anywhere else\n\nAn operator drops a six-node plan into `pleach run` and walks away. If that plan contains a cycle — say, node `b` needs `a` and `a` needs `b` — the conductor's Kahn scheduler will drain the queue, never promote either node, and sit idle until a process limit or wall-clock timeout kills it. The operator returns to a deadlocked run, no verdicts, subscription burned. `pleach validate plan.json` catches this in milliseconds before a single agent is spawned.\n\n`validatePlan` in `src/core/validate.ts` is a pure, total function over the `Plan` type defined in `src/core/plan.ts`. It accumulates failures into a `reasons[]` array rather than short-circuiting, so a single call surfaces every structural defect at once. It runs four checks in order: duplicate node IDs, unknown `needs` references (where a node declares a dependency on an ID that doesn't exist in the plan), the provider-diversity rule, and finally Kahn's toposort for cycle detection. The diversity check resolves `worker.provider` against `DEFAULT_WORKER_PROVIDER` (`'claude'`) when the field is omitted — so a plan that leaves `worker.provider` unset but sets `accept.audit.provider = 'claude'` is rejected on the same grounds as one that spells it out. This matters: the [conductor loop](conductor-loop.tend.html)'s cross-provider audit gate only has teeth if the auditor is a different model than the builder; `validatePlan` enforces that at plan-acceptance time. Structural errors (duplicates, ghost refs, diversity violations) are thrown before toposort runs, because Kahn requires a clean graph. A cycle in the survivors raises `PlanInvalidError(['dependency cycle detected in plan nodes'])`. On a clean plan the function returns `{ order: string[] }` — the topological order the conductor will schedule — and the CLI prints `{valid:true, order:[...]}` to stdout and exits 0.\n\nThe function is the shared core of both the `validate` CLI face and [pleach run](cli-run.tend.html). The bet is in [../overview.html](../overview.html).",
-  "audit": {
-    "ran_at": "2026-06-18T14:51:15Z",
-    "result": "pass",
-    "verdicts": [
-      {
-        "check_id": "c001",
-        "verdict": "pass",
-        "evidence_path": "src/core/validate.ts:94 (return {order}); test/e2e/cli.test.ts — ran `bun test test/e2e/cli.test.ts -t 'validate on the proof plan'` → 1 pass; negctrl(--file src/core/validate.ts --find 'return { order }' --replace 'return { order: [] }') → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "fb166d4404abf3b68b6c389ad8269522c3537290"
-      },
-      {
-        "check_id": "c002",
-        "verdict": "pass",
-        "evidence_path": "src/core/validate.ts:13-24 (dup-id); test/unit/validate.test.ts:109 — ran `bun test test/unit/validate.test.ts -t 'duplicate node ids'` → 1 pass; negctrl(--find 'seen.has(node.id)' --replace 'false') → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "fb166d4404abf3b68b6c389ad8269522c3537290"
-      },
-      {
-        "check_id": "c003",
-        "verdict": "pass",
-        "evidence_path": "src/core/validate.ts:28-35 (unknown-needs); test/unit/validate.test.ts:141 — ran `bun test test/unit/validate.test.ts -t 'unknown needs reference'` → 1 pass; negctrl(--find '!idSet.has(dep)' --replace 'false') → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "fb166d4404abf3b68b6c389ad8269522c3537290"
-      },
-      {
-        "check_id": "c004",
-        "verdict": "pass",
-        "evidence_path": "src/core/validate.ts:54-92 (Kahn toposort+cycle); test/unit/validate.test.ts:164 — ran `bun test test/unit/validate.test.ts -t 'dependency cycle'` → 1 pass; negctrl(--find 'order.length !== plan.nodes.length' --replace 'false') → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "fb166d4404abf3b68b6c389ad8269522c3537290"
-      },
-      {
-        "check_id": "c005",
-        "verdict": "pass",
-        "evidence_path": "src/core/validate.ts:37-47 (model-diversity); test/unit/validate.test.ts:198 — ran `bun test test/unit/validate.test.ts -t 'model-diversity'` → 1 pass; negctrl(--find 'node.accept.audit.provider === workerProvider' --replace 'false') → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "fb166d4404abf3b68b6c389ad8269522c3537290"
-      },
-      {
-        "check_id": "c006",
-        "verdict": "pass",
-        "evidence_path": "src/faces/cli.ts:221-241 (verb dispatch + HELP); test/e2e/cli.test.ts — ran `bun test test/e2e/cli.test.ts -t 'unknown verb'` → 1 pass; negctrl(--find 'process.stdout.write(HELP)' --replace '/* no help */') → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "23f95b29d3973fd65a1c4055f2718f14c9f450ce"
-      }
-    ],
-    "drift": [],
-    "verified_at_commit": "05183de50c779643dd8b14a9f78e9ee04d9fe571"
-  },
   "judgments": [
     {
       "question_id": "check_discriminates",

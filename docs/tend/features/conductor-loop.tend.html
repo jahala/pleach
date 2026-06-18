@@ -2483,7 +2483,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "tend_version": "0.4.0",
   "generated_at": "2026-06-13T16:23:27.009Z",
   "project_name": "Project Garden",
-  "dek_sha": "57d70e7c1af3fba0e9807839b66c9f060a15814e"
+  "dek_sha": "fbafdfd3d60a3b20f20617cf31d45311f99e41b0"
 }
 </script>
 
@@ -2491,19 +2491,19 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
 {
   "id": "conductor-loop",
   "title": "Conductor Loop: DAG Scheduler and Per-Node Ladder",
-  "status": "verified",
+  "status": "in-progress",
   "priority": "high",
   "journey_phase": "build",
   "personas": [
     "operator",
     "developer"
   ],
-  "what": "Drives a validated Plan to a RunSummary. Owns the process lock, closed-set, ready/inflight scheduler with concurrency semaphore, commit-before-emit ordering (B2), dual-close decision (A1), partial/blocked/skipped tracking, and the per-node execution ladder: isolate → setup → work → marker gate → scoped stage → smoke → cross-provider audit → commit.",
+  "what": "Drives a validated Plan to a RunSummary. Owns the process lock, closed-set, ready/inflight scheduler with concurrency semaphore, commit-before-emit ordering (B2), dual-close decision (A1), partial/blocked/skipped tracking, and the per-node execution ladder: isolate → setup → work → marker gate → scoped stage → smoke → cross-provider audit → commit. A build worker is spawned only for {prompt}/{phases} work — {command} nodes exec directly and need no runner, so a command-only plan runs with no agent runner at all. Re-running a plan resumes: nodes already verified in the ledger are skipped (RunSummary.alreadyVerified, captured before seedClosure).",
   "where": "src/loop/run-plan.ts; src/loop/run-node.ts; src/loop/run-work.ts; src/loop/deps.ts; src/core/classify.ts; src/core/argv.ts; src/core/errors.ts",
-  "how": "Kahn-style DAG with Promise.race on inflight Map; per-node retry loop with evidence threading (A3); classify() routes worker reasons and errors to dead/retryable/blocked/terminal; seam-injected ConductorDeps interfaces; never imports seam modules directly",
+  "how": "Kahn-style DAG with Promise.race on inflight Map; per-node retry loop with evidence threading (A3); classify() routes worker reasons and errors to dead/retryable/blocked/terminal; seam-injected ConductorDeps interfaces; never imports seam modules directly; the worker spawn is guarded by work shape ('command' in work skips spawnWorker); alreadyVerified is captured from readClosed before seedClosure and excluded from closed; the cross-provider auditor honours accept.audit.model when the plan pins one",
   "progress": {
-    "implementation": 100,
-    "verification": 100
+    "implementation": 0,
+    "verification": 0
   },
   "personas_resolved": [
     {
@@ -2701,6 +2701,36 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "verification_recipe": "Run phases node with exec always returning exit 0 → GateFailedError(red). Run with exit 1 on both → GateFailedError(green).",
       "status": "open",
       "validates_job": "developer:1"
+    },
+    {
+      "id": "c018",
+      "description": "Lazy worker spawn: a {command} node reaches a verified close without the runner ever spawning a worker.",
+      "validates": "what",
+      "method": "synthetic-test",
+      "integration_level": "unit",
+      "verification_recipe": "runNode a {command} node with a runner whose spawnWorker throws -> status 'done', spawn:build count 0 (test/loop/run-node.test.ts lazy worker spawn).",
+      "status": "open",
+      "validates_job": "developer:1"
+    },
+    {
+      "id": "c019",
+      "description": "Resume: a node already verified in the ledger is reported in RunSummary.alreadyVerified and never re-run.",
+      "validates": "what",
+      "method": "synthetic-test",
+      "integration_level": "integration",
+      "verification_recipe": "runPlan with a pre-closed node -> summary.alreadyVerified includes it, summary.closed excludes it, never isolated (test/loop/run-plan.test.ts resume).",
+      "status": "open",
+      "validates_job": "developer:1"
+    },
+    {
+      "id": "c020",
+      "description": "accept.audit.model: the cross-provider auditor is spawned at the requested model when the plan pins one.",
+      "validates": "how",
+      "method": "synthetic-test",
+      "integration_level": "unit",
+      "verification_recipe": "runNode a node with accept.audit.model set -> the audit spawnWorker spec carries that model (test/loop/run-node.test.ts audit.model).",
+      "status": "open",
+      "validates_job": "developer:1"
     }
   ],
   "subpages_resolved": [
@@ -2761,144 +2791,6 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     "kind": "svg",
     "alt": "DAG diamond: top node to two middle nodes to one bottom node — conductor scheduler",
     "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><circle class=\"tc-wh tc-frame\" cx=\"60\" cy=\"18\" r=\"7\"/><circle class=\"tc-wh tc-frame\" cx=\"38\" cy=\"40\" r=\"7\"/><circle class=\"tc-ac\" cx=\"82\" cy=\"40\" r=\"7\"/><circle class=\"tc-wh tc-frame\" cx=\"60\" cy=\"62\" r=\"7\"/><line class=\"tc-ln\" x1=\"55\" y1=\"24\" x2=\"43\" y2=\"34\"/><line class=\"tc-ln\" x1=\"65\" y1=\"24\" x2=\"77\" y2=\"34\"/><line class=\"tc-ln\" x1=\"43\" y1=\"46\" x2=\"55\" y2=\"56\"/><line class=\"tc-ln\" x1=\"77\" y1=\"46\" x2=\"65\" y2=\"56\"/></svg>"
-  },
-  "audit": {
-    "ran_at": "2026-06-18T14:51:15Z",
-    "result": "pass",
-    "verdicts": [
-      {
-        "check_id": "c001",
-        "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:110 (ready(): needs all closed); -t 'A→{B,C}→D' → 1 pass; negctrl: needs.every gate→false → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
-      },
-      {
-        "check_id": "c002",
-        "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:245 (shouldClose); -t 'non-audit node closes on done' → 1 pass; negctrl: shouldClose→false → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
-      },
-      {
-        "check_id": "c003",
-        "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:213-218 (closingVerdict diffRef); -t 'commitBranch precedes emitVerdict' → 1 pass; negctrl: diffRef:committed→undefined → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
-      },
-      {
-        "check_id": "c004",
-        "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:256 (partial.add); -t 'emitVerdict {closed:false}' → 1 pass; negctrl: partial.add→failed.add → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
-      },
-      {
-        "check_id": "c005",
-        "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:335 (resolveBaseRef recordedSha fallback); -t 'closed dep with missing branch but recorded sha' → 1 pass; negctrl: recordedSha-fallback guard→false → DISCRIMINATES. NOTE prior mismatch-guard anchor stale; updated to SHA-fallback path",
-        "validates_job_satisfied": true,
-        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
-      },
-      {
-        "check_id": "c006",
-        "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:84 (RebuildRequiredError throw); -t 'closed dep with neither branch nor recorded sha' → 1 pass; negctrl: throw RebuildRequiredError→plain Error → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
-      },
-      {
-        "check_id": "c007",
-        "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:171 (blocked.add); -t 'input → status blocked' → 1 pass; negctrl: blocked.add→failed.add → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
-      },
-      {
-        "check_id": "c008",
-        "verdict": "pass",
-        "evidence_path": "src/loop/run-node.ts:306 (REAUDIT_BUDGET loop); -t 'garbage egress then good' → 1 pass; negctrl: reaudit<REAUDIT_BUDGET→<1 → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "ee4a410fb01c75f1b3c94f330bd86bd6e79c4ae5"
-      },
-      {
-        "check_id": "c009",
-        "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:69 (M3 defensive copy of readClosed); -t 'mutating the Map returned by tend' → 1 pass; negctrl: new Map(...)→direct ref → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
-      },
-      {
-        "check_id": "c010",
-        "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:223 (dispose after emit, via disposeOrJournal); -t 'dependent never isolates inside its dep dispose window' → 1 pass; negctrl: comment the disposeOrJournal call → DISCRIMINATES. NOTE dispose now wrapped by disposeOrJournal (same ordering)",
-        "validates_job_satisfied": true,
-        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
-      },
-      {
-        "check_id": "c011",
-        "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:70 (seedClosure); -t 'a closed integration node seeds its transitive ancestors' → 1 pass; negctrl: comment seedClosure call → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
-      },
-      {
-        "check_id": "c012",
-        "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:200 (pre-commit lateMarkers scan); -t 'markers written after staging' → 1 pass; negctrl: lateMarkers→[] → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
-      },
-      {
-        "check_id": "c013",
-        "verdict": "pass",
-        "evidence_path": "src/loop/run-node.ts:112 (setup exec before phases); -t 'setup → work → markers → stage → smoke → audit' → 1 pass; negctrl: setup exec→no-op → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "ee4a410fb01c75f1b3c94f330bd86bd6e79c4ae5"
-      },
-      {
-        "check_id": "c014",
-        "verdict": "pass",
-        "evidence_path": "src/loop/run-node.ts:151 (worker.kill on normal path); -t 'build worker is killed after its wait resolves' → 1 pass; negctrl: comment worker.kill → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "ee4a410fb01c75f1b3c94f330bd86bd6e79c4ae5"
-      },
-      {
-        "check_id": "c015",
-        "verdict": "pass",
-        "evidence_path": "src/loop/run-node.ts:223 (gateEvidence smoke threading); -t 'smoke retry re-prompt contains the smoke output tail' → 1 pass; negctrl: evidence=undefined → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "ee4a410fb01c75f1b3c94f330bd86bd6e79c4ae5"
-      },
-      {
-        "check_id": "c016",
-        "verdict": "pass",
-        "evidence_path": "src/loop/run-work.ts:50 (command gate non-zero → GateFailedError); -t 'non-zero → GateFailedError' → 1 pass; negctrl: if exitCode!==0→if false → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "86933b2ebe9b96b8a8a264a9f9c101e6ab6a2d0c"
-      },
-      {
-        "check_id": "c017",
-        "verdict": "pass",
-        "evidence_path": "src/loop/run-work.ts:81 (RED gate must fail); -t 'RED passes immediately' → 1 pass; negctrl: if exitCode===0 throw→if false → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "86933b2ebe9b96b8a8a264a9f9c101e6ab6a2d0c"
-      }
-    ],
-    "drift": [
-      {
-        "file": "src/loop/run-plan.ts",
-        "finding": "Audit-fix behaviors green+discriminating but unclaimed by any check: disposeOrJournal (a dispose failure is journaled, not run-fatal — test 'dispose throw on a closed node'); within-run SHA-pin (baseRefForClosed stores the commit SHA — test 'WITHIN-RUN: B isolates from recorded SHA'); C5 startup SHA-mismatch → RebuildRequiredError (test 'STARTUP: branch moved off recorded SHA').",
-        "action": "investigate"
-      },
-      {
-        "file": "src/loop/run-node.ts",
-        "finding": "disposeQuiet now journals+swallows IsolateCatastrophicError so a non-done verdict is preserved (test 'blocked verdict preserved when dispose throws', ledger #44.1) — green+discriminating but unclaimed by any check.",
-        "action": "investigate"
-      }
-    ],
-    "verified_at_commit": "05183de50c779643dd8b14a9f78e9ee04d9fe571"
   },
   "judgments": [
     {

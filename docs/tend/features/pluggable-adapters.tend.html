@@ -2520,16 +2520,17 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "solves": [
     "logic-io-entanglement"
   ],
-  "what": "Generalizes pleach from the tend+umbel pair into a standalone conductor: RunnerSeam/LedgerSeam ports (loop/deps.ts) with bundled adapters in src/adapters/ (umbelRunner, tendLedger, gitLedger); resolveSeams selects them from a pleach.config.ts or default wiring; gitLedger makes a run standalone (node/* branches = the verified record); pleach schema emits the plan JSON Schema for planners.",
+  "what": "Generalizes pleach from the tend+umbel pair into a standalone conductor: RunnerSeam/LedgerSeam ports (loop/deps.ts) with bundled adapters in src/adapters/ (umbelRunner, tendLedger, gitLedger); resolveSeams selects them from a pleach.config.ts or default wiring; gitLedger makes a run standalone (node/* branches = the verified record); pleach schema emits the plan JSON Schema for planners. A src/index.ts barrel exports the programmatic surface (runPlan, buildDeps, validatePlan, planJsonSchema, typed errors, public types) so pleach is importable as a library, not only a CLI; a bundled scriptedRunner adapter (deterministic, no-LLM) joins umbel/tend/git.",
   "why": "pleach was wired to tend (ledger) + umbel (runner) specifically. The ports-and-adapters split lets it pair with any similar runner or ledger and run standalone on git, without changing the loop or core — answering \"can it work with other tools?\" with a concrete yes.",
-  "impact": "A non-tend, non-umbel user runs pleach standalone on git, or wires any runner/ledger via a pleach.config.ts, without forking the engine. tend + umbel become reference adapters, not requirements.",
+  "impact": "A non-tend, non-umbel user runs pleach standalone on git, or wires any runner/ledger via a pleach.config.ts, without forking the engine. tend + umbel become reference adapters, not requirements. pleach is also usable as a library — import { runPlan, buildDeps } from 'pleach' — and runnable with zero external tooling via the scripted runner.",
   "fit": "The generalization layer: the two ports the loop depends on, the bundled adapters that satisfy them, and the config that selects a pair. \"plot-plot\" (tend + umbel) becomes pleach's batteries-included default, not its only mode.",
-  "where": "src/loop/deps.ts; src/adapters/git.ts; src/faces/config.ts; src/core/schema-json.ts",
-  "how": "RunnerSeam/LedgerSeam interfaces (loop/deps.ts) the loop composes but never imports; src/adapters/{umbel,tend,git}.ts bundled bridges + package.json exports ./adapters/* + ./config; resolveSeams precedence (--config | <repoRoot>/pleach.config.ts | defaults: umbelRunner + (tendModule ? tendLedger : gitLedger)); gitLedger reads node/* branches via git for-each-ref; planJsonSchema via z.toJSONSchema; typed ConfigError + LedgerError.",
+  "where": "src/loop/deps.ts; src/adapters/git.ts; src/faces/config.ts; src/core/schema-json.ts; src/index.ts; src/adapters/scripted.ts",
+  "how": "RunnerSeam/LedgerSeam interfaces (loop/deps.ts) the loop composes but never imports; src/adapters/{umbel,tend,git}.ts bundled bridges + package.json exports ./adapters/* + ./config; resolveSeams precedence (--config | <repoRoot>/pleach.config.ts | defaults: umbelRunner + (tendModule ? tendLedger : gitLedger)); gitLedger reads node/* branches via git for-each-ref; planJsonSchema via z.toJSONSchema; typed ConfigError + LedgerError; buildDeps(opts) assembles a ConductorDeps from the four pleach seams plus an injected runner/ledger; src/index.ts re-exports the public surface and the package '.' export points at it (the bin stays main.ts); scriptedRunner(scenarios) is a deterministic RunnerSeam exported at ./adapters/scripted",
   "coverage_files": [
     "src/adapters/git.ts",
     "src/faces/config.ts",
-    "src/core/schema-json.ts"
+    "src/core/schema-json.ts",
+    "src/index.ts"
   ],
   "checks": [
     {
@@ -2579,6 +2580,26 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "method": "synthetic-test",
       "integration_level": "unit",
       "verification_recipe": "planJsonSchema() → an object with a properties map describing the plan's nodes/goal/source fields (test/unit/plan-schema-export.test.ts).",
+      "status": "open",
+      "validates_job": "developer:1"
+    },
+    {
+      "id": "c006",
+      "description": "The package root ('pleach' / src/index.ts) exports the programmatic surface: runPlan, validatePlan, planJsonSchema, buildDeps, the typed errors, and the public types.",
+      "validates": "what",
+      "method": "synthetic-test",
+      "integration_level": "unit",
+      "verification_recipe": "import { runPlan, buildDeps, validatePlan, planJsonSchema, PlanInvalidError } from 'pleach' — all defined; runPlan/buildDeps are functions (test/unit/library-export.test.ts).",
+      "status": "open",
+      "validates_job": "developer:1"
+    },
+    {
+      "id": "c007",
+      "description": "buildDeps(opts) assembles a ConductorDeps from the four pleach seams (exec/isolate/lock/journal) plus an injected runner + ledger.",
+      "validates": "how",
+      "method": "synthetic-test",
+      "integration_level": "unit",
+      "verification_recipe": "buildDeps({repoRoot, runner, ledger}) returns deps with exec/isolate/lock/journal/runner/ledger all present (test/unit/library-export.test.ts).",
       "status": "open",
       "validates_job": "developer:1"
     }
