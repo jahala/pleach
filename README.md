@@ -11,20 +11,16 @@ ledger). Agents produce; code decides.
 
 > *Pleaching: the craft of training and interweaving living branches into a single structure.*
 
-**Status — v1: the proof run closes end-to-end.** A multi-step feature builds through real claude
-workers, is audited by a real codex auditor, and is verified by real tend, reaching a full verified
-close (`docs/research/proof-run.md`, Run 3). The deterministic loop, all four seams, all three adapters,
-and both CLI faces are implemented and pass `bun run check` (191 tests). pleach tracks its own development in a tend garden
-— [`docs/tend/`](docs/tend/) — and the landing page lives at
-[jahala.github.io/pleach](https://jahala.github.io/pleach/).
+**Status — v1.** The end-to-end proof run closes: a multi-step feature builds through real agent
+workers, is cross-provider audited, and verifies ([`docs/research/proof-run.md`](docs/research/proof-run.md)).
 
 ## Install
 
-pleach is a Bun CLI; it is not on npm. It requires `git >= 2.38` at run time. The default
+pleach is a Bun CLI. It requires `git >= 2.38` at run time. The default
 `umbelRunner` also needs `tmux` and the `umbel` binary on your PATH — but the runner is
 pluggable (see [Adapters](#adapters)).
 
-Run it without cloning (once this repo is public):
+Run it without cloning:
 
 ```sh
 bunx github:jahala/pleach validate plan.json
@@ -90,13 +86,10 @@ pleach schema                      Emit the plan contract as JSON Schema (for pl
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full runtime substrate and flag reference.
 
-Build plan: [`docs/plan.md`](docs/plan.md) · Doctrine: [`ENGINEERING.md`](ENGINEERING.md) · Contract:
-[`docs/contract/plan-schema.md`](docs/contract/plan-schema.md) · Why the design looks like this:
-[`docs/ledger.md`](docs/ledger.md) · Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Doctrine: [`ENGINEERING.md`](ENGINEERING.md) · Plan contract: [`docs/contract/plan-schema.md`](docs/contract/plan-schema.md).
 
 ## Support
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/jahala)
 
-Not published to npm. MIT licensed ([`LICENSE`](LICENSE)). Part of the plot-plot garden suite alongside
-[tend](https://github.com/plot-plot) and umbel.
+MIT licensed ([`LICENSE`](LICENSE)). Part of the plot-plot suite alongside [tend](https://github.com/plot-plot) and umbel.
