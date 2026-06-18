@@ -32,7 +32,7 @@ export interface UmbelSeamOpts {
   permissionMode?: string;
 }
 
-// The concrete return type is structurally compatible with UmbelSeam; the
+// The concrete return type is structurally compatible with RunnerSeam; the
 // inferred type exposes the extra __name field on workers for test access.
 export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
   const {

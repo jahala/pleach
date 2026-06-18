@@ -111,7 +111,7 @@ reasons, conflict-file list) is a bug, not a retry.
 
 - **One conductor per (repo, source):** `O_EXCL` lockfile with pid; refuse to start if live, replace if
   stale. Test it.
-- **Single ingester:** all `TendSeam` calls flow through one in-process serial queue, even with parallel
+- **Single ingester:** all `LedgerSeam` calls flow through one in-process serial queue, even with parallel
   nodes finishing.
 - **Commit before emit:** the `node/<id>` branch + SHA exist *before* tend is told `verified`. The
   durable claim is never made without the artifact.
