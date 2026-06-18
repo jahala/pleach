@@ -10,13 +10,13 @@ nodes), runs each node's work in an **isolated detached git worktree** merged fr
 verified branches, enforces **gates** (smoke commands, conflict-marker checks, cross-provider audits),
 emits typed `Verdict`s to a verification **ledger**, and **publishes a `node/<id>` branch only for
 verified work** — so garbage cannot propagate down the DAG. It runs **standalone on git + any agent
-runner**; tend (the feature ledger) and rctrl (the execution boundary) are the batteries-included
+runner**; tend (the feature ledger) and umbel (the execution boundary) are the batteries-included
 reference adapters, not requirements (see [`docs/adapters.md`](docs/adapters.md)).
 
 ```
 tend     decides what the garden should bear   (ledger of intent; the verified gate)
 pleach   interweaves the branches               (this repo — deterministic loop, no agent judgment)
-rctrl    holds each grower steady               (spawn/send/wait/read/kill over tmux)
+umbel    holds each grower steady               (spawn/send/wait/read/kill over tmux)
 agents   the plants                             (stochastic; claude/codex/gemini/opencode)
 git+tmux the soil
 ```
@@ -61,7 +61,7 @@ Authoritative context (read before substantial work):
 ```
 faces/     cli.ts                                          ← argv, exit codes, stdout/stderr discipline
 loop/      run-plan.ts  run-node.ts  run-work.ts           ← the deterministic loop; composes injected seams + adapters
-adapters/  rctrl.ts  tend.ts  git.ts                       ← pluggable tool bridges (the runner + ledger ports)
+adapters/  umbel.ts  tend.ts  git.ts                       ← pluggable tool bridges (the runner + ledger ports)
 seams/     isolate.ts  exec.ts  lock.ts  journal.ts        ← pleach's own I/O, thin
 core/      plan.ts  validate.ts  classify.ts  evidence.ts  errors.ts   ← pure, total
 ```
@@ -80,14 +80,14 @@ core/      plan.ts  validate.ts  classify.ts  evidence.ts  errors.ts   ← pure,
 - Bun runtime + `bun:test`. Node-compatible source (no Bun-only APIs in `core/`).
 - Dependencies: `zod` only, until a need is proven in a PR description. No native modules.
 - `biome` for lint/format; `bun run check` = typecheck + lint + test and must be green before any merge.
-- Substrate requirements (runtime, not dev): `git ≥ 2.38`, `tmux`, the `rctrl` binary, `tend` (transport
+- Substrate requirements (runtime, not dev): `git ≥ 2.38`, `tmux`, the `umbel` binary, `tend` (transport
   per the T1 decision).
 
 ## The contract
 
 This repo is the **canonical home** of `@agent-contract/plan` v1.1. The schema text lives in
 `docs/contract/plan-schema.md`; `src/core/plan.ts` must match it byte-for-byte inside the fenced block
-(drift test enforces; same pattern tend uses). tend and rctrl vendor from the doc. Changing the schema =
+(drift test enforces; same pattern tend uses). tend and umbel vendor from the doc. Changing the schema =
 changing the doc + the source + the drift test in ONE commit, with a version note — and a heads-up
 recorded in `docs/contract/CHANGES.md` for the other two repos.
 
@@ -133,13 +133,13 @@ raise a timeout to "fix" a flake — find the race.
 
 - **Unit (`test/unit`)** — `core/` only. Pure in/out. No fs, no git, no processes.
 - **Integration (`test/integration`)** — seams against the REAL substrate: real git repos in tmp dirs
-  (isolate, lock), real processes (exec), real `rctrl` binary driving its **fake worker binaries**
+  (isolate, lock), real processes (exec), real `umbel` binary driving its **fake worker binaries**
   (the `fake-claude.sh` pattern vendored in `test/fixtures/`), real `tend` in a tmp garden.
 - **Loop tests (`test/loop`)** — `runPlan`/`runNode` with **in-memory seam implementations**. These are
   real, complete implementations of the seam interfaces (deterministic worker, in-memory ledger), not
   mocks of behavior under test — the subject is the *loop's* scheduling/retry/close logic. Anything that
   asserts on a seam internal belongs in integration instead.
-- **E2E (`test/e2e`)** — `pleach run` as a process, real git + real rctrl + fake worker binaries +
+- **E2E (`test/e2e`)** — `pleach run` as a process, real git + real umbel + fake worker binaries +
   real tend transport. **No mocks. Ever.**
 - **Proof (`test/proof`, gated `PLEACH_PROOF=1`)** — real claude builds / real codex audits on the
   examples project. Burns subscription; never in CI.
@@ -150,10 +150,10 @@ raise a timeout to "fix" a flake — find the race.
 
 ## Working norms
 
-- Branches: `feat/<scope>`, `fix/<scope>`. Commits: `type(scope): subject` (match rctrl's history style).
+- Branches: `feat/<scope>`, `fix/<scope>`. Commits: `type(scope): subject` (match umbel's history style).
   Lead-dev merges after green `bun run check` + a recorded self-audit pass (re-read the diff as a hostile
   reviewer; the audit note goes in the PR/commit body).
-- Work in *this* repo lands on `master` via short-lived branches. Work in **provo (rctrl)** and
+- Work in *this* repo lands on `master` via short-lived branches. Work in **provo (umbel)** and
   **missoula (tend)** is PRs only, never direct pushes; cite the ledger/letter item each PR answers.
 - CI (GitHub Actions): typecheck + lint + unit/integration/loop/e2e on ubuntu (tmux + git installed;
   fake binaries only). Proof runs are manual.

@@ -11,7 +11,7 @@ A product layer over the plotplot umbrella. Deltas only; everything absent inher
 
 ## Positioning
 
-The deterministic conductor between **tend** (the feature ledger that decides what “done” means) and **rctrl** (the boundary that runs one unit of agent work). pleach takes a plan — a DAG of nodes — isolates each node in its own detached git worktree, enforces gates (conflict-marker scan · smoke · cross-provider audit), and publishes a `node/<id>` branch only for work that mechanically passed them — so a swarm of stochastic agents can build unattended without garbage reaching the trunk.
+The deterministic conductor between **tend** (the feature ledger that decides what “done” means) and **umbel** (the boundary that runs one unit of agent work). pleach takes a plan — a DAG of nodes — isolates each node in its own detached git worktree, enforces gates (conflict-marker scan · smoke · cross-provider audit), and publishes a `node/<id>` branch only for work that mechanically passed them — so a swarm of stochastic agents can build unattended without garbage reaching the trunk.
 
 ## Mark
 

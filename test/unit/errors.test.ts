@@ -75,11 +75,11 @@ describe('AuditParseError', () => {
 
 describe('WorkerSpawnError', () => {
   test('instanceof + fields', () => {
-    const e = new WorkerSpawnError('rctrl spawn exited 1');
+    const e = new WorkerSpawnError('umbel spawn exited 1');
     expect(e).toBeInstanceOf(WorkerSpawnError);
     expect(e).toBeInstanceOf(Error);
     expect(e.name).toBe('WorkerSpawnError');
-    expect(e.detail).toBe('rctrl spawn exited 1');
+    expect(e.detail).toBe('umbel spawn exited 1');
   });
 });
 

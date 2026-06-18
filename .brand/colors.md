@@ -51,7 +51,7 @@ Each tool in the garden claims one accent; the primary palette is shared across 
 | trellis | #E89227 | orchestrate agent CLIs — sunlight |
 
 [FLAG: identity-pleach] pleach's one-line purpose is a placeholder ("composition / weaving"); replace once the product is described. Its accent #97539B is fine to keep.
-[FLAG: identity-trellis] "trellis" is the proposed garden rename of rctrl (orchestrate agent CLIs in tmux); confirm before public use.
+[FLAG: identity-trellis] "trellis" is the proposed garden rename of umbel (orchestrate agent CLIs in tmux); confirm before public use.
 
 ## Contrast Pairings
 

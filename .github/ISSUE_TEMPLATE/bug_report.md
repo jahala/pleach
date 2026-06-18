@@ -19,5 +19,5 @@ Steps to reproduce.
 **Environment**
 - pleach commit:
 - `bun --version`:
-- `git --version`, tmux, rctrl present?:
+- `git --version`, tmux, umbel present?:
 - `bun run check` output (if relevant):

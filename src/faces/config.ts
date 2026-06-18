@@ -1,8 +1,8 @@
 import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { gitLedger } from '../adapters/git.ts';
-import { rctrlRunner } from '../adapters/rctrl.ts';
 import { tendLedger } from '../adapters/tend.ts';
+import { umbelRunner } from '../adapters/umbel.ts';
 import { ConfigError } from '../core/errors.ts';
 import type { LedgerSeam, RunnerSeam } from '../loop/deps.ts';
 
@@ -16,7 +16,7 @@ export interface PleachConfig {
 export interface ResolveSeamsOpts {
   config?: string;
   repoRoot: string;
-  rctrlBin: string;
+  umbelBin: string;
   permissionMode: string;
   allowedTools?: string;
   tendModule?: string;
@@ -79,9 +79,9 @@ export async function resolveSeams(
     return { runner: config.runner, ledger: await config.ledger };
   }
 
-  // Default wiring: rctrl runner + git or tend ledger.
-  const runner = rctrlRunner({
-    bin: opts.rctrlBin,
+  // Default wiring: umbel runner + git or tend ledger.
+  const runner = umbelRunner({
+    bin: opts.umbelBin,
     permissionMode: opts.permissionMode,
     ...(opts.allowedTools !== undefined ? { allowedTools: opts.allowedTools } : {}),
   });

@@ -22,7 +22,7 @@ They are files and skills, not dashboards and servers. Local-first, legible, and
 
 plotplot.ai is the organization — the garden. Each tool carries the shared family brand (palette, type, layout, surface, voice) plus its own product layer at `.brand/products/<product>/`: one accent from the Product Accents table, its own mark, tagline, and terminology. Deltas only; everything absent inherits from this umbrella.
 
-Today's beds: **tilth** (code intelligence), **tend** (feature mapping & narration), **petals** (brand intelligence for agents), **pleach** (purpose to be confirmed), and **trellis** (orchestrating agent CLIs — a proposed rename of rctrl). More are still seeds.
+Today's beds: **tilth** (code intelligence), **tend** (feature mapping & narration), **petals** (brand intelligence for agents), **pleach** (purpose to be confirmed), and **trellis** (orchestrating agent CLIs — a proposed rename of umbel). More are still seeds.
 
 [FLAG: identity-pleach] one-line purpose for pleach not yet provided.
-[FLAG: identity-trellis] confirm the rctrl → trellis rename before public use.
+[FLAG: identity-trellis] confirm the umbel → trellis rename before public use.

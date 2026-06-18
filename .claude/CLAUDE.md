@@ -4,7 +4,7 @@
 consumes a `Plan` — a DAG of nodes — isolates each node in a detached git worktree merged from its
 dependencies' verified branches, enforces **gates** (setup · conflict-marker scan · smoke · cross-provider
 audit), and publishes a `node/<id>` branch **only for verified work**, so garbage can't propagate down the
-DAG. It runs on **git + any agent runner**; **tend** (the feature ledger) and **rctrl** (the agent-worker
+DAG. It runs on **git + any agent runner**; **tend** (the feature ledger) and **umbel** (the agent-worker
 boundary) are the batteries-included reference adapters, not requirements (see [`docs/adapters.md`](../docs/adapters.md)).
 **The prime invariant: agents produce; code decides** — every canonical decision (close, verify,
 quarantine, retry) is deterministic code; agent output is parsed evidence, never interpreted.
@@ -37,13 +37,13 @@ quarantine, retry) is deterministic code; agent output is parsed evidence, never
 ```
 faces/     cli.ts                                  ← argv, exit codes, stdout/stderr discipline
 loop/      run-plan · run-node · run-work          ← the deterministic loop; composes injected seams + adapters
-adapters/  rctrl · tend · git                      ← pluggable tool bridges (the runner + ledger ports)
+adapters/  umbel · tend · git                      ← pluggable tool bridges (the runner + ledger ports)
 seams/     isolate · exec · lock · journal         ← pleach's own I/O, thin
 core/      plan · validate · classify · errors     ← pure, total
 ```
 
 Stack: Bun + `bun:test`, TypeScript strict, `zod` the only dependency, `biome`. Runtime substrate:
-`git ≥ 2.38` always; the default rctrl runner additionally needs `tmux` + the `rctrl` binary; a `tend` transport is optional (the bundled gitLedger needs neither).
+`git ≥ 2.38` always; the default umbel runner additionally needs `tmux` + the `umbel` binary; a `tend` transport is optional (the bundled gitLedger needs neither).
 
 ## Track work in tend (this repo dogfoods itself)
 
@@ -67,10 +67,10 @@ updated, the next session starts blind.
   that runs green *and* **discriminates** — the `negctrl` helper mutates the source in a throwaway worktree
   and the test must then fail. A check's `validates_job` should point at the job its test actually asserts:
   seam/component tests → `developer:1`; operator end-to-end guarantees verify at the loop / CLI / proof-run
-  layer. (Current, after the 2026-06-18 adapters refactor + garden sync: the rctrl/tend features were reframed
+  layer. (Current, after the 2026-06-18 adapters refactor + garden sync: the umbel/tend features were reframed
   as adapters and `pluggable-adapters` was added; `cli-validate` / `conductor-loop` / `lock-journal` are now
   **verified-but-stale** — the refactor moved/changed their cited evidence, behavior is green at 191/13/0, a
-  `/tend audit` refresh is pending; `cli-run` / `rctrl-seam` / `tend-seam` / `pluggable-adapters` are planned/partial.)
+  `/tend audit` refresh is pending; `cli-run` / `umbel-seam` / `tend-seam` / `pluggable-adapters` are planned/partial.)
 - **tend#47 (upstream, filed):** the operator/developer persona polyglots validate as invalid — the
   catalog→snapshot mirror writes `journey_phases` the schema forbids, and the served tend dist is stale.
   Persona narrative writes are blocked until it's fixed + the missoula dist rebuilt + the tend MCP

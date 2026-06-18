@@ -2,21 +2,21 @@ import { WorkerSeamError, WorkerSpawnError } from '../core/errors.ts';
 import type { ExecFn, RunnerSeam, Worker, WorkerResult } from '../loop/deps.ts';
 import { exec as defaultExec } from '../seams/exec.ts';
 
-// ── createRctrlSeam ──────────────────────────────────────────────────────────
+// ── createUmbelSeam ──────────────────────────────────────────────────────────
 //
-// Drives the rctrl binary over ExecFn. Each verb is an arg-array invocation;
+// Drives the umbel binary over ExecFn. Each verb is an arg-array invocation;
 // ExecFn never rejects (spawn failure → exitCode 127).
 //
 // Per-worker sinceMtime threads send→wait correctly (race-free stop detection).
 
-export interface RctrlSeamOpts {
+export interface UmbelSeamOpts {
   bin: string;
-  // Process-level env for every rctrl invocation (RCTRL_STATE etc.).
+  // Process-level env for every umbel invocation (UMBEL_STATE etc.).
   env?: Record<string, string>;
-  // Extra env vars passed as --env KEY=VAL to rctrl spawn — reach the worker.
+  // Extra env vars passed as --env KEY=VAL to umbel spawn — reach the worker.
   // Use for FAKE_CLAUDE_* in tests; production typically leaves this empty.
   workerEnv?: Record<string, string>;
-  // Tool allowlist for spawned workers. Claude-only (rctrl rejects it for other
+  // Tool allowlist for spawned workers. Claude-only (umbel rejects it for other
   // providers by design). A curated allowlist CANNOT cover MCP tools, so it is
   // not enough to keep an autonomous worker from blocking — see permissionMode.
   allowedTools?: string;
@@ -25,16 +25,16 @@ export interface RctrlSeamOpts {
   // tools the environment injects, so the worker blocks on the first prompt. The
   // conductor's safety is external (disposable worktree + cross-provider audit
   // + gates), so bypassing in-worker prompts is correct here. Rides claude (any
-  // mode) AND codex ('bypassPermissions' → rctrl maps it to codex's
+  // mode) AND codex ('bypassPermissions' → umbel maps it to codex's
   // --dangerously-bypass-approvals-and-sandbox so an unattended auditor doesn't
   // block on codex's approval prompt). Suppressed for other providers, which
-  // rctrl rejects. rctrl is the enforcing guardrail, not the seam.
+  // umbel rejects. umbel is the enforcing guardrail, not the seam.
   permissionMode?: string;
 }
 
-// The concrete return type is structurally compatible with RctrlSeam; the
+// The concrete return type is structurally compatible with UmbelSeam; the
 // inferred type exposes the extra __name field on workers for test access.
-export function createRctrlSeam(exec: ExecFn, opts: RctrlSeamOpts) {
+export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
   const {
     bin,
     env: seamEnv = {},
@@ -65,8 +65,8 @@ export function createRctrlSeam(exec: ExecFn, opts: RctrlSeamOpts) {
       argv.push('--allowed-tools', allowedTools);
     }
     // permissionMode rides claude (any mode) AND codex ('bypassPermissions' →
-    // codex's --dangerously-bypass-approvals-and-sandbox). rctrl validates and
-    // rejects per-provider; suppressing it elsewhere (gemini) avoids a spawn rctrl
+    // codex's --dangerously-bypass-approvals-and-sandbox). umbel validates and
+    // rejects per-provider; suppressing it elsewhere (gemini) avoids a spawn umbel
     // would reject.
     if (permissionMode !== undefined && (provider === 'claude' || provider === 'codex')) {
       argv.push('--permission-mode', permissionMode);
@@ -79,13 +79,13 @@ export function createRctrlSeam(exec: ExecFn, opts: RctrlSeamOpts) {
     const result = await exec(argv, { cwd: spec.cwd, env: mergeEnv() });
 
     if (result.exitCode !== 0) {
-      throw new WorkerSpawnError(`rctrl spawn exited ${result.exitCode}: ${result.output.trim()}`);
+      throw new WorkerSpawnError(`umbel spawn exited ${result.exitCode}: ${result.output.trim()}`);
     }
 
     // stdout: "spawned: <name>\n" — verify the name appears
     if (!result.output.includes(name)) {
       throw new WorkerSpawnError(
-        `rctrl spawn succeeded but name not found in output: ${result.output.trim()}`,
+        `umbel spawn succeeded but name not found in output: ${result.output.trim()}`,
       );
     }
 
@@ -143,7 +143,7 @@ export function createRctrlSeam(exec: ExecFn, opts: RctrlSeamOpts) {
 
       argv.push(name);
 
-      // Give exec headroom beyond rctrl's own timeout so ExecFn doesn't race.
+      // Give exec headroom beyond umbel's own timeout so ExecFn doesn't race.
       const execTimeout =
         waitOpts?.timeoutMs !== undefined ? waitOpts.timeoutMs + 10_000 : undefined;
 
@@ -195,7 +195,7 @@ export function createRctrlSeam(exec: ExecFn, opts: RctrlSeamOpts) {
 
   // ── gatherWorkerResult ────────────────────────────────────────────────────
   //
-  // Assembles WorkerResult from the wait reason + subsidiary rctrl verbs.
+  // Assembles WorkerResult from the wait reason + subsidiary umbel verbs.
   // Only 'stop' warrants the read/actions/diff roundtrips.
 
   async function gatherWorkerResult(
@@ -216,7 +216,7 @@ export function createRctrlSeam(exec: ExecFn, opts: RctrlSeamOpts) {
 
     // ── stop: read + actions + diff ──────────────────────────────────────────
 
-    // rctrl read — last assistant message, untruncated (ledger C4).
+    // umbel read — last assistant message, untruncated (ledger C4).
     const readResult = await exec([bin, 'read', name], {
       cwd,
       env: mergeEnv(),
@@ -224,7 +224,7 @@ export function createRctrlSeam(exec: ExecFn, opts: RctrlSeamOpts) {
     });
     const finalMessage = readResult.exitCode === 0 ? readResult.output.trim() : '';
 
-    // rctrl actions --json — the raw ActionManifest (toolsUsed, files*, errors,
+    // umbel actions --json — the raw ActionManifest (toolsUsed, files*, errors,
     // finalMessage, turnCount). Unparseable/failed → actions = undefined.
     const actionsResult = await exec([bin, 'actions', '--json', name], {
       cwd,
@@ -240,7 +240,7 @@ export function createRctrlSeam(exec: ExecFn, opts: RctrlSeamOpts) {
       }
     }
 
-    // rctrl diff — unified text; include when exit 0, else undefined.
+    // umbel diff — unified text; include when exit 0, else undefined.
     const diffResult = await exec([bin, 'diff', name], {
       cwd,
       env: mergeEnv(),
@@ -294,6 +294,6 @@ function extractFilesTouched(actions: unknown): string[] {
 }
 
 // Public adapter factory for pleach.config.ts — wires the default audited exec.
-export function rctrlRunner(opts: RctrlSeamOpts): RunnerSeam {
-  return createRctrlSeam(defaultExec, opts);
+export function umbelRunner(opts: UmbelSeamOpts): RunnerSeam {
+  return createUmbelSeam(defaultExec, opts);
 }

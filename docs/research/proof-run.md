@@ -6,7 +6,7 @@ Per ENGINEERING.md §P6: the run names the next defect; we fix it RED-first.
 
 Setup: `examples/proof/project` copied to a throwaway git repo, `pleach run` with
 `--repo-root <copy> --tend-module …/missoula/src/core/bridge/ingester.ts
---max-concurrency 2`, real `rctrl` binary on PATH.
+--max-concurrency 2`, real `umbel` binary on PATH.
 
 ## Run 1 — named defect #1: audit egress unparseable
 
@@ -50,8 +50,8 @@ correctly prevents a partially-discriminated feature from being marked verified.
 
 ## Run 3 — full verified close (all open items resolved)
 
-After the robustness fixes landed (c2 negctrl, conductor `partial` bucket, rctrl codex
-permission bypass + seam wiring), re-ran on a fresh seed with the reinstalled rctrl
+After the robustness fixes landed (c2 negctrl, conductor `partial` bucket, umbel codex
+permission bypass + seam wiring), re-ran on a fresh seed with the reinstalled umbel
 binary. **Every node closed:**
 
 ```json
@@ -68,7 +68,7 @@ What changed since Run 2, end to end:
   so the audit's negative control discriminates and **both** c1 and c2 are
   pass+discriminated. tend's honest-middle `deriveResult` returns `pass` → `verified` →
   `emitVerdict {closed:true}` → pleach closes `wordcount`.
-- **codex audited in a worktree without blocking.** rctrl now delivers codex's Stop hook
+- **codex audited in a worktree without blocking.** umbel now delivers codex's Stop hook
   via a shared `$CODEX_HOME` (PR #34 — a project `.codex/hooks.json` is silently ignored
   in linked worktrees), and maps `--permission-mode bypassPermissions` →
   `--dangerously-bypass-approvals-and-sandbox` (PR #36); the pleach seam passes that bypass
@@ -97,8 +97,8 @@ a real codex auditor, and real tend — every check discriminated, every node cl
 2. **Conductor `failed` vs `partial`** — ✅ distinct `partial` `RunSummary` bucket
    (`cdb2932`, test-first): a done-but-not-verified node no longer reads as `failed`, and
    the CLI maps `partial` to exit 1 (not success) via a pure `summaryExitCode`.
-3. **rctrl N8 (codex approval bypass)** — ✅ codex maps `--permission-mode
-   bypassPermissions` → `--dangerously-bypass-approvals-and-sandbox` (rctrl #36); the
+3. **umbel N8 (codex approval bypass)** — ✅ codex maps `--permission-mode
+   bypassPermissions` → `--dangerously-bypass-approvals-and-sandbox` (umbel #36); the
    pleach seam passes it to the codex auditor (`09f5beb`). Both test-first.
 4. **Step-node closure persistence across runs** — flagged to tend as **T1 / B1-B2**
    (jahala/pleach#9): tend owns feature-level closure + SHA persistence; pleach already

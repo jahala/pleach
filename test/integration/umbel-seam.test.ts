@@ -1,21 +1,21 @@
 /**
- * Integration tests for src/seams/rctrl.ts
+ * Integration tests for src/seams/umbel.ts
  *
- * Drives the REAL rctrl binary with vendored fake-claude.sh.
- * No mocks — real tmux, real rctrl state, real fake worker.
+ * Drives the REAL umbel binary with vendored fake-claude.sh.
+ * No mocks — real tmux, real umbel state, real fake worker.
  *
  * Skip the suite when the binary is absent (loud skip).
  *
- * Env contract for fake-claude.sh (learned from rctrl/test/integration/spawn.test.ts):
- *   RCTRL_STATE           — rctrl state root (set in exec process env)
- *   RCTRL_CLAUDE_BIN      — injected by rctrl when launching; read from rctrl process env
+ * Env contract for fake-claude.sh (learned from umbel/test/integration/spawn.test.ts):
+ *   UMBEL_STATE           — umbel state root (set in exec process env)
+ *   UMBEL_CLAUDE_BIN      — injected by umbel when launching; read from umbel process env
  *   FAKE_CLAUDE_JSONL_DIR — where fake-claude writes its .jsonl (worker env via --env)
- *   FAKE_CLAUDE_HOOK      — stop.sh path derived from RCTRL_STATE (worker env via --env)
+ *   FAKE_CLAUDE_HOOK      — stop.sh path derived from UMBEL_STATE (worker env via --env)
  *   FAKE_CLAUDE_DELAY     — ms to sleep before responding; explicitly set to 0 to
  *                           prevent tmux global env pollution from prior runs
  *
  * CAUTION: if FAKE_CLAUDE_DELAY is set in the tmux global environment from a prior
- * agent run, rctrl spawn.ts will inherit it and pass it to the worker, causing all
+ * agent run, umbel spawn.ts will inherit it and pass it to the worker, causing all
  * waits to time out. The workerEnv explicitly sets FAKE_CLAUDE_DELAY=0 to override.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
@@ -23,14 +23,14 @@ import { randomBytes } from 'node:crypto';
 import { access, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { createRctrlSeam } from '../../src/adapters/rctrl.ts';
-import { createRctrlSeam as makeRctrl } from '../../src/adapters/rctrl.ts';
+import type { createUmbelSeam } from '../../src/adapters/umbel.ts';
+import { createUmbelSeam as makeUmbel } from '../../src/adapters/umbel.ts';
 import { WorkerSpawnError } from '../../src/core/errors.ts';
 import { exec } from '../../src/seams/exec.ts';
 
 // ── binary resolution ────────────────────────────────────────────────────────
 
-const RCTRL_BIN = process.env.PLEACH_RCTRL_BIN ?? '';
+const UMBEL_BIN = process.env.PLEACH_UMBEL_BIN ?? '';
 
 const FAKE_CLAUDE = join(import.meta.dir, '../fixtures/fake-claude.sh');
 
@@ -43,7 +43,7 @@ async function binExists(p: string): Promise<boolean> {
   }
 }
 
-const binPresent = await binExists(RCTRL_BIN);
+const binPresent = await binExists(UMBEL_BIN);
 
 // ── test-run isolation ───────────────────────────────────────────────────────
 
@@ -53,7 +53,7 @@ let stateDir = '';
 let jsonlDir = '';
 
 async function setupState(): Promise<void> {
-  stateDir = await mkdtemp(join(tmpdir(), 'pleach-rctrl-test-'));
+  stateDir = await mkdtemp(join(tmpdir(), 'pleach-umbel-test-'));
   jsonlDir = join(stateDir, 'fake-jsonl');
   await mkdir(jsonlDir, { recursive: true });
 }
@@ -68,25 +68,25 @@ async function teardownState(): Promise<void> {
 
 // ── seam factory ─────────────────────────────────────────────────────────────
 //
-// env:       process-level for every rctrl invocation (RCTRL_STATE, RCTRL_CLAUDE_BIN)
-// workerEnv: forwarded as --env KEY=VAL to rctrl spawn → reaches the worker process
+// env:       process-level for every umbel invocation (UMBEL_STATE, UMBEL_CLAUDE_BIN)
+// workerEnv: forwarded as --env KEY=VAL to umbel spawn → reaches the worker process
 
-type Seam = ReturnType<typeof createRctrlSeam>;
+type Seam = ReturnType<typeof createUmbelSeam>;
 
 function makeSeam(extra: { allowedTools?: string; permissionMode?: string } = {}): Seam {
-  return makeRctrl(exec, {
+  return makeUmbel(exec, {
     ...extra,
-    bin: RCTRL_BIN,
+    bin: UMBEL_BIN,
     env: {
-      RCTRL_STATE: stateDir,
-      RCTRL_CLAUDE_BIN: FAKE_CLAUDE,
+      UMBEL_STATE: stateDir,
+      UMBEL_CLAUDE_BIN: FAKE_CLAUDE,
     },
     workerEnv: {
       FAKE_CLAUDE_JSONL_DIR: jsonlDir,
-      // FAKE_CLAUDE_HOOK: rctrl installs stop.sh at this path
+      // FAKE_CLAUDE_HOOK: umbel installs stop.sh at this path
       FAKE_CLAUDE_HOOK: join(stateDir, 'hooks', 'stop.sh'),
       // Explicitly 0 — overrides any FAKE_CLAUDE_DELAY left in tmux global env
-      // by a prior test run (rctrl spawn.ts copies the full process.env to the
+      // by a prior test run (umbel spawn.ts copies the full process.env to the
       // worker, which inherits tmux global env if the shell was opened from tmux).
       FAKE_CLAUDE_DELAY: '0',
     },
@@ -95,7 +95,7 @@ function makeSeam(extra: { allowedTools?: string; permissionMode?: string } = {}
 
 // ── suite ────────────────────────────────────────────────────────────────────
 
-describe.skipIf(!binPresent)('rctrl seam integration', () => {
+describe.skipIf(!binPresent)('umbel seam integration', () => {
   beforeAll(setupState);
   afterAll(teardownState);
 
@@ -105,7 +105,7 @@ describe.skipIf(!binPresent)('rctrl seam integration', () => {
   // filesTouched array → kill
   test('happy path: spawn → send → wait(stop) → kill', async () => {
     // allowedTools + permissionMode ride the spawn for claude workers — the
-    // real rctrl binary validates both flag paths end-to-end. permissionMode
+    // real umbel binary validates both flag paths end-to-end. permissionMode
     // bypassPermissions is what actually keeps an autonomous worker from
     // blocking (a curated allowlist can't cover MCP tools).
     const seam = makeSeam({
@@ -189,7 +189,7 @@ describe.skipIf(!binPresent)('rctrl seam integration', () => {
 
       await worker.send('a prompt');
       // Kill the tmux session directly before fake-claude can respond
-      await exec(['tmux', 'kill-session', '-t', `rctrl-${name}`], {
+      await exec(['tmux', 'kill-session', '-t', `umbel-${name}`], {
         cwd: '/tmp',
         timeoutMs: 5000,
       });

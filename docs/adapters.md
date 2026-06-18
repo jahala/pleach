@@ -82,7 +82,7 @@ calls. For tend-backed plans it is the feature polyglot path; for other planners
 any stable string that identifies the plan's origin.
 
 `node.worker.provider` selects the runner's provider per node, making plans portable
-across tool configurations — the same plan runs whether the config wires rctrl or another
+across tool configurations — the same plan runs whether the config wires umbel or another
 runner.
 
 ---
@@ -116,7 +116,7 @@ export interface WorkerResult {
 }
 ```
 
-**What "rctrl-like" means.** The `RunnerSeam` contract describes an interactive agent you
+**What "umbel-like" means.** The `RunnerSeam` contract describes an interactive agent you
 drive via a send→wait→kill cycle:
 
 1. `spawnWorker` starts an agent session in the given `cwd` (which pleach has already
@@ -152,7 +152,7 @@ const stagedFiles = dedup([...result.filesTouched, ...changed]);
 await deps.isolate.stage(cwd, stagedFiles);
 ```
 
-`result.filesTouched` is the hint the adapter provides (e.g. from `rctrl actions --json`);
+`result.filesTouched` is the hint the adapter provides (e.g. from `umbel actions --json`);
 `changedFiles` is pleach's own fallback scan. Either path works: if your adapter cannot
 enumerate touched files precisely, return `filesTouched: []` and pleach's git status scan
 covers the rest. If your agent is self-committing (e.g. aider), the adapter must normalize
@@ -212,30 +212,30 @@ export interface PleachConfig {
 2. **`pleach.config.ts` at the repo root** — used when no `--config` is given. If present, its
    default export must be a `PleachConfig`; both `runner` and `ledger` must be non-null objects,
    else `ConfigError`.
-3. **Zero-config default** — neither of the above present: `rctrlRunner` + either `tendLedger`
-   (when `--tend-module` is supplied) or `gitLedger`. The `--rctrl-bin` and `--permission-mode`
+3. **Zero-config default** — neither of the above present: `umbelRunner` + either `tendLedger`
+   (when `--tend-module` is supplied) or `gitLedger`. The `--umbel-bin` and `--permission-mode`
    flags thread into the default runner.
 
 A minimal `pleach.config.ts` using the bundled adapters:
 
 ```ts
-import { rctrlRunner } from 'pleach/adapters/rctrl';
+import { umbelRunner } from 'pleach/adapters/umbel';
 import { gitLedger } from 'pleach/adapters/git';
 import type { PleachConfig } from 'pleach/config';
 
 export default {
-  runner: rctrlRunner({ bin: 'rctrl', permissionMode: 'bypassPermissions' }),
+  runner: umbelRunner({ bin: 'umbel', permissionMode: 'bypassPermissions' }),
   ledger: gitLedger({ repo: '.' }),
 } satisfies PleachConfig;
 ```
 
 Swapping in a different runner (e.g. one backed by the Anthropic API directly rather than
-rctrl/tmux) requires only changing the `runner` line. The plan does not change: `worker.provider`
+umbel/tmux) requires only changing the `runner` line. The plan does not change: `worker.provider`
 names the provider the plan expects, and the config decides how that provider is reached.
 
 **Plan vs. config separation.** `worker.provider` in the plan is intent; the config is
 tooling. A plan that says `provider: 'codex'` runs under any runner that can dispatch to
-codex — rctrl, a hypothetical cloud runner, or a test double. Plans stay portable across
+codex — umbel, a hypothetical cloud runner, or a test double. Plans stay portable across
 environments; configs are environment-specific.
 
 ---
@@ -306,9 +306,9 @@ verify-close. The node's branch is still published; its dependents are skipped.
 
 Three adapters ship in `src/adapters/` as the batteries-included configuration:
 
-- **`rctrlRunner`** (`src/adapters/rctrl.ts`) — `RunnerSeam` backed by the `rctrl` binary
+- **`umbelRunner`** (`src/adapters/umbel.ts`) — `RunnerSeam` backed by the `umbel` binary
   over tmux. Drives claude, codex, and gemini workers through spawn/send/wait/read/kill
-  verbs. The public factory: `rctrlRunner(opts: RctrlSeamOpts): RunnerSeam`.
+  verbs. The public factory: `umbelRunner(opts: UmbelSeamOpts): RunnerSeam`.
 
 - **`tendLedger`** (`src/adapters/tend.ts`) — `LedgerSeam` backed by tend's ingester module.
   Wraps the transport in a serial promise-chain queue (single-ingester invariant). Accepts a
@@ -319,7 +319,7 @@ Three adapters ship in `src/adapters/` as the batteries-included configuration:
   in the local git repo. Zero external dependencies; `emitVerdict` is pure (`{ closed: verdict.status === 'done' }`).
   The public factory: `gitLedger(opts?: GitLedgerOpts): LedgerSeam`.
 
-The zero-config default wires `rctrlRunner` + `gitLedger` (or `tendLedger` when
+The zero-config default wires `umbelRunner` + `gitLedger` (or `tendLedger` when
 `--tend-module` is given). This is the standalone "run and verify locally" configuration.
 
 ---
@@ -327,7 +327,7 @@ The zero-config default wires `rctrlRunner` + `gitLedger` (or `tendLedger` when
 ## Boundaries (honest)
 
 pleach conducts **local executors** over git worktrees. It is not a cloud agent orchestrator:
-the runner must be a process pleach can spawn locally (rctrl/tmux, or a local API wrapper).
+the runner must be a process pleach can spawn locally (umbel/tmux, or a local API wrapper).
 Cloud-autonomous agents that accept work and return a result asynchronously (e.g. Devin,
 Claude Code in headless mode with no shell) require an adapter that bridges their async
 protocol into the sync send→wait→kill contract — doable, but the adapter owns that

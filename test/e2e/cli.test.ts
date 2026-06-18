@@ -2,12 +2,12 @@
  * E2E: `pleach run` / `pleach validate` as a real process.
  *
  * The full stack, no mocks: real git repo (a copy of the proof project), real
- * rctrl binary driving the fake-claude fixture over tmux, real tend ingester
+ * umbel binary driving the fake-claude fixture over tmux, real tend ingester
  * module (missoula source) as the ledger transport. Three nodes: a prompt node
  * (worker turn + smoke), a command node engineered to FAIL ONCE (exercises the
  * retry ladder), and a dependent command node (exercises close→baseRef flow).
  *
- * Gated loudly on the rctrl binary + missoula module being present.
+ * Gated loudly on the umbel binary + missoula module being present.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -18,7 +18,7 @@ const PLEACH_MAIN = join(import.meta.dir, '../../src/main.ts');
 const PROOF_PROJECT = join(import.meta.dir, '../../examples/proof/project');
 const PROOF_PLAN = join(import.meta.dir, '../../examples/proof/plan.json');
 const FAKE_CLAUDE = join(import.meta.dir, '../fixtures/fake-claude.sh');
-const RCTRL_BIN = process.env.PLEACH_RCTRL_BIN ?? '';
+const UMBEL_BIN = process.env.PLEACH_UMBEL_BIN ?? '';
 const TEND_MODULE = process.env.PLEACH_TEND_MODULE ?? '';
 const MISSOULA_FILES = TEND_MODULE.replace('bridge/ingester.ts', 'files.js');
 
@@ -31,7 +31,7 @@ async function exists(p: string): Promise<boolean> {
   }
 }
 
-const fullStack = (await exists(RCTRL_BIN)) && (await exists(TEND_MODULE.replace('.js', '.ts')));
+const fullStack = (await exists(UMBEL_BIN)) && (await exists(TEND_MODULE.replace('.js', '.ts')));
 
 interface RunResult {
   code: number;
@@ -166,14 +166,14 @@ describe.skipIf(!fullStack)('pleach run — full stack e2e', () => {
         '2',
         '--timeout-ms',
         '60000',
-        '--rctrl-bin',
-        RCTRL_BIN,
+        '--umbel-bin',
+        UMBEL_BIN,
         '--tend-module',
         TEND_MODULE,
       ],
       {
-        RCTRL_STATE: state,
-        RCTRL_CLAUDE_BIN: FAKE_CLAUDE,
+        UMBEL_STATE: state,
+        UMBEL_CLAUDE_BIN: FAKE_CLAUDE,
         FAKE_CLAUDE_HOOK: join(state, 'hooks', 'stop.sh'),
         FAKE_CLAUDE_JSONL_DIR: jsonl,
         FAKE_CLAUDE_DELAY: '0',
