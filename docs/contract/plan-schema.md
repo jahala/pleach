@@ -1,4 +1,4 @@
-# `@agent-contract/plan` v1.1.1 — canonical text
+# `@agent-contract/plan` v1.1.2 — canonical text
 
 This repo is the contract's home. `src/core/plan.ts` must match the fenced block below byte-for-byte
 (drift-tested). tend and umbel vendor from this file. Schema changes happen here first — doc + source +
@@ -42,6 +42,8 @@ const Node = z.object({
     audit: z.object({
       command: z.string(),                                  // e.g. `tend audit <feature>` (intent-read + negctrl)
       provider: z.string(),                                 // MUST ≠ worker.provider — model diversity
+      // OPTIONAL — pin the auditor's model; the provider still MUST differ (diversity).
+      model: z.string().optional(),
     }).optional(),
   }).default({}),
   policy: z.object({

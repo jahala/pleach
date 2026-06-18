@@ -310,7 +310,11 @@ async function runAudit(
   const audit = node.accept.audit as NonNullable<Node['accept']['audit']>;
 
   for (let reaudit = 0; reaudit < REAUDIT_BUDGET; reaudit += 1) {
-    const worker = await deps.runner.spawnWorker({ provider: audit.provider, cwd });
+    const worker = await deps.runner.spawnWorker({
+      provider: audit.provider,
+      model: audit.model,
+      cwd,
+    });
     let res: WorkerResult;
     try {
       await worker.send(buildAuditPrompt(audit.command));

@@ -13,3 +13,8 @@
   prose added: setup-failure semantics, 30m timeout default + blocked-preempts-timeout, resolved-provider
   diversity check, single-writer-during-run, ingester-enforced diffRef, advisory evidenceSha, work-union
   mapping pin. Ratification record: missoula docs/internal/bridge/tend-umbel-v1.1-ratification.md.
+
+- **v1.1.2** (2026-06-18) — `accept.audit.model` added (optional): pins the cross-provider
+  auditor's model, mirroring `worker.model`. The provider-diversity rule is unchanged —
+  `accept.audit.provider` must still differ from the worker provider. Backward-compatible:
+  omitting it preserves the prior behaviour (the runner picks the provider's default model).
