@@ -7,7 +7,9 @@ import type { ExecFn, Worker, WorkerResult } from './deps.ts';
 // It is given everything; it never reaches for a seam module. The caller
 // (runNode) owns isolation, classification, retries and the worker lifecycle —
 // runWork only sends prompts, waits, and runs the exit-code gates that belong
-// to the Work shape. A non-stop wait (dead/timeout/input/idle/aborted) STOPS
+// to the Work shape; {command} work runs entirely through exec and is given a
+// null worker (run-node spawns none for it). A non-stop wait
+// (dead/timeout/input/idle/aborted) STOPS
 // the attempt immediately and is returned verbatim: blocked preempts every
 // gate (binding prose), and the run-node ladder decides what the reason means.
 
@@ -35,7 +37,7 @@ export function promptFor(node: Node, evidence?: string): string {
 
 export async function runWork(
   node: Node,
-  worker: Worker,
+  worker: Worker | null,
   exec: ExecFn,
   cwd: string,
   opts: RunWorkOpts,
@@ -57,6 +59,10 @@ export async function runWork(
     };
   }
 
+  // Past the command shape the work is {prompt} or {phases}; run-node spawns a
+  // worker for exactly those, so one is always present here.
+  const w = worker as Worker;
+
   if ('phases' in work) {
     let last: WorkerResult | null = null;
     for (let i = 0; i < work.phases.length; i += 1) {
@@ -67,8 +73,8 @@ export async function runWork(
         i === 0 && opts.evidence !== undefined && opts.evidence.length > 0
           ? withEvidence(phase.prompt, opts.evidence)
           : phase.prompt;
-      await worker.send(text);
-      last = await worker.wait({ timeoutMs: opts.timeoutMs });
+      await w.send(text);
+      last = await w.wait({ timeoutMs: opts.timeoutMs });
       if (last.reason !== 'stop') return last;
 
       if (phase.phase === 'red') {
@@ -92,6 +98,6 @@ export async function runWork(
   }
 
   // {prompt}: single send/wait.
-  await worker.send(promptFor(node, opts.evidence));
-  return worker.wait({ timeoutMs: opts.timeoutMs });
+  await w.send(promptFor(node, opts.evidence));
+  return w.wait({ timeoutMs: opts.timeoutMs });
 }
