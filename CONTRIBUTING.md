@@ -17,7 +17,7 @@ Enforced in review (and most by CI). Full detail in `ENGINEERING.md`:
 
 - **Test-first.** No fix or feature without a failing test first. Every defect maps to an item in [`docs/ledger.md`](docs/ledger.md) and lands as a RED test before its fix.
 - **No stubs, mocks, or TODOs in committed code.** The in-memory seams in loop tests are real implementations of the seam interfaces, not behaviour-mocks.
-- **S.U.P.E.R., strict downward deps.** `core/` is pure and total and imports nothing else; `seams/` and `faces/` own all I/O; `loop/` composes injected seams it never imports. A face never calls git; the loop never spawns a process; a seam never makes a scheduling decision.
+- **S.U.P.E.R., strict downward deps.** `core/` is pure and total and imports nothing else; `seams/` and `adapters/` own all I/O; `loop/` composes the injected seams + adapters it never imports; `faces/` wires them. A face never calls git; the loop never spawns a process; a seam never makes a scheduling decision.
 - **Typed errors, caught at the face.** Discriminated `Error` subclasses live in `core/errors.ts`; faces map them to exit codes.
 - **Single schema source.** `core/plan.ts` is pinned byte-for-byte to `docs/contract/plan-schema.md` by a drift test. A schema change = doc + source + drift-test + `docs/contract/CHANGES.md` in one commit.
 - **Smallest reasonable change**, matching surrounding style.
