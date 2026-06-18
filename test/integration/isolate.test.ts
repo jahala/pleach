@@ -7,7 +7,7 @@
  * the exec seam PR has not merged yet.
  */
 import { expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IsolateCatastrophicError } from '../../src/core/errors.ts';
@@ -373,6 +373,58 @@ test('lead-review: stage into a non-repo path throws IsolateCatastrophicError (t
   await expect(seam.stage('/nonexistent-pleach-dir', ['x.txt'])).rejects.toThrow(
     IsolateCatastrophicError,
   );
+});
+
+// ── Finding A: dispose must remove tmpBase, not just the wt/ subdir ────────────────────────────
+
+// After dispose(), the parent mkdtemp dir (tmpBase = dirname(iso.cwd)) must not exist.
+// With the bug, git worktree remove only deletes wt/ and tmpBase is left as an empty dir.
+test('dispose: tmpBase parent dir is removed after dispose', async () => {
+  const repo = await createRepo();
+  try {
+    await makeBranch(repo.path, 'node/dispose-tmpbase', { 'f.txt': 'hi\n' });
+    const seam = createIsolateSeam(execLocal, repo.path);
+    const node = { id: 'dispose-tmpbase', needs: [], work: { prompt: 'x' } } as never;
+
+    const iso = await seam.isolate(node, ['node/dispose-tmpbase']);
+    // iso.cwd is tmpBase/wt — tmpBase is the parent
+    const tmpBase = join(iso.cwd, '..');
+
+    await iso.dispose();
+
+    // tmpBase must be gone after dispose; access() rejects when path does not exist
+    await expect(access(tmpBase)).rejects.toThrow();
+  } finally {
+    await repo.cleanup();
+  }
+});
+
+// If git worktree remove exits non-zero for an unrecognized reason, it must not
+// be swallowed — it should surface as an IsolateCatastrophicError.
+test('dispose: unrecognized git worktree remove failure surfaces as IsolateCatastrophicError', async () => {
+  const repo = await createRepo();
+  try {
+    await makeBranch(repo.path, 'node/dispose-err', { 'e.txt': 'err\n' });
+    // Inject an exec that fails `git worktree remove` with an unrecognized error
+    // (not the tolerated "is not a working tree" / "not found"); everything else
+    // runs for real, so the worktree is created normally and only remove fails.
+    const spoofExec: ExecFn = async (argv, opts) => {
+      if (argv.includes('worktree') && argv.includes('remove')) {
+        return { output: 'catastrophic unrecognized failure', exitCode: 128 };
+      }
+      return execLocal(argv, opts);
+    };
+    const seam = createIsolateSeam(spoofExec, repo.path);
+    const node = { id: 'dispose-err', needs: [], work: { prompt: 'x' } } as never;
+    const iso = await seam.isolate(node, ['node/dispose-err']);
+
+    await expect(iso.dispose()).rejects.toThrow(IsolateCatastrophicError);
+
+    // dispose threw before its own tmpBase cleanup ran — remove the orphan.
+    await rm(join(iso.cwd, '..'), { recursive: true, force: true });
+  } finally {
+    await repo.cleanup();
+  }
 });
 
 // ledger: S1/C2 — staging fallback: actual changes only, gitignored junk excluded
