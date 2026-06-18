@@ -55,29 +55,29 @@ describe('classify — worker reasons', () => {
 
 describe('classify — errors', () => {
   test('GateFailedError smoke → "retryable"', () => {
-    expect(classify(errorInput(new GateFailedError('smoke', 'exit 1')))).toBe('retryable');
+    expect(classify(errorInput(new GateFailedError('smoke', 'exit 1', 1)))).toBe('retryable');
   });
 
   test('GateFailedError marker → "retryable"', () => {
-    expect(classify(errorInput(new GateFailedError('marker', 'conflict markers found')))).toBe(
+    expect(classify(errorInput(new GateFailedError('marker', 'conflict markers found', -1)))).toBe(
       'retryable',
     );
   });
 
   test('GateFailedError red → "retryable"', () => {
-    expect(classify(errorInput(new GateFailedError('red', '')))).toBe('retryable');
+    expect(classify(errorInput(new GateFailedError('red', '', 0)))).toBe('retryable');
   });
 
   test('GateFailedError green → "retryable"', () => {
-    expect(classify(errorInput(new GateFailedError('green', '')))).toBe('retryable');
+    expect(classify(errorInput(new GateFailedError('green', '', 0)))).toBe('retryable');
   });
 
   test('GateFailedError command → "retryable"', () => {
-    expect(classify(errorInput(new GateFailedError('command', '')))).toBe('retryable');
+    expect(classify(errorInput(new GateFailedError('command', '', 1)))).toBe('retryable');
   });
 
   test('GateFailedError setup → "retryable"', () => {
-    expect(classify(errorInput(new GateFailedError('setup', '')))).toBe('retryable');
+    expect(classify(errorInput(new GateFailedError('setup', '', 1)))).toBe('retryable');
   });
 
   test('AuditParseError → "reaudit"', () => {

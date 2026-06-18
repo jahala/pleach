@@ -48,11 +48,13 @@ export class GateFailedError extends Error {
   readonly name = 'GateFailedError';
   readonly gate: GateKind;
   readonly evidence: string;
+  readonly exitCode: number;
 
-  constructor(gate: GateKind, evidence: string) {
+  constructor(gate: GateKind, evidence: string, exitCode: number) {
     super(`gate '${gate}' failed`);
     this.gate = gate;
     this.evidence = evidence;
+    this.exitCode = exitCode;
   }
 }
 

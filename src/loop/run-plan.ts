@@ -199,7 +199,7 @@ async function runUnderLock(
       // written markers after the in-node gate. A dirty tree FAILS, no commit.
       const lateMarkers = await deps.isolate.scanMarkers(iso.cwd);
       if (lateMarkers.length > 0) {
-        throw new GateFailedError('marker', lateMarkers.join('\n'));
+        throw new GateFailedError('marker', lateMarkers.join('\n'), -1); // N/A: marker scan has no exit code
       }
 
       const { sha: committed } = await deps.isolate.commitBranch(
@@ -230,7 +230,7 @@ async function runUnderLock(
         status: 'failed',
         evidence:
           err instanceof GateFailedError
-            ? { ...verdict.evidence, gate: { ran: err.gate, exitCode: -1 } }
+            ? { ...verdict.evidence, gate: { ran: err.gate, exitCode: err.exitCode } }
             : verdict.evidence,
       };
       await deps.journal.append({
