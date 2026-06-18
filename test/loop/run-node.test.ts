@@ -453,6 +453,30 @@ describe('runNode — command gate exit code fidelity', () => {
   });
 });
 
+// lazy worker spawn: the loop spawns a build worker only for {prompt}/{phases}
+// work. A {command} node execs directly (run-work) and must never ask the runner
+// to spawn — so a command-only plan needs no runner binary at all.
+describe('runNode — lazy worker spawn (command work needs no runner)', () => {
+  test('a {command} node reaches done without the runner ever spawning a build worker', async () => {
+    const h = makeHarness({
+      execScript: () => ({ output: 'ok', exitCode: 0 }),
+      changedByNode: { n: ['out.txt'] },
+    });
+    // Discriminating: asking the runner to spawn for command work is the defect.
+    h.deps.runner.spawnWorker = async () => {
+      throw new Error('spawnWorker must not be called for {command} work');
+    };
+    const node = makeNode({
+      id: 'n',
+      work: { command: 'build thing' },
+      policy: { maxAttempts: 1, onDead: 'fail', reauditWhen: ['compacted'] },
+    });
+    const r = await runNode(node, ['base'], h.deps, { defaultTimeoutMs: DEF });
+    expect(r.verdict.status).toBe('done');
+    expect(h.log.count('spawn:build', 'n')).toBe(0);
+  });
+});
+
 describe('runNode — timeout default threading', () => {
   test('node without policy.timeoutMs uses opts.defaultTimeoutMs for wait + exec', async () => {
     const seen: (number | undefined)[] = [];

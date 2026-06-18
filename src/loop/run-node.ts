@@ -124,11 +124,17 @@ export async function runNode(
       }
 
       // ── work ────────────────────────────────────────────────────────────────
-      const worker = await deps.runner.spawnWorker({
-        provider: node.worker.provider,
-        model: node.worker.model,
-        cwd,
-      });
+      // Command work execs directly (run-work) and never uses a worker; only a
+      // {prompt}/{phases} node spawns a build worker — so a command-only plan
+      // needs no runner at all.
+      const worker =
+        'command' in node.work
+          ? null
+          : await deps.runner.spawnWorker({
+              provider: node.worker.provider,
+              model: node.worker.model,
+              cwd,
+            });
       let result: WorkerResult;
       try {
         result = await runWork(node, worker, deps.exec, cwd, {
@@ -136,7 +142,7 @@ export async function runNode(
           evidence: promptEvidence,
         });
       } catch (err) {
-        await worker.kill();
+        await worker?.kill();
         if (err instanceof GateFailedError) {
           const decision = handleGate(node, attempts, maxAttempts, err);
           if (decision.settle) {
@@ -148,7 +154,7 @@ export async function runNode(
         }
         throw err;
       }
-      await worker.kill();
+      await worker?.kill();
 
       // ── non-stop reasons ──────────────────────────────────────────────────
       if (result.reason !== 'stop') {
