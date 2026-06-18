@@ -341,6 +341,24 @@ describe('runNode — audit', () => {
     expect(r.verdict.status).toBe('failed');
     expect(r.verdict.evidence.gate?.ran).toContain('auditor dead');
   });
+
+  test('audit.model: the cross-provider auditor is spawned at the requested model', async () => {
+    const specs: { provider?: string; model?: string }[] = [];
+    const h = makeHarness({ auditEgress: () => auditBlock([{ check: 'c', verdict: 'pass' }]) });
+    const realSpawn = h.deps.runner.spawnWorker;
+    h.deps.runner.spawnWorker = (spec) => {
+      specs.push({ provider: spec.provider, model: spec.model });
+      return realSpawn(spec);
+    };
+    const node = makeNode({
+      id: 'n',
+      accept: { audit: { command: 'audit n', provider: 'codex', model: 'a-codex-model' } },
+    });
+    const r = await runNode(node, ['base'], h.deps, { defaultTimeoutMs: DEF });
+    expect(r.verdict.status).toBe('done');
+    const auditSpec = specs.find((s) => s.provider === 'codex');
+    expect(auditSpec?.model).toBe('a-codex-model');
+  });
 });
 
 describe('runNode — retry carries evidence (ledger A3)', () => {
