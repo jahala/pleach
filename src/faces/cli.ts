@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import {
   ConfigError,
   LockHeldError,
@@ -10,13 +9,9 @@ import {
 import { PlanSchema } from '../core/plan.ts';
 import { planJsonSchema } from '../core/schema-json.ts';
 import { nodeSummaries, validatePlan } from '../core/validate.ts';
-import type { ConductorDeps, RunSummary } from '../loop/deps.ts';
+import type { RunSummary } from '../loop/deps.ts';
 import { runPlan } from '../loop/run-plan.ts';
-import { exec } from '../seams/exec.ts';
-import { createIsolateSeam } from '../seams/isolate.ts';
-import { createJournal } from '../seams/journal.ts';
-import { createLockSeam } from '../seams/lock.ts';
-import { resolveSeams } from './config.ts';
+import { buildDeps, resolveSeams } from './config.ts';
 
 const HELP = `pleach — deterministic conductor for DAGs of verified agent work
 
@@ -195,7 +190,6 @@ export function summaryExitCode(summary: RunSummary): number {
 async function verbRun(planPath: string, flags: Flags): Promise<number> {
   const plan = await readPlan(planPath);
 
-  const journalPath = flags.journal ?? join(flags.repoRoot, '.git', 'pleach', 'journal.jsonl');
   const { runner, ledger } = await resolveSeams({
     repoRoot: flags.repoRoot,
     umbelBin: flags.umbelBin,
@@ -204,16 +198,14 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     ...(flags.allowedTools !== undefined ? { allowedTools: flags.allowedTools } : {}),
     ...(flags.tendModule !== undefined ? { tendModule: flags.tendModule } : {}),
   });
-  const deps: ConductorDeps = {
-    exec,
-    isolate: createIsolateSeam(exec, flags.repoRoot),
-    lock: createLockSeam(),
-    journal: createJournal(journalPath),
+  const deps = buildDeps({
+    repoRoot: flags.repoRoot,
     runner,
     ledger,
-  };
+    ...(flags.journal !== undefined ? { journal: flags.journal } : {}),
+  });
 
-  process.stderr.write(`pleach: running ${plan.nodes.length} nodes (journal: ${journalPath})\n`);
+  process.stderr.write(`pleach: running ${plan.nodes.length} nodes\n`);
   const summary = await runPlan(plan, deps, {
     repoRoot: flags.repoRoot,
     ...(flags.maxConcurrency !== undefined ? { maxConcurrency: flags.maxConcurrency } : {}),
