@@ -2659,88 +2659,95 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><line class=\"tc-ln\" x1=\"40\" y1=\"14\" x2=\"40\" y2=\"66\"/><circle class=\"tc-fg\" cx=\"40\" cy=\"20\" r=\"4\"/><circle class=\"tc-fg\" cx=\"40\" cy=\"60\" r=\"4\"/><line class=\"tc-ln\" x1=\"40\" y1=\"40\" x2=\"62\" y2=\"40\"/><circle class=\"tc-ac\" cx=\"62\" cy=\"40\" r=\"4\"/><rect class=\"tc-wh tc-frame\" x=\"68\" y=\"24\" width=\"44\" height=\"32\" rx=\"3\" stroke-dasharray=\"5,3\"/><line class=\"tc-la\" x1=\"76\" y1=\"34\" x2=\"102\" y2=\"34\"/><line class=\"tc-la\" x1=\"76\" y1=\"43\" x2=\"96\" y2=\"43\"/></svg>"
   },
   "audit": {
-    "ran_at": "2026-06-16T20:10:00Z",
+    "ran_at": "2026-06-18T14:51:15Z",
     "result": "pass",
     "verdicts": [
       {
         "check_id": "c001",
         "verdict": "pass",
-        "evidence_path": "src/seams/isolate.ts:48-56 (git worktree add --detach) ; ran `bun test test/integration/isolate.test.ts -t \"spec: fan-out\"` → pass ; negctrl (broke '--detach' → '--NOT-DETACH') → DISCRIMINATES",
+        "evidence_path": "test/integration/isolate.test.ts:102 (fan-out); ran `bun test test/integration/isolate.test.ts -t 'spec: fan-out'` → 1 pass; negctrl: worktree add --detach → --NOT-DETACH → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+        "evidence_sha": "8bf086304d9b28fef8e8be58df9a5b945d3e06b0"
       },
       {
         "check_id": "c002",
         "verdict": "pass",
-        "evidence_path": "src/seams/isolate.ts:129-131 (conflictFiles.push) ; ran `bun test test/integration/isolate.test.ts -t \"ledger: B3/C1\"` → pass ; negctrl (broke conflictFiles.push → no-op) → DISCRIMINATES",
+        "evidence_path": "test/integration/isolate.test.ts:134 (B3/C1 conflict-commit); ran -t 'B3/C1' → 1 pass; negctrl: conflictFiles.push(f)→no-op → DISCRIMINATES. NOTE prior 'add -A' anchor stale — now 'add -u' at isolate.ts:150 (audit-fix 2a6fe14)",
         "validates_job_satisfied": true,
-        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+        "evidence_sha": "8bf086304d9b28fef8e8be58df9a5b945d3e06b0"
       },
       {
         "check_id": "c003",
         "verdict": "pass",
-        "evidence_path": "src/seams/isolate.ts:159-163 (return {cwd, conflictFiles, dispose}) ; ran `bun test test/integration/isolate.test.ts -t \"spec: clean join\"` → pass ; negctrl (broke conflictFiles return → ['BROKEN_CLEAN']) → DISCRIMINATES",
+        "evidence_path": "test/integration/isolate.test.ts:173 (clean join); ran -t 'spec: clean join' → 1 pass; negctrl: corrupt conflictFiles return → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+        "evidence_sha": "8bf086304d9b28fef8e8be58df9a5b945d3e06b0"
       },
       {
         "check_id": "c004",
         "verdict": "pass",
-        "evidence_path": "src/seams/isolate.ts:92-98 (verifyResult check + dispose + throw) ; ran `bun test test/integration/isolate.test.ts -t \"ledger: B1\"` → pass ; negctrl (removed dispose() before throw → leftover worktree) → DISCRIMINATES",
+        "evidence_path": "test/integration/isolate.test.ts:197 (B1 missing ref); ran -t 'ledger: B1' → 1 pass; negctrl: suppress verifyResult exitCode guard (isolate.ts:98-104) → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+        "evidence_sha": "8bf086304d9b28fef8e8be58df9a5b945d3e06b0"
       },
       {
         "check_id": "c005",
         "verdict": "pass",
-        "evidence_path": "src/seams/isolate.ts:173 (git grep -l --untracked -E regex) ; ran `bun test test/integration/isolate.test.ts -t \"ledger: C1 — scanMarkers\"` → pass ; negctrl (broke regex {7} → {9}) → DISCRIMINATES",
+        "evidence_path": "test/integration/isolate.test.ts:224 (C1 scanMarkers); ran -t 'C1 — scanMarkers' → 1 pass; negctrl: marker regex {7}→{9} (isolate.ts:186) → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+        "evidence_sha": "8bf086304d9b28fef8e8be58df9a5b945d3e06b0"
       },
       {
         "check_id": "c006",
         "verdict": "pass",
-        "evidence_path": "src/seams/isolate.ts:199 (gitMust add -A -- ...files) ; ran `bun test test/integration/isolate.test.ts -t \"ledger: S1\"` → pass ; negctrl (removed '--' path scoping → git add -A stages all) → DISCRIMINATES",
+        "evidence_path": "test/integration/isolate.test.ts:266 (S1 scoped stage); ran -t 'ledger: S1' → 1 pass; negctrl: suppress add -A -- files (isolate.ts:212) → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+        "evidence_sha": "8bf086304d9b28fef8e8be58df9a5b945d3e06b0"
       },
       {
         "check_id": "c007",
         "verdict": "pass",
-        "evidence_path": "src/seams/isolate.ts:237-240 (commit --allow-empty, branch -f, rev-parse HEAD) ; ran `bun test test/integration/isolate.test.ts -t \"ledger: B2\"` → pass ; negctrl (broke rev-parse HEAD → 'BROKEN') → DISCRIMINATES",
+        "evidence_path": "test/integration/isolate.test.ts:299 (B2 commitBranch sha); ran -t 'ledger: B2' → 1 pass; negctrl: break rev-parse HEAD return (isolate.ts:252) → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+        "evidence_sha": "8bf086304d9b28fef8e8be58df9a5b945d3e06b0"
       },
       {
         "check_id": "c008",
         "verdict": "pass",
-        "evidence_path": "src/seams/isolate.ts:67 (git worktree remove --force worktreePath) ; ran `bun test test/integration/isolate.test.ts -t \"ledger: dispose\"` → pass ; negctrl (broke worktreePath → '/dev/null/nonexistent') → DISCRIMINATES",
+        "evidence_path": "test/integration/isolate.test.ts:332 (dispose); ran -t 'ledger: dispose' → 1 pass; negctrl: stub worktree remove (isolate.ts:67) → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+        "evidence_sha": "8bf086304d9b28fef8e8be58df9a5b945d3e06b0"
       },
       {
         "check_id": "c009",
         "verdict": "pass",
-        "evidence_path": "src/seams/isolate.ts:191 (throw IsolateCatastrophicError on git grep exit>1) ; ran `bun test test/integration/isolate.test.ts -t \"lead-review: scanMarkers on a non-repo path\"` → pass ; negctrl (broke throw → return []) → DISCRIMINATES",
+        "evidence_path": "test/integration/isolate.test.ts:362 (scanMarkers non-repo fails closed); ran -t 'scanMarkers on a non-repo' → 1 pass; negctrl: return [] instead of throw (isolate.ts:204) → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+        "evidence_sha": "8bf086304d9b28fef8e8be58df9a5b945d3e06b0"
       },
       {
         "check_id": "c010",
         "verdict": "pass",
-        "evidence_path": "src/seams/isolate.ts:210 (git status --porcelain parse) ; ran `bun test test/integration/isolate.test.ts -t \"lead: changedFiles\"` → pass ; negctrl (broke '--porcelain' → '--porcelain --ignored') → DISCRIMINATES",
+        "evidence_path": "test/integration/isolate.test.ts:431 (changedFiles); ran -t 'lead: changedFiles' → 1 pass; negctrl: add --ignored to status (isolate.ts:223) → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "b7bc8d2a29357bdea8d4bcd20af41838958536b9"
+        "evidence_sha": "8bf086304d9b28fef8e8be58df9a5b945d3e06b0"
       }
     ],
-    "drift": []
+    "drift": [
+      {
+        "file": "src/seams/isolate.ts",
+        "finding": "dispose() now removes the mkdtemp tmpBase and throws IsolateCatastrophicError on an unrecognized worktree-remove failure; conflict-commit staging is 'git add -u' not '-A' (audit-fix 2a6fe14). Tests isolate.test.ts:382 (tmpBase cleanup) + :404 (unrecognized-failure throw) are green but unclaimed by any check.",
+        "action": "investigate"
+      }
+    ],
+    "verified_at_commit": "05183de50c779643dd8b14a9f78e9ee04d9fe571"
   },
   "judgments": [
     {
       "question_id": "check_discriminates",
       "target": "feature",
       "verdict": "n_a",
-      "rationale": "all 10 checks discriminate via negctrl: each mutation causes the corresponding integration test to fail on broken code and pass on clean code",
+      "rationale": "negctrl proves discrimination mechanically; semantic re-judgment skipped for negctrl-proven checks.",
       "judged_sha": "75abde34336a48c4e9d2f907c67c10ad8774eddc"
     }
   ]

@@ -2763,137 +2763,149 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><circle class=\"tc-wh tc-frame\" cx=\"60\" cy=\"18\" r=\"7\"/><circle class=\"tc-wh tc-frame\" cx=\"38\" cy=\"40\" r=\"7\"/><circle class=\"tc-ac\" cx=\"82\" cy=\"40\" r=\"7\"/><circle class=\"tc-wh tc-frame\" cx=\"60\" cy=\"62\" r=\"7\"/><line class=\"tc-ln\" x1=\"55\" y1=\"24\" x2=\"43\" y2=\"34\"/><line class=\"tc-ln\" x1=\"65\" y1=\"24\" x2=\"77\" y2=\"34\"/><line class=\"tc-ln\" x1=\"43\" y1=\"46\" x2=\"55\" y2=\"56\"/><line class=\"tc-ln\" x1=\"77\" y1=\"46\" x2=\"65\" y2=\"56\"/></svg>"
   },
   "audit": {
-    "ran_at": "2026-06-16T20:25:00Z",
+    "ran_at": "2026-06-18T14:51:15Z",
     "result": "pass",
     "verdicts": [
       {
         "check_id": "c001",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:99-113 ; ran `bun test test/loop/run-plan.test.ts -t 'A→{B,C}→D: wave order respected'` → pass ; negctrl (if (node.needs.every → if (false && node.needs.every) → DISCRIMINATES",
+        "evidence_path": "src/loop/run-plan.ts:110 (ready(): needs all closed); -t 'A→{B,C}→D' → 1 pass; negctrl: needs.every gate→false → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
       },
       {
         "check_id": "c002",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:230 ; ran `bun test test/loop/run-plan.test.ts -t 'non-audit node closes on done'` → pass ; negctrl (node.accept.audit ? decision.closed : true → …: false) → DISCRIMINATES",
+        "evidence_path": "src/loop/run-plan.ts:245 (shouldClose); -t 'non-audit node closes on done' → 1 pass; negctrl: shouldClose→false → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
       },
       {
         "check_id": "c003",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:190-203 ; ran `bun test test/loop/run-plan.test.ts -t 'closing audit node: commitBranch precedes emitVerdict'` → pass ; negctrl (diffRef: committed → diffRef: undefined) → DISCRIMINATES",
+        "evidence_path": "src/loop/run-plan.ts:213-218 (closingVerdict diffRef); -t 'commitBranch precedes emitVerdict' → 1 pass; negctrl: diffRef:committed→undefined → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
       },
       {
         "check_id": "c004",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:241-242 ; ran `bun test test/loop/run-plan.test.ts -t 'emitVerdict {closed:false} on an audit node'` → pass ; negctrl (partial.add(node.id) → failed.add(node.id)) → DISCRIMINATES",
+        "evidence_path": "src/loop/run-plan.ts:256 (partial.add); -t 'emitVerdict {closed:false}' → 1 pass; negctrl: partial.add→failed.add → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
       },
       {
         "check_id": "c005",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:305-306 ; ran `bun test test/loop/run-plan.test.ts -t 'closed dep with missing branch but recorded sha'` → pass ; negctrl (recordedSha !== null && refSha... → false) → DISCRIMINATES ; RE-ANCHORED operator:3→developer:4: test asserts isolate.detail (internal), not RunSummary bucket",
+        "evidence_path": "src/loop/run-plan.ts:335 (resolveBaseRef recordedSha fallback); -t 'closed dep with missing branch but recorded sha' → 1 pass; negctrl: recordedSha-fallback guard→false → DISCRIMINATES. NOTE prior mismatch-guard anchor stale; updated to SHA-fallback path",
         "validates_job_satisfied": true,
-        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
       },
       {
         "check_id": "c006",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:84 ; ran `bun test test/loop/run-plan.test.ts -t 'closed dep with neither branch nor recorded sha'` → pass ; negctrl (throw new RebuildRequiredError → throw new Error) → DISCRIMINATES",
+        "evidence_path": "src/loop/run-plan.ts:84 (RebuildRequiredError throw); -t 'closed dep with neither branch nor recorded sha' → 1 pass; negctrl: throw RebuildRequiredError→plain Error → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
       },
       {
         "check_id": "c007",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:156 ; ran `bun test test/loop/run-plan.test.ts -t 'input → status blocked, in RunSummary.blocked'` → pass ; negctrl (blocked.add(node.id) → failed.add(node.id)) → DISCRIMINATES",
+        "evidence_path": "src/loop/run-plan.ts:171 (blocked.add); -t 'input → status blocked' → 1 pass; negctrl: blocked.add→failed.add → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
       },
       {
         "check_id": "c008",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-node.ts:290 ; ran `bun test test/loop/run-plan.test.ts -t 'garbage egress then good'` → pass ; negctrl (reaudit < REAUDIT_BUDGET → reaudit < 1) → DISCRIMINATES ; RE-ANCHORED operator:0→developer:4: test asserts buildSpawns/auditSpawns counts (internal)",
+        "evidence_path": "src/loop/run-node.ts:306 (REAUDIT_BUDGET loop); -t 'garbage egress then good' → 1 pass; negctrl: reaudit<REAUDIT_BUDGET→<1 → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "1e08e6b9eb61bf4c22cefb9b4253753a756d6b2d"
+        "evidence_sha": "ee4a410fb01c75f1b3c94f330bd86bd6e79c4ae5"
       },
       {
         "check_id": "c009",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:69 ; ran `bun test test/loop/run-plan.test.ts -t 'mutating the Map returned by tend'` → pass ; negctrl (new Map(await deps.tend.readClosed…) → live ref) → DISCRIMINATES",
+        "evidence_path": "src/loop/run-plan.ts:69 (M3 defensive copy of readClosed); -t 'mutating the Map returned by tend' → 1 pass; negctrl: new Map(...)→direct ref → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
       },
       {
         "check_id": "c010",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:208 ; ran `bun test test/loop/run-plan.test.ts -t 'dependent never isolates inside its dep dispose window'` → pass ; negctrl (await iso.dispose(); if (failure → if (failure, skipping dispose) → DISCRIMINATES",
+        "evidence_path": "src/loop/run-plan.ts:223 (dispose after emit, via disposeOrJournal); -t 'dependent never isolates inside its dep dispose window' → 1 pass; negctrl: comment the disposeOrJournal call → DISCRIMINATES. NOTE dispose now wrapped by disposeOrJournal (same ordering)",
         "validates_job_satisfied": true,
-        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
       },
       {
         "check_id": "c011",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:279-293 ; ran `bun test test/loop/run-plan.test.ts -t 'a closed integration node seeds its transitive ancestors'` → pass ; negctrl (seedClosure(plan, closed) → commented) → DISCRIMINATES ; RE-ANCHORED operator:3→developer:4: test asserts isolate counts (internal), not RunSummary bucket",
+        "evidence_path": "src/loop/run-plan.ts:70 (seedClosure); -t 'a closed integration node seeds its transitive ancestors' → 1 pass; negctrl: comment seedClosure call → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
       },
       {
         "check_id": "c012",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:185 ; ran `bun test test/loop/run-plan.test.ts -t 'markers written after staging'` → pass ; negctrl (scanMarkers(iso.cwd) → []) → DISCRIMINATES",
+        "evidence_path": "src/loop/run-plan.ts:200 (pre-commit lateMarkers scan); -t 'markers written after staging' → 1 pass; negctrl: lateMarkers→[] → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "1f0b564deb9af0debdb5602246e47ba8589a8166"
+        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
       },
       {
         "check_id": "c013",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-node.ts:95-108 ; ran `bun test test/loop/run-node.test.ts -t 'setup → work → markers → stage → smoke → audit'` → pass ; negctrl (deps.exec(toArgv(node.setup) → Promise.resolve) → DISCRIMINATES",
+        "evidence_path": "src/loop/run-node.ts:112 (setup exec before phases); -t 'setup → work → markers → stage → smoke → audit' → 1 pass; negctrl: setup exec→no-op → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "1e08e6b9eb61bf4c22cefb9b4253753a756d6b2d"
+        "evidence_sha": "ee4a410fb01c75f1b3c94f330bd86bd6e79c4ae5"
       },
       {
         "check_id": "c014",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-node.ts:135 ; ran `bun test test/loop/run-node.test.ts -t 'build worker is killed after its wait resolves'` → pass ; negctrl (await worker.kill() → commented) → DISCRIMINATES ; RE-ANCHORED operator:2→developer:4: test asserts kill call count (internal mechanism)",
+        "evidence_path": "src/loop/run-node.ts:151 (worker.kill on normal path); -t 'build worker is killed after its wait resolves' → 1 pass; negctrl: comment worker.kill → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "1e08e6b9eb61bf4c22cefb9b4253753a756d6b2d"
+        "evidence_sha": "ee4a410fb01c75f1b3c94f330bd86bd6e79c4ae5"
       },
       {
         "check_id": "c015",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-node.ts:207 ; ran `bun test test/loop/run-node.test.ts -t 'smoke retry re-prompt contains the smoke output tail'` → pass ; negctrl (gateEvidence('smoke'…) → evidence = undefined) → DISCRIMINATES ; RE-ANCHORED operator:0→developer:4: test asserts prompt content (internal mechanism)",
+        "evidence_path": "src/loop/run-node.ts:223 (gateEvidence smoke threading); -t 'smoke retry re-prompt contains the smoke output tail' → 1 pass; negctrl: evidence=undefined → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "1e08e6b9eb61bf4c22cefb9b4253753a756d6b2d"
+        "evidence_sha": "ee4a410fb01c75f1b3c94f330bd86bd6e79c4ae5"
       },
       {
         "check_id": "c016",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-work.ts:50 ; ran `bun test test/loop/run-work.test.ts -t 'non-zero'` → pass ; negctrl (exitCode !== 0 throw GateFailedError('command') → if false) → DISCRIMINATES",
+        "evidence_path": "src/loop/run-work.ts:50 (command gate non-zero → GateFailedError); -t 'non-zero → GateFailedError' → 1 pass; negctrl: if exitCode!==0→if false → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "d1d3937c1f1b71edf2a576eff96e7b7aba40ddec"
+        "evidence_sha": "86933b2ebe9b96b8a8a264a9f9c101e6ab6a2d0c"
       },
       {
         "check_id": "c017",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-work.ts:81 ; ran `bun test test/loop/run-work.test.ts -t 'RED passes immediately'` → pass ; negctrl (if (exitCode === 0) throw GateFailedError('red') → if false) → DISCRIMINATES",
+        "evidence_path": "src/loop/run-work.ts:81 (RED gate must fail); -t 'RED passes immediately' → 1 pass; negctrl: if exitCode===0 throw→if false → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "d1d3937c1f1b71edf2a576eff96e7b7aba40ddec"
+        "evidence_sha": "86933b2ebe9b96b8a8a264a9f9c101e6ab6a2d0c"
       }
     ],
-    "drift": []
+    "drift": [
+      {
+        "file": "src/loop/run-plan.ts",
+        "finding": "Audit-fix behaviors green+discriminating but unclaimed by any check: disposeOrJournal (a dispose failure is journaled, not run-fatal — test 'dispose throw on a closed node'); within-run SHA-pin (baseRefForClosed stores the commit SHA — test 'WITHIN-RUN: B isolates from recorded SHA'); C5 startup SHA-mismatch → RebuildRequiredError (test 'STARTUP: branch moved off recorded SHA').",
+        "action": "investigate"
+      },
+      {
+        "file": "src/loop/run-node.ts",
+        "finding": "disposeQuiet now journals+swallows IsolateCatastrophicError so a non-done verdict is preserved (test 'blocked verdict preserved when dispose throws', ledger #44.1) — green+discriminating but unclaimed by any check.",
+        "action": "investigate"
+      }
+    ],
+    "verified_at_commit": "05183de50c779643dd8b14a9f78e9ee04d9fe571"
   },
   "judgments": [
     {
       "question_id": "check_discriminates",
       "target": "feature",
       "verdict": "n_a",
-      "rationale": "All 17 checks proven discriminating by negctrl — every check passes on clean code and fails on the targeted break.",
+      "rationale": "negctrl proves discrimination mechanically; semantic re-judgment skipped for negctrl-proven checks.",
       "judged_sha": "0082751d21a0ccf4895fc10e6c093867f31bf3ee"
     },
     {
