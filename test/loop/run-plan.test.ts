@@ -70,7 +70,7 @@ describe('runPlan — A1 dual close', () => {
     });
     const summary = await runPlan(p, h.deps, { repoRoot: REPO, defaultTimeoutMs: 1000 });
     expect(summary.closed.sort()).toEqual(['cmd', 'dep']);
-    // dep isolated against node/cmd (cmd's branch committed).
+    // dep isolated against the recorded commit SHA of cmd (not the branch string 'node/cmd').
     expect(h.git.refs.has('node/cmd')).toBe(true);
     expect(h.log.first('isolate', 'dep')).toBeGreaterThan(h.log.first('commitBranch', 'node/cmd'));
   });
@@ -355,6 +355,55 @@ describe('runPlan — dispose failure is journaled, not run-fatal', () => {
     const summary = await runPlan(p, h.deps, { repoRoot: REPO, defaultTimeoutMs: 1000 });
     expect(summary.closed).toContain('A');
     expect(h.journal.some((e) => e.event === 'dispose-failed' && e.node === 'A')).toBe(true);
+  });
+});
+
+// ── C5 SHA pinning (audit #41) ────────────────────────────────────────────────
+// The conductor records the *commit SHA* of each node/<id> it creates and must
+// verify the recorded SHA before use. Branch pointers are mutable; SHAs are not.
+describe('runPlan — C5 SHA pinning', () => {
+  test('WITHIN-RUN: B isolates from the recorded commit SHA of A, not the branch string', async () => {
+    // A→B: after A commits to node/A, settle must store the SHA (not 'node/A')
+    // in baseRefForClosed so that B's isolate receives an immutable ref.
+    const h = makeHarness();
+    const p = plan({
+      nodes: [makeNode({ id: 'A' }), makeNode({ id: 'B', needs: ['A'] })],
+    });
+    await runPlan(p, h.deps, { repoRoot: REPO, defaultTimeoutMs: 1000 });
+    // The SHA that commitBranch assigned to node/A.
+    const committedSha = h.git.refs.get('node/A');
+    expect(committedSha).toBeDefined();
+    // B's isolate event must list the committed SHA, not the branch name.
+    const bIso = h.log.of('isolate').find((e) => e.node === 'B');
+    expect(bIso?.detail).toContain(committedSha);
+    expect(bIso?.detail).not.toContain('node/A');
+  });
+
+  test('STARTUP: branch moved off recorded SHA → RebuildRequiredError before any node runs', async () => {
+    // readClosed says A was verified at recordedSha, but node/A now points
+    // to a different SHA → the ref was force-moved (worker attack or external push).
+    // The loop must detect the mismatch and throw RebuildRequiredError.
+    const recordedSha = 'a'.repeat(40);
+    const differentSha = 'b'.repeat(40);
+    const h = makeHarness({
+      closed: new Map([['A', recordedSha]]),
+      refs: {
+        'node/A': differentSha, // branch pointer moved off the recorded SHA
+      },
+    });
+    const p = plan({
+      nodes: [makeNode({ id: 'A' }), makeNode({ id: 'B', needs: ['A'] })],
+    });
+    let err: unknown;
+    try {
+      await runPlan(p, h.deps, { repoRoot: REPO, defaultTimeoutMs: 1000 });
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(RebuildRequiredError);
+    expect((err as RebuildRequiredError).nodeId).toBe('A');
+    // Halt before any node runs.
+    expect(h.log.count('isolate')).toBe(0);
   });
 });
 

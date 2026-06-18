@@ -106,6 +106,13 @@ checkpoint but have different lifetimes and trust domains.**
   cross-provider audit defends the *report* path, not the substrate. **Fix:** conductor reads tend state
   only from outside worker-writable paths (main checkout / MCP); record the SHA of each `node/<id>` it
   creates and verify before use.
+  - **(A) verify-before-use: implemented** (`src/loop/run-plan.ts`). `settle` pins each closed node's
+    baseRef to its committed SHA (not the movable `node/<id>` branch). `resolveBaseRef` compares the
+    recorded SHA against the current branch tip at startup; a mismatch throws `RebuildRequiredError`
+    before any node runs. Tests: `runPlan — C5 SHA pinning` (WITHIN-RUN + STARTUP), `test/loop/run-plan.test.ts`.
+  - **(B) read-from-outside-worktrees: verified-sound** — `readClosed` / `emitVerdict` go through the
+    `LedgerSeam` (tend MCP / gitLedger), which resolves over the main checkout, not any worker worktree.
+    The worker has no write path into that seam.
 
 ### Class D — robustness, config, hygiene
 
