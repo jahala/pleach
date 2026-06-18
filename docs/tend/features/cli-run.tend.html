@@ -2483,7 +2483,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "tend_version": "0.4.0",
   "generated_at": "2026-06-13T16:23:15.741Z",
   "project_name": "Project Garden",
-  "dek_sha": "a22efb99d7f4cbf6bcb85a9d17b2d8fe9f6909e4"
+  "dek_sha": "132d7ba187191a2a95c0a67ae9635b82fcf592fa"
 }
 </script>
 
@@ -2497,13 +2497,13 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   "personas": [
     "operator"
   ],
-  "what": "Execute a plan.json through the deterministic conductor loop, driving workers via the configured runner (umbel by default) and recording verdicts in the configured ledger (git ledger by default; tend when `--tend-module` is given). Exits 0 only when every node closes verified; partial/failed/blocked/skipped maps to exit 1.",
+  "what": "Execute a plan.json through the deterministic conductor loop, driving workers via the configured runner (umbel by default) and recording verdicts in the configured ledger (git ledger by default; tend when `--tend-module` is given). Exits 0 only when every node closes verified; partial/failed/blocked/skipped maps to exit 1. Re-running a plan resumes: nodes already verified in the ledger are skipped and reported — RunSummary.alreadyVerified lists them and stderr notes how many — so only unbuilt or previously-failed nodes run.",
   "why": "The primary value of pleach: running a plan behind enforced gates (smoke, conflict-marker scan, cross-provider audit) with deterministic DAG ordering on git + any runner — tend and umbel are the batteries-included defaults, not requirements.",
   "where": "src/faces/cli.ts; src/main.ts",
-  "how": "parseFlags → readPlan (Zod) → construct ConductorDeps from seams → runPlan → summaryExitCode; JSON RunSummary on stdout; errors → stderr + typed exit code",
+  "how": "parseFlags → readPlan (Zod) → assemble ConductorDeps via buildDeps → runPlan → summaryExitCode; JSON RunSummary on stdout; errors → stderr + typed exit code; a stderr line names already-verified nodes skipped (resume)",
   "progress": {
     "implementation": 0,
-    "verification": 67
+    "verification": 0
   },
   "personas_resolved": [
     {
@@ -2580,13 +2580,23 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "verification_recipe": "Use flaky.sh node in plan; run pleach run; verify node/e2 branch contains .sentinel (proof second attempt ran).",
       "status": "open",
       "validates_job": "operator:0"
+    },
+    {
+      "id": "c007",
+      "description": "Resume surfacing: an already-verified node is reported, not re-run — RunSummary.alreadyVerified lists it and verbRun's stderr says 'skipped N already-verified node(s)'.",
+      "validates": "what",
+      "method": "synthetic-test",
+      "integration_level": "integration",
+      "verification_recipe": "re-run a plan with a node already closed in the ledger; summary.alreadyVerified includes it, summary.closed excludes it, it is never isolated (test/loop/run-plan.test.ts resume).",
+      "status": "open",
+      "validates_job": "developer:1"
     }
   ],
   "subpages_resolved": [
     {
       "id": "conductor-loop",
       "title": "Conductor Loop: DAG Scheduler and Per-Node Ladder",
-      "status": "verified",
+      "status": "in-progress",
       "priority": "high",
       "personas": [
         "operator",
@@ -2721,53 +2731,6 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     "kind": "svg",
     "alt": "Run triangle flowing into a forking branch — pleach run executor",
     "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><polygon class=\"tc-wh tc-frame\" points=\"32,20 32,60 58,40\" /><line class=\"tc-ln\" x1=\"58\" y1=\"40\" x2=\"80\" y2=\"40\"/><line class=\"tc-ln\" x1=\"80\" y1=\"40\" x2=\"95\" y2=\"28\"/><line class=\"tc-ln\" x1=\"80\" y1=\"40\" x2=\"95\" y2=\"52\"/><circle class=\"tc-ac\" cx=\"95\" cy=\"28\" r=\"5\"/><circle class=\"tc-fg\" cx=\"95\" cy=\"52\" r=\"5\"/></svg>"
-  },
-  "audit": {
-    "ran_at": "2026-06-16T20:25:00Z",
-    "result": "partial",
-    "verdicts": [
-      {
-        "check_id": "c001",
-        "verdict": "pass",
-        "evidence_path": "test/e2e/cli.test.ts — fullStack describe 'three nodes close; retry happened; node branches published'; ran `bun test test/e2e/cli.test.ts -t \"three nodes close\"` → 1 pass, 11 expect() calls; negctrl (replace `return clean ? 0 : 1` with `return 1` in cli.ts) → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "99aa9543e59b7e371dbbba5e2572703fec975987"
-      },
-      {
-        "check_id": "c002",
-        "verdict": "pass",
-        "evidence_path": "test/unit/cli-summary.test.ts — 6 tests covering partial/failed/blocked/skipped all → 1; ran → 6 pass; negctrl (remove `summary.partial.length === 0 &&` from summaryExitCode) → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "f9a7b695d15a232e8784a3da091bb990de6a5c66"
-      },
-      {
-        "check_id": "c003",
-        "verdict": "pass",
-        "evidence_path": "test/e2e/cli.test.ts ungated 'invalid plan JSON → exit 2'; ran `bun test test/e2e/cli.test.ts` → 4 pass; negctrl (replace PlanInvalidError throw with generic Error in readPlan) → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "99aa9543e59b7e371dbbba5e2572703fec975987"
-      },
-      {
-        "check_id": "c004",
-        "verdict": "partial",
-        "evidence_path": "cli.ts:176-178 correctly guards missing tendModule with UsageError. Manual: `bun src/main.ts run examples/proof/plan.json` → exit 2. But negctrl (remove UsageError throw) against full e2e suite → DOES NOT DISCRIMINATE. No test exercises the missing --tend-module CLI path.",
-        "validates_job_satisfied": false
-      },
-      {
-        "check_id": "c005",
-        "verdict": "partial",
-        "evidence_path": "cli.ts:230-232 catches LockHeldError → return 3. test/integration/lock.test.ts confirms seam throws LockHeldError (4 pass). Negctrl (replace `return 3` with `return 1` in LockHeldError catch) → DOES NOT DISCRIMINATE. No CLI-level test exercises exit-3 path.",
-        "validates_job_satisfied": false
-      },
-      {
-        "check_id": "c006",
-        "verdict": "pass",
-        "evidence_path": "test/e2e/cli.test.ts full-stack retry test; flaky.sh fails first attempt then closes with .sentinel committed to node/e2; ran → 1 pass; negctrl (replace `if (attempts < maxAttempts) return undefined` with always-fail in run-node.ts) → DISCRIMINATES",
-        "validates_job_satisfied": true,
-        "evidence_sha": "99aa9543e59b7e371dbbba5e2572703fec975987"
-      }
-    ],
-    "drift": []
   },
   "judgments": [
     {
