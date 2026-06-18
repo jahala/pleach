@@ -29,13 +29,13 @@ builds, codex audits, tend's gate decides), surviving the A1/A2 traps it was cho
 - **R1 in umbel (PR to provo, ledger-cited):** `wait --json` (+ `--since <mtime>`), `send --json`
   emitting `sinceMtime`, MCP `sinceMtime` wiring, `allowedTools` work-or-error per provider, exit-code
   split input/idle. Each item RED-first in umbel's own suite.
-- `src/seams/umbel.ts` — `spawnWorker → Worker{send, wait, kill}`; `WorkerResult` assembled from
+- `src/adapters/umbel.ts` — `spawnWorker → Worker{send, wait, kill}`; `WorkerResult` assembled from
   `wait --json` + `read` (untruncated) + `actions` (files arrays) + `diff`; maps `input|idle` reasons
   through *(D2)*. Integration tests: real `umbel` binary + vendored fake worker binaries
   (`test/fixtures/fake-worker.sh`, the umbel fixture pattern). No mocks.
 
 ## P3 — ledger seam  `[repos: missoula (T1, tend agent) ∥ pleach]`
-- `src/seams/tend.ts` — `readClosed`/`emitVerdict` over the transport T1 exposes (package export or
+- `src/adapters/tend.ts` — `readClosed`/`emitVerdict` over the transport T1 exposes (package export or
   `tend bridge` CLI verb — both acceptable; adapter hides the choice). All calls serialized through one
   in-process queue (single-ingester invariant).
 - Until T1 merges: integration tests run against the missoula checkout's real source (`file:` dep or
@@ -59,6 +59,8 @@ builds, codex audits, tend's gate decides), surviving the A1/A2 traps it was cho
 - `src/faces/cli.ts` — `pleach run <plan.json> [--max-concurrency N] [--land <branch>] [--journal <path>]`,
   `pleach validate <plan.json>`; exit codes (0 all-closed; 1 failures; 2 usage/invalid plan; 3 lock held);
   stdout = the `RunSummary` JSON, stderr = narration. `--land` default OFF (human merges).
+  *(Note: `--land` is not implemented in the current CLI — landing is manual by design. The flag is
+  documented here as a planned interface; it does not appear in `src/faces/cli.ts`.)*
 - E2E: `pleach run` as a process — real git, real umbel + fake workers, real tend transport, a 3-node
   plan with one engineered failure+retry.
 

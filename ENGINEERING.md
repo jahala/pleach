@@ -63,7 +63,7 @@ faces/     cli.ts                                          ← argv, exit codes,
 loop/      run-plan.ts  run-node.ts  run-work.ts           ← the deterministic loop; composes injected seams + adapters
 adapters/  umbel.ts  tend.ts  git.ts                       ← pluggable tool bridges (the runner + ledger ports)
 seams/     isolate.ts  exec.ts  lock.ts  journal.ts        ← pleach's own I/O, thin
-core/      plan.ts  validate.ts  classify.ts  evidence.ts  errors.ts   ← pure, total
+core/      plan.ts  validate.ts  classify.ts  audit-egress.ts  argv.ts  schema-json.ts  errors.ts   ← pure, total
 ```
 
 - `core/` imports nothing from the other layers. `seams/` and `adapters/` import `core/`; an `adapters/`
@@ -80,8 +80,9 @@ core/      plan.ts  validate.ts  classify.ts  evidence.ts  errors.ts   ← pure,
 - Bun runtime + `bun:test`. Node-compatible source (no Bun-only APIs in `core/`).
 - Dependencies: `zod` only, until a need is proven in a PR description. No native modules.
 - `biome` for lint/format; `bun run check` = typecheck + lint + test and must be green before any merge.
-- Substrate requirements (runtime, not dev): `git ≥ 2.38`, `tmux`, the `umbel` binary, `tend` (transport
-  per the T1 decision).
+- Substrate requirements (runtime, not dev): `git ≥ 2.38` always. The default `umbelRunner` additionally
+  needs `tmux` and the `umbel` binary on your PATH — but the runner is pluggable. `tend` is optional;
+  the bundled `gitLedger` needs neither tmux nor tend.
 
 ## The contract
 
@@ -153,7 +154,7 @@ raise a timeout to "fix" a flake — find the race.
 - Branches: `feat/<scope>`, `fix/<scope>`. Commits: `type(scope): subject` (match umbel's history style).
   Lead-dev merges after green `bun run check` + a recorded self-audit pass (re-read the diff as a hostile
   reviewer; the audit note goes in the PR/commit body).
-- Work in *this* repo lands on `master` via short-lived branches. Work in **provo (umbel)** and
+- Work in *this* repo lands on `master` via short-lived branches. Work in **umbel** and
   **missoula (tend)** is PRs only, never direct pushes; cite the ledger/letter item each PR answers.
 - CI (GitHub Actions): typecheck + lint + unit/integration/loop/e2e on ubuntu (tmux + git installed;
   fake binaries only). Proof runs are manual.

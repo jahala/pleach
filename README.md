@@ -13,8 +13,8 @@ ledger). Agents produce; code decides.
 
 **Status — v1: the proof run closes end-to-end.** A multi-step feature builds through real claude
 workers, is audited by a real codex auditor, and is verified by real tend, reaching a full verified
-close (`docs/research/proof-run.md`, Run 3). The deterministic loop, all six seams, and both CLI faces
-are implemented and pass `bun run check` (191 tests). pleach tracks its own development in a tend garden
+close (`docs/research/proof-run.md`, Run 3). The deterministic loop, all four seams, all three adapters,
+and both CLI faces are implemented and pass `bun run check` (191 tests). pleach tracks its own development in a tend garden
 — [`docs/tend/`](docs/tend/) — and the landing page lives at
 [jahala.github.io/pleach](https://jahala.github.io/pleach/).
 
