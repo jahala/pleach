@@ -43,6 +43,22 @@ export async function runNode(
   deps: ConductorDeps,
   opts: RunNodeOpts,
 ): Promise<RunNodeResult> {
+  // disposeQuiet: journal+swallow IsolateCatastrophicError so a dispose failure
+  // on a non-done verdict never overwrites the real verdict (blocked/dead/timeout).
+  // Defined as a closure to capture deps.journal + node.id without threading params
+  // to every call site.
+  async function disposeQuiet(iso: Isolation): Promise<void> {
+    try {
+      await iso.dispose();
+    } catch (err) {
+      await deps.journal.append({
+        event: 'dispose-failed',
+        node: node.id,
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   // Resolved-provider diversity preflight (binding prose) — before any spawn.
   const buildProvider = node.worker.provider ?? DEFAULT_WORKER_PROVIDER;
   if (node.accept.audit && node.accept.audit.provider === buildProvider) {
@@ -415,10 +431,6 @@ function failedVerdict(
     status: 'failed',
     evidence: { ...v.evidence, ...(extra.gate ? { gate: extra.gate } : {}) },
   };
-}
-
-async function disposeQuiet(iso: Isolation): Promise<void> {
-  await iso.dispose();
 }
 
 function dedup(items: string[]): string[] {

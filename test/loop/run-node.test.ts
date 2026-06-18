@@ -469,3 +469,32 @@ describe('runNode — timeout default threading', () => {
     expect(seen.length).toBeGreaterThan(0);
   });
 });
+
+// ledger: #44.1 — disposeQuiet must journal+swallow IsolateCatastrophicError on
+// non-done verdicts (blocked/dead/timeout) instead of propagating, which would
+// overwrite the real verdict with a thrown exception.
+describe('runNode — disposeQuiet swallows IsolateCatastrophicError (ledger #44.1)', () => {
+  test('blocked verdict preserved when dispose throws; dispose-failed event journaled', async () => {
+    // Worker returns 'input' reason → blocked verdict. disposeThrows makes dispose()
+    // throw IsolateCatastrophicError for this node. Before the fix, that throw
+    // propagates out of runNode entirely — the blocked verdict is lost.
+    const script: WaitScript = (ctx) =>
+      ctx.role === 'build' ? stop({ reason: 'input', message: 'allow Bash?' }) : stop();
+    const h = makeHarness({
+      waitScript: script,
+      disposeThrows: new Set(['n']),
+    });
+    const node = makeNode({
+      id: 'n',
+      policy: { maxAttempts: 1, onDead: 'fail', reauditWhen: ['compacted'] },
+    });
+    // Must RESOLVE (not throw) with the blocked verdict.
+    const r = await runNode(node, ['base'], h.deps, { defaultTimeoutMs: DEF });
+    expect(r.verdict.status).toBe('blocked');
+    expect(r.verdict.evidence.blockedReason).toBe('allow Bash?');
+    // dispose-failed must be recorded in the journal.
+    const disposeFailed = h.journal.find((e) => e['event'] === 'dispose-failed');
+    expect(disposeFailed).toBeDefined();
+    expect(disposeFailed?.['node']).toBe('n');
+  });
+});
