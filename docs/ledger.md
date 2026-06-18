@@ -9,7 +9,9 @@ commit unresolved conflict markers into verified branches.** The defects below m
 the bridge channel (a v0.4 / conductor-spec v1.0) before the first conductor commit. Every defect becomes
 a failing test first.
 
-Naming (proposed, npm-checked — see §6): conductor → **pleach**, umbel → **rootstock**. The working names are used below for clarity.
+Naming (proposed at time of writing, npm-checked — see §6): conductor → **pleach**, umbel → **rootstock**
+(rootstock was the leading candidate; **umbel was ultimately kept** — it is the current name). The working
+names pleach/tend/umbel are used throughout this repo.
 
 ---
 
@@ -136,7 +138,8 @@ checkpoint but have different lifetimes and trust domains.**
 the-inflight-promise ordering (single-process); `Promise.race` never sees a rejection; the semaphore;
 the cross-provider audit blocking worker-forged audit reports; **zero schema drift** (the drift-guard test
 mechanically pins `plan.ts` to spec §1 byte-for-byte, `.prefault({})` included). Also ahead of schedule:
-**`tend audit` is fully built** (`src/cli/audit.ts`, compute/apply split enforced by static import-guard
+**`tend audit` is fully built** (`src/cli/audit.ts` in missoula/tend — not a pleach path; pleach's
+audit-egress equivalent is `src/core/audit-egress.ts`; compute/apply split enforced by static import-guard
 tests; delimited ` ```tend-audit-result ` block + `extractJson` recovery) — the §7 roadmap item is done.
 
 ---
