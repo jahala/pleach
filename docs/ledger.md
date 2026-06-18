@@ -121,7 +121,7 @@ checkpoint but have different lifetimes and trust domains.**
   (toposort, uniqueness, id regex `^[A-Za-z0-9_.:-]+$`) before the loop; exec via arg-arrays
   (`execFile`-style); declare plans trusted-input-only in the spec.
 - **D4 ◦ [code] Generator omissions vs spec:** multi-`needs` "resolve any merge conflicts" prose not
-  implemented (`stepToNeeds`, `generator.ts:127-133`); spec §2 `TendSeam.emitVerdict` signature diverges
+  implemented (`stepToNeeds`, `generator.ts:127-133`); spec §2 `LedgerSeam.emitVerdict` signature diverges
   from code (`(v, source)`, `ingester.ts:109-112`) — reconcile spec to code.
 - **D5 ◦ [me] Evidence = extractor quality.** `filesTouched` comes from umbel's ActionManifest
   (`filesRead/filesEdited/filesWritten`, `providers/types.ts:33-62`); codex/gemini/opencode extraction is

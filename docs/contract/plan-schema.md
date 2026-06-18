@@ -108,11 +108,11 @@ export { Plan as PlanSchema, Node as NodeSchema, Verdict as VerdictSchema, Audit
 ## Seam interfaces (informative — code home is `src/loop/deps.ts`)
 
 ```ts
-export interface TendSeam {
+export interface LedgerSeam {
   readClosed(source: string): Promise<Map<string, string | null>>;   // id → verified commit SHA (null = legacy)
   emitVerdict(v: Verdict, source: string): Promise<{ closed: boolean }>;
 }
-export interface UmbelSeam {
+export interface RunnerSeam {
   spawnWorker(spec: { provider?: string; model?: string; cwd: string }): Promise<Worker>;
 }
 export interface Worker {
