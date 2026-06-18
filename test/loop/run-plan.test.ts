@@ -59,6 +59,24 @@ describe('runPlan — §6 diamond wave order + semaphore', () => {
   });
 });
 
+describe('runPlan — resume (already-verified nodes)', () => {
+  test('a pre-verified node is reported in alreadyVerified and never re-run', async () => {
+    // The ledger already has 'a' closed (a prior run). Re-running the plan must
+    // skip it, report it, and run only the rest.
+    const h = makeHarness({ closed: new Map([['a', null]]) });
+    const p = plan({
+      nodes: [
+        makeNode({ id: 'a', work: { command: 'c' } }),
+        makeNode({ id: 'b', work: { command: 'c' } }),
+      ],
+    });
+    const summary = await runPlan(p, h.deps, { repoRoot: REPO, defaultTimeoutMs: 1000 });
+    expect(summary.alreadyVerified).toEqual(['a']);
+    expect(summary.closed).toEqual(['b']); // only b ran — a was already verified
+    expect(h.log.count('isolate', 'a')).toBe(0); // a never isolated, not re-run
+  });
+});
+
 describe('runPlan — A1 dual close', () => {
   test('non-audit node closes on done (conductor decides); dependent runs', async () => {
     const h = makeHarness();

@@ -12,7 +12,15 @@ import { summaryExitCode } from '../../src/faces/cli.ts';
 import type { RunSummary } from '../../src/loop/deps.ts';
 
 function summary(over: Partial<RunSummary> = {}): RunSummary {
-  return { closed: [], failed: [], partial: [], skipped: [], blocked: [], ...over };
+  return {
+    closed: [],
+    failed: [],
+    partial: [],
+    skipped: [],
+    blocked: [],
+    alreadyVerified: [],
+    ...over,
+  };
 }
 
 describe('summaryExitCode', () => {
