@@ -4,7 +4,11 @@ import { gitLedger } from '../adapters/git.ts';
 import { tendLedger } from '../adapters/tend.ts';
 import { umbelRunner } from '../adapters/umbel.ts';
 import { ConfigError } from '../core/errors.ts';
-import type { LedgerSeam, RunnerSeam } from '../loop/deps.ts';
+import type { ConductorDeps, LedgerSeam, RunnerSeam } from '../loop/deps.ts';
+import { exec } from '../seams/exec.ts';
+import { createIsolateSeam } from '../seams/isolate.ts';
+import { createJournal } from '../seams/journal.ts';
+import { createLockSeam } from '../seams/lock.ts';
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -105,4 +109,30 @@ export async function resolveSeams(
       : gitLedger({ repo: opts.repoRoot });
 
   return { runner, ledger };
+}
+
+// ── buildDeps ───────────────────────────────────────────────────────────────
+
+export interface BuildDepsOpts {
+  repoRoot: string;
+  runner: RunnerSeam;
+  ledger: LedgerSeam;
+  // Run journal path; defaults to <repoRoot>/.git/pleach/journal.jsonl.
+  journal?: string;
+}
+
+// Assemble a ConductorDeps for runPlan from the four pleach-owned seams
+// (exec/isolate/lock/journal) plus the two adapters you bring. The library
+// counterpart to the CLI's wiring: supply a runner + ledger (from resolveSeams,
+// or any RunnerSeam/LedgerSeam) and hand the result to runPlan.
+export function buildDeps(opts: BuildDepsOpts): ConductorDeps {
+  const journalPath = opts.journal ?? join(opts.repoRoot, '.git', 'pleach', 'journal.jsonl');
+  return {
+    exec,
+    isolate: createIsolateSeam(exec, opts.repoRoot),
+    lock: createLockSeam(),
+    journal: createJournal(journalPath),
+    runner: opts.runner,
+    ledger: opts.ledger,
+  };
 }
