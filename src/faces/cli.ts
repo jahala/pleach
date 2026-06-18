@@ -44,6 +44,10 @@ Flags (run):
 Landing is manual by design: verified work is published as node/<id> branches;
 merge the integration node's branch yourself (git merge node/<feature>).
 
+Resuming is automatic: re-running a plan skips nodes already verified in the
+ledger (their node/<id> branch exists) — only unbuilt or previously-failed
+nodes execute. The JSON summary's "alreadyVerified" lists what was skipped.
+
 Exit codes:
   0  every plan node closed (verified)
   1  one or more nodes failed / partial / blocked / skipped (summary on stdout says which)
@@ -216,6 +220,11 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     ...(flags.timeoutMs !== undefined ? { defaultTimeoutMs: flags.timeoutMs } : {}),
   });
 
+  if (summary.alreadyVerified.length > 0) {
+    process.stderr.write(
+      `pleach: skipped ${summary.alreadyVerified.length} already-verified node(s)\n`,
+    );
+  }
   process.stdout.write(`${JSON.stringify(summary)}\n`);
   return summaryExitCode(summary);
 }

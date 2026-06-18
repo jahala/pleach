@@ -67,6 +67,10 @@ async function runUnderLock(
 
   // Defensive copy (M3) — never mutate what the seam returned.
   const closed = new Map<string, string | null>(await deps.ledger.readClosed(plan.source));
+  // Nodes the ledger already had verified — skipped this run, surfaced so the
+  // caller knows a resume happened. Captured BEFORE seedClosure adds ancestors,
+  // so it names only what the ledger directly reported (not implied ancestors).
+  const alreadyVerified = plan.nodes.filter((n) => closed.has(n.id)).map((n) => n.id);
   seedClosure(plan, closed);
 
   // Startup reconciliation (B1/B2): every closed id a pending node depends on
@@ -276,12 +280,16 @@ async function runUnderLock(
     )
     .map((n) => n.id);
 
+  const alreadyVerifiedSet = new Set(alreadyVerified);
   const summary: RunSummary = {
-    closed: plan.nodes.filter((n) => closed.has(n.id)).map((n) => n.id),
+    closed: plan.nodes
+      .filter((n) => closed.has(n.id) && !alreadyVerifiedSet.has(n.id))
+      .map((n) => n.id),
     failed: [...failed],
     partial: [...partial],
     skipped,
     blocked: [...blocked],
+    alreadyVerified,
   };
   await deps.journal.append({ event: 'run-end', ...summary });
   return summary;
