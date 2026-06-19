@@ -39,6 +39,11 @@
   /* product accent — plum is the one voice */
   --pp-pleach:  #97539B;
 
+  /* garden siblings — used only in the family footer (shared umbrella accents) */
+  --pp-tilth:  #4E88A6;
+  --pp-tend:   #D6502F;
+  --pp-petals: #E588A0;
+
   /* terminal */
   --pp-term-bg:      #1C1610;
   --pp-term-surface: #262019;
@@ -727,30 +732,45 @@ code {
   padding: 4px 12px;
 }
 
-/* ── footer ───────────────────────────────────────────────────────────────── */
-.footer { background: var(--pp-forest); padding: var(--sp-md) 0; }
-.footer-inner {
-  display: flex;
+/* ── footer / the garden ──────────────────────────────────────────────────── */
+.footer { background: var(--pp-forest); color: var(--pp-term-text); padding: var(--sp-2xl) 0 var(--sp-lg); }
+.footer a { color: var(--pp-term-green); text-decoration: none; transition: color var(--dur-micro); }
+.footer a:hover { color: var(--pp-bg); }
+.footer h4 {
+  color: var(--pp-bg);
+  font-family: var(--font-heading);
+  font-size: var(--text-h4);
+  margin-bottom: var(--sp-xs);
+}
+.foot-grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: var(--sp-lg); }
+.foot-soft { color: rgba(250,245,233,0.62); font-size: var(--text-small); line-height: 1.6; }
+.garden { display: flex; flex-wrap: wrap; gap: var(--sp-2xs); margin-top: var(--sp-4xs); }
+.garden a {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--sp-sm);
-}
-.footer-copy { font-size: var(--text-small); color: rgba(250,245,233,0.5); }
-.footer-copy strong {
-  color: rgba(250,245,233,0.82);
-  font-weight: 600;
+  gap: var(--sp-3xs);
   font-family: var(--font-code);
-  font-size: 0.9rem;
-}
-.footer-links { display: flex; gap: var(--sp-sm); flex-wrap: wrap; }
-.footer-links a {
   font-size: var(--text-small);
-  color: rgba(250,245,233,0.5);
-  text-decoration: none;
-  transition: color var(--dur-micro);
+  padding: var(--sp-3xs) var(--sp-2xs);
+  border-radius: var(--r-full);
+  background: rgba(250,245,233,0.06);
+  color: var(--pp-term-text);
 }
-.footer-links a:hover { color: rgba(250,245,233,0.88); text-decoration: none; }
+.garden a:hover { background: rgba(250,245,233,0.12); color: var(--pp-bg); }
+.garden a.is-self { background: rgba(151,83,155,0.20); }
+.garden .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.foot-bottom {
+  margin-top: var(--sp-xl);
+  padding-top: var(--sp-sm);
+  border-top: 1px solid rgba(250,245,233,0.12);
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-xs);
+  flex-wrap: wrap;
+  color: rgba(250,245,233,0.62);
+  font-size: var(--text-small);
+}
+@media (max-width: 880px) { .foot-grid { grid-template-columns: 1fr; gap: var(--sp-md); } }
 
 /* ── responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 880px) {
@@ -770,7 +790,6 @@ code {
   .stats-row { grid-template-columns: repeat(2, 1fr); }
   .hero { padding: var(--sp-xl) 0 var(--sp-lg); }
   .section { padding: var(--sp-xl) 0; }
-  .footer-inner { flex-direction: column; align-items: flex-start; }
 }
 </style>
 </head>
@@ -1193,20 +1212,39 @@ code {
   </div>
 </section>
 
-<!-- ═══ footer ═══════════════════════════════════════════════════════════════ -->
+<!-- ═══ footer / the garden ═══════════════════════════════════════════════════ -->
 <footer class="footer" role="contentinfo">
   <div class="container">
-    <div class="footer-inner">
-      <p class="footer-copy">
-        <strong>pleach</strong> · MIT · part of the plotplot garden
-      </p>
-      <nav class="footer-links" aria-label="Footer navigation">
-        <a href="https://github.com/jahala/pleach" target="_blank" rel="noopener">GitHub</a>
-        <a href="docs/tend/overview.html">garden</a>
-        <a href="ENGINEERING.md">doctrine</a>
-        <a href="docs/contract/plan-schema.md">contract</a>
-        <a href="docs/adapters.md">adapters</a>
-      </nav>
+    <div class="foot-grid">
+      <div class="reveal">
+        <h4>pleach</h4>
+        <p class="foot-soft">the deterministic conductor for verified agent work — it runs a plan's nodes in isolated git worktrees and publishes a <code>node/&lt;id&gt;</code> branch only for work that mechanically cleared its gates.</p>
+        <p class="foot-soft" style="margin-top:var(--sp-xs)"><a href="https://github.com/jahala/pleach" target="_blank" rel="noopener">github →</a> &nbsp;·&nbsp; MIT licensed &nbsp;·&nbsp; <a href="https://github.com/jahala/pleach/blob/master/CONTRIBUTING.md" target="_blank" rel="noopener">contributing</a></p>
+      </div>
+      <div class="reveal">
+        <h4>the plotplot garden</h4>
+        <div class="garden">
+          <a href="https://github.com/jahala/tilth" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-tilth)"></span>tilth</a>
+          <a href="https://github.com/jahala/tend" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-tend)"></span>tend</a>
+          <a href="https://github.com/jahala/petals" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-petals)"></span>petals</a>
+          <a class="is-self" href="https://github.com/jahala/pleach" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-pleach)"></span>pleach</a>
+          <a href="https://github.com/jahala/umbel" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-accent)"></span>umbel</a>
+        </div>
+        <p class="foot-soft" style="margin-top:var(--sp-xs)">small, sharp tools for building with agents.</p>
+      </div>
+      <div class="reveal">
+        <h4>read on</h4>
+        <p class="foot-soft">
+          <a href="ENGINEERING.md">the doctrine</a> — the binding rules.<br>
+          <a href="docs/contract/plan-schema.md">the plan contract</a> — what a planner emits.<br>
+          <a href="docs/adapters.md">the adapters guide</a> — bring your own runner + ledger.
+        </p>
+        <p class="foot-soft" style="margin-top:var(--sp-xs)"><a href="docs/tend/overview.html">see the garden prove itself →</a></p>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 · a plotplot garden tool · MIT</span>
+      <span>agents produce; code decides.</span>
     </div>
   </div>
 </footer>
