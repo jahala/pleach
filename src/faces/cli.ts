@@ -25,7 +25,7 @@ Flags (run):
   --repo-root PATH        Git repo the worktrees and node/<id> branches live in (default: cwd)
   --max-concurrency N     Parallel node cap (default: 1)
   --timeout-ms N          Default per-attempt timeout when a node omits policy.timeoutMs (default: 30m)
-  --journal PATH          Run journal JSONL (default: <repo-root>/.git/pleach/journal.jsonl)
+  --journal PATH          Run journal JSONL (default: <git-dir>/pleach/journal.jsonl)
   --umbel-bin PATH        umbel binary (default: $PLEACH_UMBEL_BIN or 'umbel' on PATH)
   --config PATH           pleach.config.ts selecting the runner + ledger
                           (default: <repo-root>/pleach.config.ts if present)
