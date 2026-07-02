@@ -15,6 +15,29 @@ async function makeTmpRepo(): Promise<string> {
 }
 
 describe('lock seam', () => {
+  // Regression: pleach run from a linked git worktree (git-worktree(1)), where
+  // `.git` is a FILE containing `gitdir: <path>` — the lock must land inside
+  // the pointed-at git dir instead of ENOTDIRing under the pointer file.
+  test('acquires from a linked worktree whose .git is a gitdir: pointer file', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'pleach-lock-wt-'));
+    const realGitDir = join(dir, 'main', '.git', 'worktrees', 'wt');
+    const { mkdirSync, readdirSync } = await import('node:fs');
+    mkdirSync(realGitDir, { recursive: true });
+    const worktree = join(dir, 'wt');
+    mkdirSync(worktree, { recursive: true });
+    await writeFile(join(worktree, '.git'), `gitdir: ${realGitDir}\n`, 'utf8');
+
+    const lock = createLockSeam();
+    const handle = await lock.acquire(worktree, 'wt-source');
+    try {
+      const locks = readdirSync(realGitDir).filter((f) => f.startsWith('pleach-'));
+      expect(locks.length).toBe(1);
+    } finally {
+      await handle.release();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   // ledger: B4 — second acquire from same process throws LockHeldError with holder pid
   test('B4: second acquire throws LockHeldError with the holder pid', async () => {
     const repoRoot = await makeTmpRepo();
