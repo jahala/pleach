@@ -208,8 +208,39 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
 
   async function stage(cwd: string, files: readonly string[]): Promise<void> {
     if (files.length === 0) return;
-    // Scoped to exactly the given paths (ledger S1)
-    await gitMust(exec, cwd, 'add', '-A', '--', ...files);
+    // Scoped to exactly the given paths (ledger S1). Workers legitimately
+    // create-and-delete probe files (toolchain smoke checks); a pathspec that
+    // matches neither the worktree NOR the index has nothing to stage and
+    // must not fail the whole collection (a tracked file deleted by the
+    // worker still matches the index, so its deletion stages normally).
+    const keep: string[] = [];
+    for (const file of files) {
+      // gitMust: a broken environment (non-repo cwd) must still fail CLOSED —
+      // ls-files itself exits 0 on unmatched pathspecs, so emptiness below
+      // only ever means "nothing to stage for this path".
+      const inTree = await gitMust(
+        exec,
+        cwd,
+        'ls-files',
+        '--others',
+        '--exclude-standard',
+        '--cached',
+        '--',
+        file,
+      );
+      if (inTree.trim() !== '') {
+        keep.push(file);
+        continue;
+      }
+      // Present-but-unlisted edge (fresh empty dirs): worktree existence probe
+      // before dropping.
+      const probe = await exec(['test', '-e', file.startsWith('/') ? file : `${cwd}/${file}`], {
+        cwd,
+      });
+      if (probe.exitCode === 0) keep.push(file);
+    }
+    if (keep.length === 0) return;
+    await gitMust(exec, cwd, 'add', '-A', '--', ...keep);
   }
 
   // ── changedFiles ─────────────────────────────────────────────────────────
