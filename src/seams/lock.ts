@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import { open, readFile, stat, unlink } from 'node:fs/promises';
-import { isAbsolute, join } from 'node:path';
+import { open, readFile, unlink } from 'node:fs/promises';
+import { join } from 'node:path';
 import { LockHeldError } from '../core/errors.ts';
 import type { LockHandle, LockSeam } from '../loop/deps.ts';
+import { resolveGitDir } from './gitdir.ts';
 
 // ledger: B4 — O_EXCL pid lockfile per (repoRoot, source); stale-lock takeover.
 //
@@ -19,22 +20,9 @@ import type { LockHandle, LockSeam } from '../loop/deps.ts';
 //      b. ESRCH → stale → unlink + retry wx once.
 //   3. Write our pid and return a handle whose release() unlinks the file.
 
-// Resolve the real git dir. In a linked worktree (git-worktree(1)) `.git` is
-// a file containing `gitdir: <path>` — joining lock names under it ENOTDIRs.
-async function resolveGitDir(repoRoot: string): Promise<string> {
-  const dotGit = join(repoRoot, '.git');
-  if ((await stat(dotGit)).isDirectory()) return dotGit;
-  const text = await readFile(dotGit, 'utf8');
-  const match = text.match(/^gitdir:\s*(.+?)\s*$/m);
-  if (match === null || match[1] === undefined) {
-    throw new Error(`unrecognized .git file at ${dotGit} — expected a "gitdir: <path>" pointer`);
-  }
-  return isAbsolute(match[1]) ? match[1] : join(repoRoot, match[1]);
-}
-
-async function lockPath(repoRoot: string, source: string): Promise<string> {
+function lockPath(repoRoot: string, source: string): string {
   const sha = createHash('sha1').update(source).digest('hex').slice(0, 12);
-  return join(await resolveGitDir(repoRoot), `pleach-${sha}.lock`);
+  return join(resolveGitDir(repoRoot), `pleach-${sha}.lock`);
 }
 
 // Returns true on success, false on EEXIST; re-throws other errors.
@@ -77,7 +65,7 @@ function isAlive(pid: number): boolean {
 export function createLockSeam(): LockSeam {
   return {
     async acquire(repoRoot: string, source: string): Promise<LockHandle> {
-      const path = await lockPath(repoRoot, source);
+      const path = lockPath(repoRoot, source);
 
       // First attempt — fast path
       if (await tryAcquireExcl(path)) {

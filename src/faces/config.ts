@@ -6,6 +6,7 @@ import { umbelRunner } from '../adapters/umbel.ts';
 import { ConfigError } from '../core/errors.ts';
 import type { ConductorDeps, LedgerSeam, RunnerSeam } from '../loop/deps.ts';
 import { exec } from '../seams/exec.ts';
+import { resolveGitDir } from '../seams/gitdir.ts';
 import { createIsolateSeam } from '../seams/isolate.ts';
 import { createJournal } from '../seams/journal.ts';
 import { createLockSeam } from '../seams/lock.ts';
@@ -117,7 +118,8 @@ export interface BuildDepsOpts {
   repoRoot: string;
   runner: RunnerSeam;
   ledger: LedgerSeam;
-  // Run journal path; defaults to <repoRoot>/.git/pleach/journal.jsonl.
+  // Run journal path; defaults to <git-dir>/pleach/journal.jsonl (the git dir
+  // is resolved through seams/gitdir.ts, so linked worktrees work).
   journal?: string;
 }
 
@@ -126,7 +128,7 @@ export interface BuildDepsOpts {
 // counterpart to the CLI's wiring: supply a runner + ledger (from resolveSeams,
 // or any RunnerSeam/LedgerSeam) and hand the result to runPlan.
 export function buildDeps(opts: BuildDepsOpts): ConductorDeps {
-  const journalPath = opts.journal ?? join(opts.repoRoot, '.git', 'pleach', 'journal.jsonl');
+  const journalPath = opts.journal ?? join(resolveGitDir(opts.repoRoot), 'pleach', 'journal.jsonl');
   return {
     exec,
     isolate: createIsolateSeam(exec, opts.repoRoot),
