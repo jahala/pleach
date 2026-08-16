@@ -2568,7 +2568,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       {
         "id": "pluggable-adapters",
         "title": "Pluggable Adapters: Any Runner, Any Ledger",
-        "status": "planned",
+        "status": "in-progress",
         "priority": "high",
         "enables": [
           "cli-run"
@@ -2586,28 +2586,6 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
           "kind": "svg",
           "alt": "A central port box with one solid adapter plugged in on the left and one dashed swappable adapter on the right — pluggable runner/ledger",
           "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><rect class=\"tc-wh tc-frame\" x=\"46\" y=\"28\" width=\"28\" height=\"24\" rx=\"3\"/><rect class=\"tc-ac\" x=\"14\" y=\"32\" width=\"20\" height=\"16\" rx=\"3\"/><line class=\"tc-ln\" x1=\"34\" y1=\"40\" x2=\"46\" y2=\"40\"/><rect class=\"tc-wh tc-frame\" x=\"86\" y=\"32\" width=\"20\" height=\"16\" rx=\"3\" stroke-dasharray=\"4,2\"/><line class=\"tc-ln\" x1=\"74\" y1=\"40\" x2=\"86\" y2=\"40\"/></svg>"
-        }
-      },
-      {
-        "id": "umbel-seam",
-        "title": "umbel Runner Adapter: Agent Worker Bridge",
-        "status": "planned",
-        "priority": "high",
-        "personas": [
-          "developer",
-          "operator"
-        ],
-        "solves": [
-          "agent-output-as-truth",
-          "logic-io-entanglement"
-        ],
-        "journey_phase": "build",
-        "is_subpage": true,
-        "what": "Spawns umbel-managed agent workers (claude, codex) over ExecFn arg-arrays, drives them with send/wait/kill, threads sinceMtime for race-free stop detection, gathers finalMessage+actions+diff after sto",
-        "thumbnail": {
-          "kind": "svg",
-          "alt": "Square loop and circle agent joined by a two-way arrow channel — umbel spawn/send bridge",
-          "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><rect class=\"tc-wh tc-frame\" x=\"16\" y=\"24\" width=\"34\" height=\"32\" rx=\"3\"/><circle class=\"tc-ac\" cx=\"90\" cy=\"40\" r=\"16\"/><line class=\"tc-ln\" x1=\"50\" y1=\"36\" x2=\"72\" y2=\"32\"/><line class=\"tc-ln\" x1=\"72\" y1=\"32\" x2=\"68\" y2=\"26\"/><line class=\"tc-ln\" x1=\"72\" y1=\"48\" x2=\"50\" y2=\"44\"/><line class=\"tc-ln\" x1=\"50\" y1=\"44\" x2=\"54\" y2=\"38\"/></svg>"
         }
       },
       {
@@ -2630,6 +2608,28 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
           "kind": "svg",
           "alt": "Funnel of three lines converging to a single line into a ledger bar — serial queue to one writer",
           "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><line class=\"tc-ln\" x1=\"18\" y1=\"22\" x2=\"56\" y2=\"38\"/><line class=\"tc-ln\" x1=\"18\" y1=\"40\" x2=\"56\" y2=\"40\"/><line class=\"tc-ln\" x1=\"18\" y1=\"58\" x2=\"56\" y2=\"42\"/><line class=\"tc-ln\" x1=\"56\" y1=\"40\" x2=\"72\" y2=\"40\"/><rect class=\"tc-ac\" x=\"72\" y=\"28\" width=\"40\" height=\"24\" rx=\"3\"/><line class=\"tc-la\" x1=\"78\" y1=\"36\" x2=\"104\" y2=\"36\"/><line class=\"tc-la\" x1=\"78\" y1=\"42\" x2=\"104\" y2=\"42\"/><line class=\"tc-la\" x1=\"78\" y1=\"48\" x2=\"98\" y2=\"48\"/></svg>"
+        }
+      },
+      {
+        "id": "umbel-seam",
+        "title": "umbel Runner Adapter: Agent Worker Bridge",
+        "status": "planned",
+        "priority": "high",
+        "personas": [
+          "developer",
+          "operator"
+        ],
+        "solves": [
+          "agent-output-as-truth",
+          "logic-io-entanglement"
+        ],
+        "journey_phase": "build",
+        "is_subpage": true,
+        "what": "Spawns umbel-managed agent workers (claude, codex) over ExecFn arg-arrays, drives them with send/wait/kill, threads sinceMtime for race-free stop detection, gathers finalMessage+actions+diff after sto",
+        "thumbnail": {
+          "kind": "svg",
+          "alt": "Square loop and circle agent joined by a two-way arrow channel — umbel spawn/send bridge",
+          "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><rect class=\"tc-wh tc-frame\" x=\"16\" y=\"24\" width=\"34\" height=\"32\" rx=\"3\"/><circle class=\"tc-ac\" cx=\"90\" cy=\"40\" r=\"16\"/><line class=\"tc-ln\" x1=\"50\" y1=\"36\" x2=\"72\" y2=\"32\"/><line class=\"tc-ln\" x1=\"72\" y1=\"32\" x2=\"68\" y2=\"26\"/><line class=\"tc-ln\" x1=\"72\" y1=\"48\" x2=\"50\" y2=\"44\"/><line class=\"tc-ln\" x1=\"50\" y1=\"44\" x2=\"54\" y2=\"38\"/></svg>"
         }
       }
     ]

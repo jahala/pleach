@@ -1,0 +1,39 @@
+{
+  "goal": "Build a PLAYABLE WEB tic-tac-toe game — a self-contained index.html you open in a browser and play. Engine first (legalMoves + applyMove in s1, winner in s2), then an integration node that adds status(), builds the clickable UI, and bundles it into a single directly-openable index.html — gated by a DOM test that plays a full game plus a self-containment test.",
+  "source": "examples/three-ways/README.md",
+  "nodes": [
+    {
+      "id": "ttt.s1",
+      "work": {
+        "prompt": "You are implementing a TypeScript/Bun tic-tac-toe engine feature test-first.\n\nProject: a tic-tac-toe web game. File to extend: src/ttt.ts (already exports the types Player/Cell/Board and emptyBoard). Test file: test/ttt.test.ts.\n\nYour task — implement legalMoves and applyMove (test-first):\n\n1. In test/ttt.test.ts, ADD (do not replace existing tests) a describe('moves', ...) block with failing tests FIRST:\n   - legalMoves(emptyBoard()) returns [0,1,2,3,4,5,6,7,8]\n   - applyMove(emptyBoard(), 4, 'X') places 'X' at index 4 and leaves every other cell empty\n   - applyMove returns a NEW board and does not mutate its input\n   - applyMove on an already-occupied cell throws\n\n2. Confirm the new tests fail: run `bun test test/ttt.test.ts`.\n\n3. In src/ttt.ts, ADD (do not modify emptyBoard or the types):\n   export function legalMoves(board: Board): number[]  // indices of empty cells, ascending\n   export function applyMove(board: Board, index: number, player: Player): Board  // a new board with player placed at index; throws if the cell is occupied or index is out of range\n\n4. Run `bun test` — all tests must pass. Fix any issues.\n\nConstraints: do NOT modify or delete emptyBoard, the types, or their tests. Export legalMoves and applyMove from src/ttt.ts."
+      },
+      "setup": "bun install",
+      "needs": [],
+      "accept": { "smoke": "bun test" },
+      "policy": { "timeoutMs": 600000 }
+    },
+    {
+      "id": "ttt.s2",
+      "work": {
+        "prompt": "You are implementing a TypeScript/Bun tic-tac-toe engine feature test-first.\n\nProject: a tic-tac-toe web game. File to extend: src/ttt.ts (already exports the types Player/Cell/Board and emptyBoard). Test file: test/ttt.test.ts.\n\nYour task — implement winner (test-first):\n\n1. In test/ttt.test.ts, ADD (do not replace existing tests) a describe('winner', ...) block with failing tests FIRST:\n   - winner(emptyBoard()) is null\n   - a full top row of 'X' (indices 0,1,2) gives 'X'\n   - a full left column of 'O' (indices 0,3,6) gives 'O'\n   - a full main diagonal of 'X' (indices 0,4,8) gives 'X'\n   - a board with no three-in-a-row gives null\n\n2. Confirm the new tests fail: run `bun test test/ttt.test.ts`.\n\n3. In src/ttt.ts, ADD (do not modify emptyBoard or the types):\n   export function winner(board: Board): Player | null  // the player occupying a full row, column, or diagonal; null if none\n\n4. Run `bun test` — all tests must pass. Fix any issues.\n\nConstraints: do NOT modify or delete emptyBoard, the types, or their tests. Export winner from src/ttt.ts."
+      },
+      "setup": "bun install",
+      "needs": [],
+      "accept": { "smoke": "bun test" },
+      "policy": { "timeoutMs": 600000 }
+    },
+    {
+      "id": "ttt",
+      "work": {
+        "prompt": "You are completing a PLAYABLE WEB tic-tac-toe game — a single self-contained index.html a human opens in a browser and plays.\n\nThis worktree merges two branches into src/ttt.ts (the pure engine): one added legalMoves + applyMove, the other added winner. Your task:\n\n1. Resolve any merge conflict: run `git diff --check`. If conflicts exist in src/ttt.ts or test/ttt.test.ts, resolve them — keep ALL engine functions (emptyBoard, legalMoves, applyMove, winner) and ALL their tests.\n\n2. In src/ttt.ts ADD (do not modify the existing functions):\n   export type Status = 'X' | 'O' | 'draw' | 'playing';\n   export function status(board: Board): Status  // 'X' or 'O' when winner(board) is that player; 'draw' when the board is full with no winner; otherwise 'playing'\n\n3. Build the web UI on top of the engine:\n   - src/app.ts: export function mount(root: HTMLElement): void. It renders a 3x3 grid of clickable cells into root, plus a status line and a 'New game' button. Clicking an empty cell places the current player's mark (X first, then alternating) using the engine, then re-renders the grid; it ignores clicks on a filled cell or once the game is over. The status line shows whose turn it is, or 'X wins' / 'O wins' / 'Draw'. 'New game' resets to an empty board with X to move.\n   - index.html: a SELF-CONTAINED, directly-openable page. A browser CANNOT load a .ts module — so do NOT `import` a local module and do NOT use an external `<script src=...>`. Instead, BUNDLE the app to browser JavaScript and INLINE it: run `bun build src/app.ts` (it bundles app.ts + its engine import) and place the bundled output inside a single inline `<script>` in index.html, then mount the app onto a container element on load. Opening index.html directly in a browser (file://) must play the game — zero build step, zero server. Include a little CSS so the board is a real 3x3 grid of sizable, clickable cells.\n\n4. Test-first. happy-dom is preloaded for `bun test`, so document / HTMLElement / click events work.\n   - test/app.test.ts: mount the app into a fresh element; click cells to play a game where X takes the top row (click order 0, 3, 1, 4, 2); assert those three cells render 'X' and the status announces X as the winner; assert a click on an already-filled cell does nothing; assert 'New game' clears the board to empty with X to move.\n   - test/selfcontained.test.ts: read index.html and assert it is self-contained — it has an inline `<script>` and contains NO local-module import (no `from './`) and NO external script (`<script` ... `src=`). This guards the directly-openable property so the page can never regress to importing a .ts module.\n   Run `bun test` — the engine tests AND both UI tests must all pass.\n\n5. The deliverable is a single self-contained index.html: opening it in a browser plays a full game (click cells, X/O alternate, win/draw, a working 'New game' button) with no build or server.\n\nFiles you may edit: src/ttt.ts, test/ttt.test.ts, src/app.ts, test/app.test.ts, test/selfcontained.test.ts, index.html."
+      },
+      "setup": "bun install",
+      "needs": ["ttt.s1", "ttt.s2"],
+      "accept": {
+        "smoke": "bun test",
+        "audit": { "command": "bash git-audit.sh ttt", "provider": "codex" }
+      },
+      "policy": { "timeoutMs": 600000 }
+    }
+  ]
+}

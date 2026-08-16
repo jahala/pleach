@@ -134,8 +134,8 @@ The `reason` field is the full taxonomy of terminal events:
 | `'dead'` | Agent process exited unexpectedly | Retry or fail per `onDead` policy |
 | `'timeout'` | `wait` timed out | Retryable — reuse tree, re-prompt with evidence |
 | `'aborted'` | Session cancelled | Terminal failure |
-| `'input'` | Agent is waiting at a permission/approval prompt | Verdict `status:'blocked'`; no auto-retry |
-| `'idle'` | Agent stalled without a permission prompt | Verdict `status:'blocked'`; no auto-retry |
+| `'input'` | Agent is waiting at a permission/approval prompt | Kill + dispose; Verdict `status:'blocked'` with the prompt text as `blockedReason` — the operator fixes the permission mode and re-runs |
+| `'idle'` | Agent stalled without a permission prompt | Kill + dispose; Verdict `status:'blocked'` — the operator re-runs |
 
 **Runner post-condition (verified from `src/loop/run-node.ts:191–194`).** When `wait()`
 returns `reason: 'stop'`, the runner is expected to have populated the working tree with
@@ -190,8 +190,11 @@ pleach ignores `emitVerdict`'s return value and closes unconditionally (`run-pla
 `closed` flag is only consequential for nodes that carry an `accept.audit` block.
 
 `gitLedger` is the trivial reference: `readClosed` lists `node/*` branches in the local
-repo; `emitVerdict` returns `{ closed: verdict.status === 'done' }`. It is entirely local
-and requires no external service.
+repo, **scoped to the plan source** — pleach writes `source: <plan.source>` into every
+node commit, and only branches carrying that exact line count as this plan's verified
+work (two plans sharing a repo cannot cross-resume; a hand-made `node/*` branch is never
+trusted). `emitVerdict` returns `{ closed: verdict.status === 'done' }`. It is entirely
+local and requires no external service.
 
 ---
 
@@ -263,6 +266,14 @@ applies to any auditor. `extractAuditJson` finds the **last** block so labelled 
 the content is not valid JSON, pleach re-runs the auditor up to `REAUDIT_BUDGET` (2) times
 before failing the node.
 
+**Gate integrity (ledger SEC4).** The auditor works in the tree the builder wrote, which
+makes the worktree a collusion channel. Two defenses: audit commands should live outside
+worker-writable paths (the `tend audit` pattern) — and for repo-local commands, pleach
+refuses to spawn the auditor when any file named in `audit.command` was touched by the
+builder (retryable with revert evidence, terminal at `maxAttempts`). The audit prompt also
+instructs the auditor to treat repository content as untrusted data and run only the given
+command.
+
 The parsed JSON must match `AuditResult` from `src/core/plan.ts`:
 
 ```ts
@@ -304,11 +315,23 @@ verify-close. The node's branch is still published; its dependents are skipped.
 
 ## Bundled adapters
 
-Three adapters ship in `src/adapters/` as the batteries-included configuration:
+Five adapters ship in `src/adapters/` as the batteries-included configuration:
 
 - **`umbelRunner`** (`src/adapters/umbel.ts`) — `RunnerSeam` backed by the `umbel` binary
   over tmux. Drives claude, codex, and gemini workers through spawn/send/wait/read/kill
   verbs. The public factory: `umbelRunner(opts: UmbelSeamOpts): RunnerSeam`.
+
+- **`directCliRunner`** (`src/adapters/direct-cli.ts`) — `RunnerSeam` over headless agent
+  CLIs (`claude -p`, `codex exec`) as one-shot subprocesses; no umbel, no tmux. Selected
+  with `pleach run --runner direct-cli` or imported in a config. Single-turn `{prompt}`
+  work only (a second `send` throws — `{phases}` needs session resumption; use umbel).
+  Its argv table tracks external CLIs and is pinned by unit tests so drift breaks CI —
+  the installed CLI versions are your substrate responsibility. The public factory:
+  `directCliRunner(opts?: DirectCliOpts): RunnerSeam`.
+
+- **`scriptedRunner`** (`src/adapters/scripted.ts`) — deterministic no-LLM `RunnerSeam`
+  driven by canned scenarios; the CI backbone for example plans and a template for
+  test doubles. The public factory: `scriptedRunner(scenarios): RunnerSeam`.
 
 - **`tendLedger`** (`src/adapters/tend.ts`) — `LedgerSeam` backed by tend's ingester module.
   Wraps the transport in a serial promise-chain queue (single-ingester invariant). Accepts a

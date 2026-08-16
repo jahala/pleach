@@ -295,6 +295,43 @@ test('ledger: S1 — scoped stage only commits the given files, not junk', async
   }
 });
 
+// Regression: workers create-and-delete probe files (toolchain smoke checks);
+// a pathspec matching neither worktree nor index must not fail collection,
+// while a tracked file the worker deleted still stages as a deletion.
+test('stage: tolerates vanished untracked probes; still stages tracked deletions', async () => {
+  const repo = await createRepo();
+  try {
+    await makeBranch(repo.path, 'node/ghost-base', {
+      'keep.txt': 'keep\n',
+      'doomed.txt': 'doomed\n',
+    });
+
+    const seam = createIsolateSeam(execLocal, repo.path);
+    const node = { id: 'ghost-node', needs: [], work: { prompt: 'x' } } as never;
+    const iso = await seam.isolate(node, ['node/ghost-base']);
+
+    // The worker: adds a real file, deletes a tracked file; its probe file
+    // (_realsmoke) was created and already deleted — never tracked.
+    await writeFile(join(iso.cwd, 'new.txt'), 'new\n');
+    await rm(join(iso.cwd, 'doomed.txt'));
+
+    await seam.stage(iso.cwd, ['new.txt', 'doomed.txt', 'tests/_realsmoke.spec.ts']);
+    await seam.commitBranch(iso.cwd, 'node/ghost-result', 'ghost-tolerant commit');
+
+    const { output } = await execLocal(
+      ['git', '-C', iso.cwd, 'show', '--stat', '--format=', 'HEAD'],
+      { cwd: iso.cwd },
+    );
+    expect(output).toContain('new.txt');
+    expect(output).toContain('doomed.txt'); // the deletion is staged
+    expect(output).not.toContain('_realsmoke');
+
+    await iso.dispose();
+  } finally {
+    await repo.cleanup();
+  }
+});
+
 // ledger: B2 — commitBranch returns sha; refSha matches; allow-empty works
 test('ledger: B2 — commitBranch returns sha; allow-empty succeeds; refSha resolves', async () => {
   const repo = await createRepo();
