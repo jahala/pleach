@@ -43,6 +43,12 @@ export interface IsolateSeam {
   // Resolve a ref to a commit SHA in the repo containing `cwd`; null if the
   // ref does not exist (ledger B1 — the baseRef fallback chain).
   refSha(cwd: string, ref: string): Promise<string | null>;
+  // Land verified refs onto the branch checked out in repoRoot (ledger B3).
+  // Builds the merges in a throwaway detached worktree; the checkout is only
+  // ever touched by a final `merge --ff-only`, so a conflict (LandConflictError),
+  // a detached HEAD, or a refused fast-forward (LandBlockedError) leaves the
+  // repo exactly as it was.
+  land(repoRoot: string, refs: readonly string[]): Promise<{ branch: string; sha: string }>;
 }
 
 export interface WorkerResult {
@@ -111,8 +117,12 @@ export interface RunSummary {
   partial: string[];
   skipped: string[];
   // Nodes whose worker settled at a permission prompt (Verdict status
-  // 'blocked') — neither failed-retryable nor closed; a human attaches.
+  // 'blocked'). The session is terminated and the prompt text recorded as
+  // blockedReason — fix the permission mode / allowlist and re-run.
   blocked: string[];
+  // Failed nodes whose worktree still held changes: the evidence is committed
+  // to quarantine/<id> before dispose (never node/<id> — nothing verified).
+  quarantined: string[];
   // Nodes already verified in the ledger before this run — skipped, not re-run.
   // Re-running a plan resumes: only unbuilt or previously-failed nodes execute.
   alreadyVerified: string[];

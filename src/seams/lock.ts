@@ -3,10 +3,14 @@ import { open, readFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { LockHeldError } from '../core/errors.ts';
 import type { LockHandle, LockSeam } from '../loop/deps.ts';
+import { resolveGitDir } from './gitdir.ts';
 
 // ledger: B4 — O_EXCL pid lockfile per (repoRoot, source); stale-lock takeover.
 //
-// Lockfile path: <repoRoot>/.git/pleach-<sha1(source) first 12 hex>.lock
+// Lockfile path: <git-dir>/pleach-<sha1(source) first 12 hex>.lock, where
+// <git-dir> is <repoRoot>/.git when that is a directory, or the directory a
+// linked worktree's `.git` FILE points at (`gitdir: <path>`). Locking stays
+// per-checkout either way: same repoRoot → same git dir → same lock.
 // Content: the acquiring process's pid as a decimal string.
 //
 // Acquire protocol:
@@ -18,7 +22,7 @@ import type { LockHandle, LockSeam } from '../loop/deps.ts';
 
 function lockPath(repoRoot: string, source: string): string {
   const sha = createHash('sha1').update(source).digest('hex').slice(0, 12);
-  return join(repoRoot, '.git', `pleach-${sha}.lock`);
+  return join(resolveGitDir(repoRoot), `pleach-${sha}.lock`);
 }
 
 // Returns true on success, false on EEXIST; re-throws other errors.

@@ -98,7 +98,7 @@ recorded in `docs/contract/CHANGES.md` for the other two repos.
 |---|---|---|
 | worker `reason: 'dead'` | `dead` | `onDead:'resume'` → dispose + re-isolate + fresh worker, else fail |
 | worker `reason: 'timeout'` / exec timeout | `retryable` | retry ≤ `maxAttempts`, **reuse tree, re-prompt with evidence** |
-| worker `reason: 'input' \| 'idle'` | `blocked` | kill worker; Verdict `status:'blocked'`; no auto-retry (human attaches) |
+| worker `reason: 'input' \| 'idle'` | `blocked` | kill worker + dispose tree; Verdict `status:'blocked'`, prompt text in `blockedReason`; no auto-retry — fix the permission mode / allowlist and re-run |
 | smoke / command non-zero, marker-gate hit | `retryable` | retry ≤ `maxAttempts`, reuse tree, evidence in re-prompt |
 | audit returned fail verdicts | `retryable` | re-prompt the *builder* with the audit `reasons[]` |
 | `AuditParseError` (bad audit egress) | `reaudit` | re-run **only the audit worker**, bounded separately (default 2) |
@@ -126,6 +126,9 @@ reasons, conflict-file list) is a bug, not a retry.
   string interpolation anywhere), `Node.id` charset is schema-enforced, and tend state is read only from
   paths **outside** any worker-writable worktree. SHAs of refs pleach created are verified before use —
   a worker can reach shared git refs from inside a worktree; never trust a ref it could have moved.
+  The audit gate is protected the same way (SEC4): audit commands live outside worker-writable paths
+  or are integrity-checked against the staged set before the auditor spawns, and the auditor's prompt
+  treats repository content as untrusted data, never instructions.
 
 ## Testing doctrine
 

@@ -2798,7 +2798,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     {
       "id": "pluggable-adapters",
       "title": "Pluggable Adapters: Any Runner, Any Ledger",
-      "status": "planned",
+      "status": "in-progress",
       "priority": "high",
       "enables": [
         "cli-run"
@@ -2828,6 +2828,24 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       ],
       "journey_phase": "build",
       "what": "A deterministic RunnerSeam (src/adapters/scripted.ts) that applies canned worktree changes per build prompt and returns a canned cross-provider AuditResult — no LLM, no API keys, no network. Paired wi"
+    },
+    {
+      "id": "cli-land",
+      "title": "pleach land: The Last Mile",
+      "status": "in-progress",
+      "priority": "high",
+      "dependencies": [
+        "conductor-loop",
+        "isolate-seam"
+      ],
+      "personas": [
+        "operator"
+      ],
+      "solves": [
+        "status-artifact-split"
+      ],
+      "journey_phase": "build",
+      "what": "`pleach land <plan>` (and `pleach run --land`) merges a verified plan's sink branches onto the branch checked out in --repo-root, so a verified close ends with working code on the user's branch — not "
     }
   ],
   "source_dirs": [
@@ -2844,26 +2862,26 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     ],
     "truth": {
       "verified": 3,
-      "total": 17,
-      "stale": 11,
+      "total": 18,
+      "stale": 10,
       "mock_only": 0,
-      "false_done": 1,
-      "auditable": 10,
+      "false_done": 2,
+      "auditable": 11,
       "audited": 5
     },
     "flow": {
       "ready_now": 5,
-      "blocked": 2,
-      "bottleneck_feature_id": "cli-run"
+      "blocked": 3,
+      "bottleneck_feature_id": "conductor-loop"
     },
     "value": {
       "highest_value_unblocked": "cli-run",
       "weakest_opportunity_coverage": "silent-contract-drift"
     },
     "lifecycle": {
-      "total": 10,
+      "total": 11,
       "planned": {
-        "count": 7,
+        "count": 6,
         "blocked": 2
       },
       "building": {
@@ -2871,16 +2889,16 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
         "blocked": 0
       },
       "built": {
-        "count": 0,
-        "blocked": 0
+        "count": 2,
+        "blocked": 1
       },
       "verified": {
         "count": 3,
-        "at_risk": 1
+        "at_risk": 0
       }
     },
     "coherence": {
-      "total": 54,
+      "total": 51,
       "groups": [
         {
           "kind": "judgment_missing",
@@ -2899,34 +2917,46 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
         {
           "kind": "how_decisions_trail",
           "label": "slot coherence",
-          "count": 10,
+          "count": 9,
           "route": "/tend change",
           "section": "spine"
         },
         {
-          "kind": "unplanned_check",
-          "label": "Unplanned check",
+          "kind": "thinly_authored",
+          "label": "authoring thinness",
           "count": 3,
-          "route": "/tend validate",
-          "section": "spine"
-        },
-        {
-          "kind": "feature_has_persona",
-          "label": "spine bindings",
-          "count": 2,
-          "route": "/tend position",
-          "section": "spine"
-        },
-        {
-          "kind": "thumbnail_missing",
-          "label": "thumbnails",
-          "count": 1,
           "route": "/tend narrate",
           "section": "content"
+        },
+        {
+          "kind": "feature_grounded",
+          "label": "spine bindings",
+          "count": 1,
+          "route": "/tend position",
+          "section": "spine"
         }
       ]
     },
-    "computed_at": "2026-06-18T19:35:31.999Z"
+    "what_missing": {
+      "uncovered_intent": [
+        {
+          "persona_id": "developer",
+          "persona_name": "Developer",
+          "uncovered_jobs": [
+            "When I add a capability, because I must not let I/O leak into pure logic or a scheduling decision leak into a seam, we believe the layer boundaries make the wrong place to put code obviously wrong. We'll know we got it right when a change lands in exactly one of faces / loop / seams / core without debate, and the import graph stays strictly downward — core imports nothing, the loop receives seams it never imports.",
+            "When I change the plan schema, because tend and umbel vendor it byte-for-byte and a silent divergence breaks all three repos, we believe schema, source, and doc move together or not at all. We'll know we got it right when the drift test pins `plan.ts` to `plan-schema.md` byte-for-byte and the change lands as doc + source + drift-test + a CHANGES.md entry in one commit.",
+            "When convenience argues for a TODO, a mock in shipped code, or a compat shim, because greenfield always tempts the shortcut, we believe committed code is real and complete. We'll know we got it right when review finds no committed `// TODO`, no behavior-mock outside the in-memory seam doubles, and every dormant config field is annotated `[ROADMAP]`-inert rather than half-wired."
+          ]
+        }
+      ],
+      "incomplete_bets": 1,
+      "incomplete_bet_ids": [
+        "cli-land"
+      ],
+      "unclaimed_code": 0,
+      "unclaimed_code_sample": []
+    },
+    "computed_at": "2026-08-16T19:18:16.623Z"
   },
   "what": "pleach — a deterministic conductor that interweaves a DAG of agent-built work into one verified canopy: it isolates each plan node in its own git worktree, enforces gates, and publishes a branch only for work that mechanically passed them.",
   "why": "Stochastic agents can't be trusted to self-certify, and reviewing every diff defeats the point of delegating to them. pleach makes deterministic code — never agent prose — the sole authority on what counts as done, so a swarm can build unattended without garbage reaching the trunk.",

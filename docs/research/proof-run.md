@@ -104,3 +104,25 @@ a real codex auditor, and real tend — every check discriminated, every node cl
    (jahala/pleach#9): tend owns feature-level closure + SHA persistence; pleach already
    anticipates it (`Map<id, sha|null>` + the `Set→Map` adapter) and degrades gracefully.
    Non-blocking; tracked cross-repo.
+
+## P7 Phases Proof — calc (2026-08-16)
+
+The `{test, phases}` TDD mode, previously covered only by in-memory loop
+tests, proven at both rigor levels:
+
+- **Case 0 (CI, deterministic):** `test/e2e/phases.test.ts` drives the cycle
+  through the real CLI + real git with the scripted runner and REAL gate
+  execution. The honest cycle closes; a CHEATING red phase (test already
+  passes — no failing spec demonstrated) fails the node: exit 1, no branch,
+  work quarantined. The TDD gate discriminates mechanically.
+- **Real agent (manual, this machine):** a real claude session via umbel drove
+  red→impl→green on a seeded broken `add()` (returns 0). pleach ran the RED
+  gate itself (`bun test calc.test.ts` genuinely failed against the seed),
+  the impl phase fixed the source, GREEN + smoke passed, `node/calc`
+  published, verified close:
+  `{"closed":["calc"],"failed":[],"partial":[],"skipped":[],"blocked":[],"quarantined":[]}`
+  exit 0. Journal: run-start → node-start → verdict done → closed → run-end.
+  The committed test is claude's own authorship (its formatting), not canned.
+
+Constraint (documented in adapters.md + the pleach-plan skill): phases needs a
+multi-turn runner — umbel, not `--runner direct-cli`.

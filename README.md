@@ -18,7 +18,8 @@ workers, is cross-provider audited, and verifies ([`docs/research/proof-run.md`]
 
 pleach is a Bun CLI. It requires `git >= 2.38` at run time. The default
 `umbelRunner` also needs `tmux` and the `umbel` binary on your PATH — but the runner is
-pluggable (see [Adapters](#adapters)).
+pluggable (see [Adapters](#adapters)): `pleach run plan.json --runner direct-cli` needs
+only the `claude` and `codex` CLIs, no umbel, no tmux.
 
 Run it without cloning:
 
@@ -79,10 +80,20 @@ own: [`docs/adapters.md`](docs/adapters.md).
 ## Usage
 
 ```
-pleach run <plan.json> [flags]     Execute a plan
+pleach run <plan.json> [flags]     Execute a plan (--land to land a fully-verified close)
+pleach land <plan.json> [flags]    Merge a verified plan's sinks onto the checked-out branch
 pleach validate <plan.json>        Parse + validate a plan; print the topo order
 pleach schema                      Emit the plan contract as JSON Schema (for planners / codegen)
 ```
+
+Landing is deterministic and fail-closed: it refuses unless **every** plan node is
+verified, builds the merges in a throwaway worktree, and touches your checkout only
+via a final fast-forward — a conflict aborts with the repo untouched.
+
+**Don't want to write plan.json by hand?** The repo ships a Claude Code skill,
+[`pleach-plan`](.claude/skills/pleach-plan/SKILL.md): give it a goal and a repo and it
+decomposes the work into a gated DAG, then proves the result with `pleach validate`
+before handing it over.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full runtime substrate and flag reference.
 

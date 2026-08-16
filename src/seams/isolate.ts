@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { IsolateCatastrophicError } from '../core/errors.ts';
+import { IsolateCatastrophicError, LandBlockedError, LandConflictError } from '../core/errors.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, IsolateSeam, Isolation } from '../loop/deps.ts';
 
@@ -208,8 +208,39 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
 
   async function stage(cwd: string, files: readonly string[]): Promise<void> {
     if (files.length === 0) return;
-    // Scoped to exactly the given paths (ledger S1)
-    await gitMust(exec, cwd, 'add', '-A', '--', ...files);
+    // Scoped to exactly the given paths (ledger S1). Workers legitimately
+    // create-and-delete probe files (toolchain smoke checks); a pathspec that
+    // matches neither the worktree NOR the index has nothing to stage and
+    // must not fail the whole collection (a tracked file deleted by the
+    // worker still matches the index, so its deletion stages normally).
+    const keep: string[] = [];
+    for (const file of files) {
+      // gitMust: a broken environment (non-repo cwd) must still fail CLOSED —
+      // ls-files itself exits 0 on unmatched pathspecs, so emptiness below
+      // only ever means "nothing to stage for this path".
+      const inTree = await gitMust(
+        exec,
+        cwd,
+        'ls-files',
+        '--others',
+        '--exclude-standard',
+        '--cached',
+        '--',
+        file,
+      );
+      if (inTree.trim() !== '') {
+        keep.push(file);
+        continue;
+      }
+      // Present-but-unlisted edge (fresh empty dirs): worktree existence probe
+      // before dropping.
+      const probe = await exec(['test', '-e', file.startsWith('/') ? file : `${cwd}/${file}`], {
+        cwd,
+      });
+      if (probe.exitCode === 0) keep.push(file);
+    }
+    if (keep.length === 0) return;
+    await gitMust(exec, cwd, 'add', '-A', '--', ...keep);
   }
 
   // ── changedFiles ─────────────────────────────────────────────────────────
@@ -261,5 +292,82 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     return r.output.trim() || null;
   }
 
-  return { isolate, scanMarkers, stage, changedFiles, commitBranch, refSha };
+  // ── land ─────────────────────────────────────────────────────────────────
+
+  async function land(
+    landRepoRoot: string,
+    refs: readonly string[],
+  ): Promise<{ branch: string; sha: string }> {
+    // The branch the user has checked out — landing target. Detached → refuse.
+    const br = await git(exec, landRepoRoot, 'symbolic-ref', '--short', '-q', 'HEAD');
+    if (br.exitCode !== 0) {
+      throw new LandBlockedError('repo HEAD is detached — check out a branch to land onto');
+    }
+    const branch = br.output.trim();
+
+    // Build the merges in a throwaway detached worktree at the branch tip
+    // (same isolation model as node builds); the checkout is untouched until
+    // the final fast-forward.
+    const tmpBase = await mkdtemp(join(tmpdir(), 'pleach-land-'));
+    const worktreePath = join(tmpBase, 'wt');
+    const add = await git(exec, landRepoRoot, 'worktree', 'add', '--detach', worktreePath, branch);
+    if (add.exitCode !== 0) {
+      await rm(tmpBase, { recursive: true, force: true });
+      throw new IsolateCatastrophicError(branch, `git worktree add failed: ${add.output}`);
+    }
+    const dispose = async (): Promise<void> => {
+      const r = await git(exec, landRepoRoot, 'worktree', 'remove', '--force', worktreePath);
+      if (r.exitCode !== 0) {
+        if (!r.output.includes('is not a working tree') && !r.output.includes('not found')) {
+          throw new IsolateCatastrophicError(
+            'git worktree remove',
+            `exited ${r.exitCode}: ${r.output.trim()}`,
+          );
+        }
+      }
+      await rm(tmpBase, { recursive: true, force: true });
+    };
+
+    try {
+      for (const ref of refs) {
+        const verify = await git(
+          exec,
+          worktreePath,
+          'rev-parse',
+          '--verify',
+          '--quiet',
+          `${ref}^{commit}`,
+        );
+        if (verify.exitCode !== 0) {
+          throw new IsolateCatastrophicError(ref, `ref does not point to a commit`);
+        }
+        const merge = await git(exec, worktreePath, 'merge', '-m', `pleach: land ${ref}`, ref);
+        if (merge.exitCode !== 0) {
+          // A conflict must NEVER land — collect the files, abort, refuse
+          // (the marker-keeping path of isolate() is for node builds only).
+          const diff = await git(exec, worktreePath, 'diff', '--name-only', '--diff-filter=U');
+          const files = diff.output
+            .trim()
+            .split('\n')
+            .map((l) => l.trim())
+            .filter(Boolean);
+          await git(exec, worktreePath, 'merge', '--abort');
+          throw new LandConflictError(ref, files);
+        }
+      }
+      const sha = await gitMust(exec, worktreePath, 'rev-parse', 'HEAD');
+
+      // The ONLY touch on the user's checkout. Refused when the branch moved
+      // mid-land or uncommitted changes overlap — fail closed, explain.
+      const ff = await git(exec, landRepoRoot, 'merge', '--ff-only', sha);
+      if (ff.exitCode !== 0) {
+        throw new LandBlockedError(`fast-forward of '${branch}' refused: ${ff.output.trim()}`);
+      }
+      return { branch, sha };
+    } finally {
+      await dispose();
+    }
+  }
+
+  return { isolate, scanMarkers, stage, changedFiles, commitBranch, refSha, land };
 }

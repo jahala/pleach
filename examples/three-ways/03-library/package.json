@@ -1,0 +1,9 @@
+{
+  "name": "three-ways-library",
+  "private": true,
+  "type": "module",
+  "//": "Example-only. The Agent SDK is NOT a pleach dependency — pleach itself depends on zod alone. Install it at the pleach repo root so `pleach` self-resolves: `bun add @anthropic-ai/claude-agent-sdk`, then run `bun examples/three-ways/03-library/run.ts` from the root.",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "*"
+  }
+}
