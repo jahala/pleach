@@ -30,8 +30,9 @@ three — only the profile around them changes.
 
 - **"I want maximum rigor with interactive agents"** → **proof 1**. tend's discriminating
   audit is the strictest close criterion pleach has.
-- **"I want to run lean on git, with my own runner, no umbel"** → **proof 2**. A ~40-line
-  runner is the whole integration surface.
+- **"I want to run lean on git, no umbel"** → **proof 2**. The bundled direct-CLI
+  adapter (`pleach run --runner direct-cli`) — a ~40-line runner is the whole
+  integration surface if you bring your own.
 - **"I want to embed pleach in my own app or tool"** → **proof 3**. `buildDeps` + `runPlan`
   from your code, consume the typed result, resume for free.
 

@@ -6,10 +6,10 @@ git.
 
 ## What it shows
 
-- [`../lib/direct-cli-runner.ts`](../lib/direct-cli-runner.ts) is a complete
-  `RunnerSeam`. Its core — an argv table plus a spawn-and-capture worker — is about
-  40 lines (the rest is the doc comment and the injected seams that make it
-  unit-testable). It shells `claude -p` for each build node and `codex exec` for the
+- [`src/adapters/direct-cli.ts`](../../../src/adapters/direct-cli.ts) — now a
+  **bundled adapter** — is a complete `RunnerSeam`. Its core — an argv table plus a
+  spawn-and-capture worker — is about 40 lines (the rest is the doc comment and the
+  injected seams that make it unit-testable, plus the D1 timeout watchdog). It shells `claude -p` for each build node and `codex exec` for the
   cross-provider audit, captures stdout + the git diff, and hands pleach a
   `WorkerResult`. That is the **entire** integration surface: write that, and every
   pleach guarantee — isolation, the gate ladder, quarantine, the cross-provider
@@ -53,8 +53,9 @@ runner: garbage can't propagate down the DAG.
 ## The takeaway
 
 You are not locked to umbel. The `RunnerSeam` is the whole contract, and a headless
-CLI wrapper satisfies it. Copy `../lib/direct-cli-runner.ts`, confirm the argv flags
-against your installed CLI versions, and pleach runs on your stack.
+CLI wrapper satisfies it — bundled: `pleach run --runner direct-cli` needs no config
+file at all. For another provider, copy `src/adapters/direct-cli.ts` into your own
+config, extend its argv table, and confirm the flags against your installed CLIs.
 
 ## Play it
 
