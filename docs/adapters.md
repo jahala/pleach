@@ -304,11 +304,23 @@ verify-close. The node's branch is still published; its dependents are skipped.
 
 ## Bundled adapters
 
-Three adapters ship in `src/adapters/` as the batteries-included configuration:
+Five adapters ship in `src/adapters/` as the batteries-included configuration:
 
 - **`umbelRunner`** (`src/adapters/umbel.ts`) — `RunnerSeam` backed by the `umbel` binary
   over tmux. Drives claude, codex, and gemini workers through spawn/send/wait/read/kill
   verbs. The public factory: `umbelRunner(opts: UmbelSeamOpts): RunnerSeam`.
+
+- **`directCliRunner`** (`src/adapters/direct-cli.ts`) — `RunnerSeam` over headless agent
+  CLIs (`claude -p`, `codex exec`) as one-shot subprocesses; no umbel, no tmux. Selected
+  with `pleach run --runner direct-cli` or imported in a config. Single-turn `{prompt}`
+  work only (a second `send` throws — `{phases}` needs session resumption; use umbel).
+  Its argv table tracks external CLIs and is pinned by unit tests so drift breaks CI —
+  the installed CLI versions are your substrate responsibility. The public factory:
+  `directCliRunner(opts?: DirectCliOpts): RunnerSeam`.
+
+- **`scriptedRunner`** (`src/adapters/scripted.ts`) — deterministic no-LLM `RunnerSeam`
+  driven by canned scenarios; the CI backbone for example plans and a template for
+  test doubles. The public factory: `scriptedRunner(scenarios): RunnerSeam`.
 
 - **`tendLedger`** (`src/adapters/tend.ts`) — `LedgerSeam` backed by tend's ingester module.
   Wraps the transport in a serial promise-chain queue (single-ingester invariant). Accepts a

@@ -30,6 +30,9 @@ Flags (run):
   --max-concurrency N     Parallel node cap (default: 1)
   --timeout-ms N          Default per-attempt timeout when a node omits policy.timeoutMs (default: 30m)
   --journal PATH          Run journal JSONL (default: <git-dir>/pleach/journal.jsonl)
+  --runner NAME           Bundled runner for zero-config runs: 'umbel' (default; interactive
+                          CLIs over tmux) or 'direct-cli' (headless \`claude -p\` / \`codex exec\` —
+                          no umbel, no tmux, single-turn {prompt} nodes only)
   --umbel-bin PATH        umbel binary (default: $PLEACH_UMBEL_BIN or 'umbel' on PATH)
   --config PATH           pleach.config.ts selecting the runner + ledger
                           (default: <repo-root>/pleach.config.ts if present)
@@ -69,6 +72,7 @@ interface Flags {
   permissionMode: string;
   config?: string;
   land: boolean;
+  runnerKind?: 'umbel' | 'direct-cli';
 }
 
 class UsageError extends Error {
@@ -145,6 +149,15 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
       case '--land':
         flags.land = true;
         break;
+      case '--runner': {
+        const kind = takeValue(arg, next);
+        if (kind !== 'umbel' && kind !== 'direct-cli') {
+          throw new UsageError(`--runner must be 'umbel' or 'direct-cli', got '${kind}'`);
+        }
+        flags.runnerKind = kind;
+        i += 1;
+        break;
+      }
       default:
         throw new UsageError(`unknown flag '${arg}'`);
     }
@@ -208,6 +221,7 @@ async function depsFromFlags(flags: Flags) {
     ...(flags.config !== undefined ? { config: flags.config } : {}),
     ...(flags.allowedTools !== undefined ? { allowedTools: flags.allowedTools } : {}),
     ...(flags.tendModule !== undefined ? { tendModule: flags.tendModule } : {}),
+    ...(flags.runnerKind !== undefined ? { runnerKind: flags.runnerKind } : {}),
   });
   return buildDeps({
     repoRoot: flags.repoRoot,

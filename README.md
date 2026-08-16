@@ -18,7 +18,8 @@ workers, is cross-provider audited, and verifies ([`docs/research/proof-run.md`]
 
 pleach is a Bun CLI. It requires `git >= 2.38` at run time. The default
 `umbelRunner` also needs `tmux` and the `umbel` binary on your PATH — but the runner is
-pluggable (see [Adapters](#adapters)).
+pluggable (see [Adapters](#adapters)): `pleach run plan.json --runner direct-cli` needs
+only the `claude` and `codex` CLIs, no umbel, no tmux.
 
 Run it without cloning:
 

@@ -1,5 +1,6 @@
 import { access } from 'node:fs/promises';
 import { join } from 'node:path';
+import { directCliRunner } from '../adapters/direct-cli.ts';
 import { gitLedger } from '../adapters/git.ts';
 import { tendLedger } from '../adapters/tend.ts';
 import { umbelRunner } from '../adapters/umbel.ts';
@@ -25,6 +26,9 @@ export interface ResolveSeamsOpts {
   permissionMode: string;
   allowedTools?: string;
   tendModule?: string;
+  // Which bundled runner the default wiring uses (--runner). A config file
+  // brings its own runner, so combining the two is a contradiction → ConfigError.
+  runnerKind?: 'umbel' | 'direct-cli';
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────
@@ -94,15 +98,24 @@ export async function resolveSeams(
   const config = await loadConfig(configPath, explicit);
 
   if (config !== null) {
+    if (opts.runnerKind !== undefined) {
+      throw new ConfigError(
+        configPath,
+        '--runner conflicts with a config file (the config brings its own runner) — drop one',
+      );
+    }
     return { runner: config.runner, ledger: await config.ledger };
   }
 
-  // Default wiring: umbel runner + git or tend ledger.
-  const runner = umbelRunner({
-    bin: opts.umbelBin,
-    permissionMode: opts.permissionMode,
-    ...(opts.allowedTools !== undefined ? { allowedTools: opts.allowedTools } : {}),
-  });
+  // Default wiring: the selected bundled runner + git or tend ledger.
+  const runner =
+    opts.runnerKind === 'direct-cli'
+      ? directCliRunner()
+      : umbelRunner({
+          bin: opts.umbelBin,
+          permissionMode: opts.permissionMode,
+          ...(opts.allowedTools !== undefined ? { allowedTools: opts.allowedTools } : {}),
+        });
 
   const ledger =
     opts.tendModule !== undefined
