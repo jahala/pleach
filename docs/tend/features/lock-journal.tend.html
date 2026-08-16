@@ -2572,7 +2572,8 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   ],
   "coverage_files": [
     "src/seams/lock.ts",
-    "src/seams/journal.ts"
+    "src/seams/journal.ts",
+    "src/seams/gitdir.ts"
   ],
   "solves": [
     "logic-io-entanglement"
@@ -2588,47 +2589,47 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     "content": "<svg viewBox=\"0 0 120 80\" xmlns=\"http://www.w3.org/2000/svg\"><rect class=\"tc-bg tc-frame\" x=\"8\" y=\"8\" width=\"104\" height=\"64\" rx=\"4\"/><rect class=\"tc-wh tc-frame\" x=\"20\" y=\"38\" width=\"30\" height=\"26\" rx=\"3\"/><path class=\"tc-ln\" d=\"M26,38 L26,28 a9,9 0 0 1 18,0 L44,38\"/><circle class=\"tc-ac\" cx=\"35\" cy=\"51\" r=\"5\"/><rect class=\"tc-wh tc-frame\" x=\"66\" y=\"22\" width=\"46\" height=\"36\" rx=\"3\"/><line class=\"tc-la\" x1=\"74\" y1=\"33\" x2=\"104\" y2=\"33\"/><line class=\"tc-la\" x1=\"74\" y1=\"41\" x2=\"104\" y2=\"41\"/><line class=\"tc-la\" x1=\"74\" y1=\"49\" x2=\"96\" y2=\"49\"/></svg>"
   },
   "audit": {
-    "ran_at": "2026-06-18T14:51:15Z",
+    "ran_at": "2026-08-16",
     "result": "pass",
     "verdicts": [
       {
         "check_id": "c001",
         "verdict": "pass",
-        "evidence_path": "src/seams/lock.ts:33 (EEXIST guard returns false); ran `bun test test/integration/lock.test.ts` → 4 pass; negctrl: EEXIST-guard false→true → DISCRIMINATES",
+        "evidence_path": "src/seams/lock.ts:37 (EEXIST guard returns false); ran `bun test test/integration/lock.test.ts` → all pass; negctrl (throwaway worktree, 2026-08-16 refresh): EEXIST-guard false→true → DISCRIMINATES",
         "validates_job_satisfied": true,
-        "evidence_sha": "3d55c039339e5109f525860fb0cb16b7da547073"
+        "evidence_sha": "6389b154336752ac47834ce7f1a4c029dc9955f2"
       },
       {
         "check_id": "c002",
         "verdict": "pass",
-        "evidence_path": "src/seams/lock.ts:100-107 (release unlinks the lockfile); ran `bun test test/integration/lock.test.ts` → 4 pass; negctrl: comment out unlink in release → DISCRIMINATES",
+        "evidence_path": "src/seams/lock.ts:104-110 (release unlinks the lockfile); ran `bun test test/integration/lock.test.ts` → all pass; negctrl: release body unlink → no-op → DISCRIMINATES (refreshed 2026-08-16)",
         "validates_job_satisfied": true,
-        "evidence_sha": "3d55c039339e5109f525860fb0cb16b7da547073"
+        "evidence_sha": "6389b154336752ac47834ce7f1a4c029dc9955f2"
       },
       {
         "check_id": "c003",
         "verdict": "pass",
-        "evidence_path": "src/seams/lock.ts:55 (ESRCH guard returns false); ran `bun test test/integration/lock.test.ts` → 4 pass; negctrl: ESRCH-guard false→true → DISCRIMINATES",
+        "evidence_path": "src/seams/lock.ts:59 (ESRCH guard returns false); ran `bun test test/integration/lock.test.ts` → all pass; negctrl: ESRCH-guard false→true → DISCRIMINATES (refreshed 2026-08-16)",
         "validates_job_satisfied": true,
-        "evidence_sha": "3d55c039339e5109f525860fb0cb16b7da547073"
+        "evidence_sha": "6389b154336752ac47834ce7f1a4c029dc9955f2"
       },
       {
         "check_id": "c004",
         "verdict": "pass",
-        "evidence_path": "src/seams/lock.ts:29 (writes process.pid into the lockfile); ran `bun test test/integration/lock.test.ts` → 4 pass; negctrl: write '0' instead of pid → DISCRIMINATES",
+        "evidence_path": "src/seams/lock.ts:33 (writes process.pid into the lockfile); ran `bun test test/integration/lock.test.ts` → all pass; negctrl: write '0' instead of pid → DISCRIMINATES (refreshed 2026-08-16)",
         "validates_job_satisfied": true,
-        "evidence_sha": "3d55c039339e5109f525860fb0cb16b7da547073"
+        "evidence_sha": "6389b154336752ac47834ce7f1a4c029dc9955f2"
       },
       {
         "check_id": "c005",
         "verdict": "pass",
-        "evidence_path": "src/loop/run-plan.ts:66 (run-start) + :286 (run-end) journal appends; ran `bun test test/loop/run-plan.test.ts -t 'acquires the lock and releases it; journals run-start and run-end'` → 1 pass; negctrl: comment out run-start append → DISCRIMINATES",
+        "evidence_path": "src/loop/run-plan.ts:66 (run-start) + run-end journal appends; ran `bun test test/loop/run-plan.test.ts -t 'journals run-start'` → 1 pass; negctrl: drop the run-start append → DISCRIMINATES (refreshed 2026-08-16; lock/journal paths resolve through src/seams/gitdir.ts since 59669c1 — now claimed in coverage_files)",
         "validates_job_satisfied": true,
-        "evidence_sha": "70891d5274e3d77d9aba2598f926e8ef8d9d3fda"
+        "evidence_sha": "a20cea65c2baca9aaaa4812e5ad82ca43034d5c0"
       }
     ],
     "drift": [],
-    "verified_at_commit": "05183de50c779643dd8b14a9f78e9ee04d9fe571"
+    "verified_at_commit": "9e28318d41abc0a24c69924ed519d9933c492701"
   },
   "judgments": [
     {

@@ -2510,7 +2510,7 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
 {
   "id": "pluggable-adapters",
   "title": "Pluggable Adapters: Any Runner, Any Ledger",
-  "status": "planned",
+  "status": "in-progress",
   "priority": "high",
   "journey_phase": "build",
   "personas": [
@@ -2530,7 +2530,8 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
     "src/adapters/git.ts",
     "src/faces/config.ts",
     "src/core/schema-json.ts",
-    "src/index.ts"
+    "src/index.ts",
+    "src/adapters/direct-cli.ts"
   ],
   "checks": [
     {
@@ -2602,11 +2603,21 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       "verification_recipe": "buildDeps({repoRoot, runner, ledger}) returns deps with exec/isolate/lock/journal/runner/ledger all present (test/unit/library-export.test.ts).",
       "status": "open",
       "validates_job": "developer:1"
+    },
+    {
+      "id": "c008",
+      "description": "The bundled directCliRunner (headless claude -p / codex exec) is selectable with `pleach run --runner direct-cli` and reaches a verified close with no umbel and no tmux; --runner with a config file is a contradiction and errors (no silent fallback).",
+      "validates": "what",
+      "method": "synthetic-test",
+      "integration_level": "e2e",
+      "verification_recipe": "bun test test/e2e/direct-cli.test.ts — expect 3 pass (verified close via fake claude/codex binaries on PATH; --runner validation; --config conflict); negctrl: break the runnerKind branch in resolveSeams → must fail",
+      "status": "open",
+      "validates_job": "operator:0"
     }
   ],
   "narrative": "## One data contract, two pluggable seams\n\npleach used to be wired to exactly two tools — umbel for the runner, tend for the ledger. The generalization keeps the deterministic loop untouched and turns those two couplings into ports: `RunnerSeam` and `LedgerSeam` in `src/loop/deps.ts`. The loop composes whatever satisfies them and imports no concrete adapter. `src/adapters/` holds the bundled bridges — `umbelRunner`, `tendLedger`, and the new `gitLedger` — beside pleach's own I/O in `src/seams/`. The integration surface is exactly one data contract (the [plan](cli-validate.tend.html)) plus those two code seams; a new tool is a new adapter file and the engine never changes. The full contracts live in `docs/adapters.md`.\n\n## gitLedger makes a run standalone\n\n`src/adapters/git.ts:gitLedger` is the unlock: a `LedgerSeam` backed by git itself. `readClosed` lists the `node/*` branches pleach has already published and returns each one's commit SHA — the verified record and the resume base, with no external service. `emitVerdict` is pure — `{ closed: verdict.status === 'done' }` — because pleach commits the branch before it asks (commit-before-emit). With gitLedger, `pleach run plan.json` works on git + a runner alone; tend becomes an opt-in rigor upgrade, not a requirement.\n\n## The config selects the pair\n\n`src/faces/config.ts:resolveSeams` decides which adapters a run uses, in precedence: an explicit `--config <path>`, else a `pleach.config.ts` at the repo root, else the defaults — `umbelRunner` plus `tendLedger` (when `--tend-module` is given) or `gitLedger`. A `pleach.config.ts` exports `{ runner, ledger }` built from the bundled factories or your own; a missing or malformed one throws the typed `ConfigError`. `loadConfig` also duck-types the resolved adapters — checking that the runner has `spawnWorker` and the ledger has `readClosed`/`emitVerdict` as functions — so a wrong-shape config fails at the boundary with `ConfigError`, not deep in a run (`src/faces/config.ts:68–76`). The plan stays portable: it names the provider per node (`worker.provider`) while the config names the tools — so the same plan runs whether the runner is umbel, an API wrapper, or a test double. For programmatic planners, `pleach schema` emits the plan contract as JSON Schema (`src/core/schema-json.ts:planJsonSchema`, kept out of the drift-pinned `plan.ts`).\n\npleach conducts **local** executors over git worktrees with **automatable** verification — that is the boundary. Cloud-autonomous agents or human-gated approval need an adapter that bridges into the sync send→wait→kill and deterministic-emitVerdict contracts. See `docs/adapters.md` and the [project bet](../overview.html).",
   "progress": {
-    "implementation": 0,
+    "implementation": 100,
     "verification": 0
   },
   "personas_resolved": [
@@ -2640,6 +2651,59 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
   },
   "enables": [
     "cli-run"
+  ],
+  "steps": [
+    {
+      "id": "s1",
+      "title": "Extract the ports",
+      "description": "RunnerSeam/LedgerSeam interfaces in loop/deps.ts; loop composes injected instances only (construction in faces/)",
+      "status": "done",
+      "traces_to": [
+        "c007"
+      ]
+    },
+    {
+      "id": "s2",
+      "title": "Config precedence + zero-config default",
+      "description": "resolveSeams: --config > pleach.config.ts > default wiring (umbelRunner + gitLedger/tendLedger); typed ConfigError on malformed configs",
+      "status": "done",
+      "traces_to": [
+        "c001",
+        "c002",
+        "c003"
+      ]
+    },
+    {
+      "id": "s3",
+      "title": "Bundled adapters",
+      "description": "umbelRunner, tendLedger, gitLedger, scriptedRunner — plus directCliRunner (2026-08-16): headless claude/codex, D1 timeout kill, single-turn guard, selectable via --runner direct-cli",
+      "status": "done",
+      "traces_to": [
+        "c004",
+        "c008"
+      ]
+    },
+    {
+      "id": "s4",
+      "title": "Library surface",
+      "description": "package exports: pleach (index), pleach/adapters/*, pleach/config; buildDeps assembles ConductorDeps for embedding (three-ways proof 3)",
+      "status": "done",
+      "traces_to": [
+        "c005",
+        "c006",
+        "c007"
+      ]
+    }
+  ],
+  "smoke": {
+    "cmd": "bun test test/integration/config-resolve.test.ts test/e2e/direct-cli.test.ts"
+  },
+  "decisions": [
+    {
+      "id": "d001",
+      "decision": "Adapters are runtime-injected code seams (RunnerSeam/LedgerSeam instances in a config file or --runner selection), not a plugin registry or declarative adapter names in the plan.",
+      "rationale": "The plan stays a pure data contract (worker.provider is intent; the config decides how a provider is reached), portable across environments. A string-keyed plugin registry was rejected: it reintroduces interpretation at the loop boundary and makes the integration surface a lookup convention instead of two typed interfaces. Explicit contradiction (--runner + config) errors rather than silently preferring one."
+    }
   ]
 }
 </script>
