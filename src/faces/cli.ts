@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { cpus } from 'node:os';
 import {
   ConfigError,
   LandBlockedError,
@@ -27,7 +28,7 @@ Usage:
 
 Flags (run):
   --repo-root PATH        Git repo the worktrees and node/<id> branches live in (default: cwd)
-  --max-concurrency N     Parallel node cap (default: 1)
+  --max-concurrency N     Parallel node cap (default: plan.maxConcurrency, else CPU cores − 2)
   --timeout-ms N          Default per-attempt timeout when a node omits policy.timeoutMs (default: 30m)
   --journal PATH          Run journal JSONL (default: <git-dir>/pleach/journal.jsonl)
   --runner NAME           Bundled runner for zero-config runs: 'umbel' (default; interactive
@@ -53,6 +54,12 @@ with the repo untouched — resolve those by hand (git merge node/<id>).
 Resuming is automatic: re-running a plan skips nodes already verified in the
 ledger (their node/<id> branch exists) — only unbuilt or previously-failed
 nodes execute. The JSON summary's "alreadyVerified" lists what was skipped.
+
+A 'blocked' node means its worker stopped at a permission/approval prompt. The
+session is terminated (nothing to attach to); the prompt text is recorded in
+the journal as blockedReason. Fix --permission-mode / --allowed-tools and
+re-run. A failed node's uncommitted work is preserved on quarantine/<id> for
+inspection (summary field "quarantined"); it is never treated as verified.
 
 Exit codes:
   0  every plan node closed (verified)
@@ -238,6 +245,9 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
   process.stderr.write(`pleach: running ${plan.nodes.length} nodes\n`);
   const summary = await runPlan(plan, deps, {
     repoRoot: flags.repoRoot,
+    // The contract's conductor default when neither flag nor plan caps it:
+    // cores−2, floored at 1 (the loop stays environment-free).
+    defaultConcurrency: Math.max(1, cpus().length - 2),
     ...(flags.maxConcurrency !== undefined ? { maxConcurrency: flags.maxConcurrency } : {}),
     ...(flags.timeoutMs !== undefined ? { defaultTimeoutMs: flags.timeoutMs } : {}),
   });

@@ -98,7 +98,7 @@ recorded in `docs/contract/CHANGES.md` for the other two repos.
 |---|---|---|
 | worker `reason: 'dead'` | `dead` | `onDead:'resume'` → dispose + re-isolate + fresh worker, else fail |
 | worker `reason: 'timeout'` / exec timeout | `retryable` | retry ≤ `maxAttempts`, **reuse tree, re-prompt with evidence** |
-| worker `reason: 'input' \| 'idle'` | `blocked` | kill worker; Verdict `status:'blocked'`; no auto-retry (human attaches) |
+| worker `reason: 'input' \| 'idle'` | `blocked` | kill worker + dispose tree; Verdict `status:'blocked'`, prompt text in `blockedReason`; no auto-retry — fix the permission mode / allowlist and re-run |
 | smoke / command non-zero, marker-gate hit | `retryable` | retry ≤ `maxAttempts`, reuse tree, evidence in re-prompt |
 | audit returned fail verdicts | `retryable` | re-prompt the *builder* with the audit `reasons[]` |
 | `AuditParseError` (bad audit egress) | `reaudit` | re-run **only the audit worker**, bounded separately (default 2) |

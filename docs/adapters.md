@@ -134,8 +134,8 @@ The `reason` field is the full taxonomy of terminal events:
 | `'dead'` | Agent process exited unexpectedly | Retry or fail per `onDead` policy |
 | `'timeout'` | `wait` timed out | Retryable — reuse tree, re-prompt with evidence |
 | `'aborted'` | Session cancelled | Terminal failure |
-| `'input'` | Agent is waiting at a permission/approval prompt | Verdict `status:'blocked'`; no auto-retry |
-| `'idle'` | Agent stalled without a permission prompt | Verdict `status:'blocked'`; no auto-retry |
+| `'input'` | Agent is waiting at a permission/approval prompt | Kill + dispose; Verdict `status:'blocked'` with the prompt text as `blockedReason` — the operator fixes the permission mode and re-runs |
+| `'idle'` | Agent stalled without a permission prompt | Kill + dispose; Verdict `status:'blocked'` — the operator re-runs |
 
 **Runner post-condition (verified from `src/loop/run-node.ts:191–194`).** When `wait()`
 returns `reason: 'stop'`, the runner is expected to have populated the working tree with
@@ -190,8 +190,11 @@ pleach ignores `emitVerdict`'s return value and closes unconditionally (`run-pla
 `closed` flag is only consequential for nodes that carry an `accept.audit` block.
 
 `gitLedger` is the trivial reference: `readClosed` lists `node/*` branches in the local
-repo; `emitVerdict` returns `{ closed: verdict.status === 'done' }`. It is entirely local
-and requires no external service.
+repo, **scoped to the plan source** — pleach writes `source: <plan.source>` into every
+node commit, and only branches carrying that exact line count as this plan's verified
+work (two plans sharing a repo cannot cross-resume; a hand-made `node/*` branch is never
+trusted). `emitVerdict` returns `{ closed: verdict.status === 'done' }`. It is entirely
+local and requires no external service.
 
 ---
 

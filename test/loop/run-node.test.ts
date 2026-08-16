@@ -535,8 +535,8 @@ describe('runNode — disposeQuiet swallows IsolateCatastrophicError (ledger #44
     expect(r.verdict.status).toBe('blocked');
     expect(r.verdict.evidence.blockedReason).toBe('allow Bash?');
     // dispose-failed must be recorded in the journal.
-    const disposeFailed = h.journal.find((e) => e['event'] === 'dispose-failed');
+    const disposeFailed = h.journal.find((e) => e.event === 'dispose-failed');
     expect(disposeFailed).toBeDefined();
-    expect(disposeFailed?.['node']).toBe('n');
+    expect(disposeFailed?.node).toBe('n');
   });
 });
