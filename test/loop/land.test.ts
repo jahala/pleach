@@ -91,7 +91,7 @@ describe('landPlan', () => {
 
     await landPlan(p, h.deps, OPTS);
 
-    const events = h.journal.map((e) => e['event']);
+    const events = h.journal.map((e) => e.event);
     expect(events).toContain('land-start');
     expect(events).toContain('landed');
     expect(h.log.first('lock.acquire')).toBeLessThan(h.log.first('land'));

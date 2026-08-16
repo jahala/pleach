@@ -2,7 +2,7 @@
 import { expect, test } from 'bun:test';
 import { ConfigError } from '../../src/core/errors.ts';
 import { resolveSeams } from '../../src/faces/config.ts';
-import { createRepo, makeBranch } from '../support/git-repo.ts';
+import { createRepo, gitIn } from '../support/git-repo.ts';
 
 // ── fixture paths ─────────────────────────────────────────────────────────────
 
@@ -30,11 +30,20 @@ test('resolveSeams: explicit config path → custom ledger selected (sentinel ke
   }
 });
 
-// (b) no config, no tendModule → gitLedger default, node/foo branch appears in readClosed
+// (b) no config, no tendModule → gitLedger default; a pleach-published branch
+// for the queried source appears in readClosed (the ledger scopes by source).
 test('resolveSeams: no config → gitLedger default, node/foo branch is returned', async () => {
   const repo = await createRepo();
   try {
-    await makeBranch(repo.path, 'node/foo');
+    await gitIn(repo.path, 'checkout', '--detach', 'HEAD');
+    await gitIn(
+      repo.path,
+      'commit',
+      '--allow-empty',
+      '-m',
+      'pleach: foo verified (done)\n\nsource: x\ngoal: g',
+    );
+    await gitIn(repo.path, 'branch', '-f', 'node/foo', 'HEAD');
 
     const { ledger } = await resolveSeams({
       repoRoot: repo.path,

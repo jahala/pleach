@@ -29,8 +29,10 @@ export interface RunNodeOpts {
 
 export interface RunNodeResult {
   verdict: Verdict;
-  // The live isolation for a done node — run-plan commits then disposes. Absent
-  // for terminal verdicts that already disposed (or never isolated).
+  // The live isolation, handed to run-plan for the commit-then-dispose
+  // (done) or quarantine-then-dispose (terminal failed/dead) sequence.
+  // Absent for blocked verdicts (disposed here — the worker never finished a
+  // turn, there is nothing worth keeping) and for never-isolated failures.
   iso?: Isolation;
   stagedFiles?: string[];
 }
@@ -57,6 +59,15 @@ export async function runNode(
         detail: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+
+  // Terminal failed/dead verdicts hand the live tree back to the caller so
+  // run-plan can quarantine the evidence before disposing. Blocked verdicts
+  // dispose here — the worker never finished a turn; there is nothing to keep.
+  function handBack(result: RunNodeResult): RunNodeResult {
+    const live = iso;
+    iso = null;
+    return live === null ? result : { ...result, iso: live };
   }
 
   // Resolved-provider diversity preflight (binding prose) — before any spawn.
@@ -114,10 +125,7 @@ export async function runNode(
           const settle = settleRetryable(node, attempts, maxAttempts, {
             gate: { ran: node.setup, exitCode },
           });
-          if (settle) {
-            await disposeQuiet(iso);
-            return settle;
-          }
+          if (settle) return handBack(settle);
           evidence = gateEvidence('setup', exitCode, output);
           continue; // retry — SAME tree (setup idempotent by contract)
         }
@@ -145,10 +153,7 @@ export async function runNode(
         await worker?.kill();
         if (err instanceof GateFailedError) {
           const decision = handleGate(node, attempts, maxAttempts, err);
-          if (decision.settle) {
-            await disposeQuiet(iso);
-            return decision.settle;
-          }
+          if (decision.settle) return handBack(decision.settle);
           evidence = decision.evidence;
           continue; // retryable — SAME tree
         }
@@ -180,20 +185,18 @@ export async function runNode(
             evidence = undefined;
             continue;
           }
-          await disposeQuiet(iso);
-          return { verdict: { ...baseVerdict(node, attempts), status: 'dead' } };
+          return handBack({ verdict: { ...baseVerdict(node, attempts), status: 'dead' } });
         }
         // timeout → retryable (reuse tree); anything else terminal.
         if (klass === 'retryable' && attempts < maxAttempts) {
           evidence = `previous attempt ended: ${result.reason}`;
           continue;
         }
-        await disposeQuiet(iso);
-        return {
+        return handBack({
           verdict: failedVerdict(node, attempts, {
             gate: { ran: `wait:${result.reason}`, exitCode: -1 },
           }),
-        };
+        });
       }
 
       // ── marker gate (ledger C1) ─────────────────────────────────────────────
@@ -202,10 +205,7 @@ export async function runNode(
         const settle = settleRetryable(node, attempts, maxAttempts, {
           gate: { ran: 'marker', exitCode: -1 },
         });
-        if (settle) {
-          await disposeQuiet(iso);
-          return settle;
-        }
+        if (settle) return handBack(settle);
         evidence = `Conflict markers remain in:\n${markers.join('\n')}\nResolve the conflict markers.`;
         continue;
       }
@@ -222,10 +222,7 @@ export async function runNode(
           const settle = settleRetryable(node, attempts, maxAttempts, {
             gate: { ran: node.accept.smoke, exitCode },
           });
-          if (settle) {
-            await disposeQuiet(iso);
-            return settle;
-          }
+          if (settle) return handBack(settle);
           evidence = gateEvidence('smoke', exitCode, output);
           continue;
         }
@@ -236,33 +233,28 @@ export async function runNode(
       if (node.accept.audit) {
         const auditOutcome = await runAudit(node, cwd, deps, timeoutMs);
         if (auditOutcome.kind === 'parse-exhausted') {
-          await disposeQuiet(iso);
-          return {
+          return handBack({
             verdict: failedVerdict(node, attempts, {
               // node.accept.audit is defined inside this block.
               gate: { ran: `${node.accept.audit.command} (egress unparseable)`, exitCode: -1 },
             }),
-          };
+          });
         }
         if (auditOutcome.kind === 'worker-fault') {
           // The auditor died / timed out / blocked — it never returned a verdict.
           // Distinct from a fail verdict; record the reason for the journal.
-          await disposeQuiet(iso);
-          return {
+          return handBack({
             verdict: failedVerdict(node, attempts, {
               gate: {
                 ran: `${node.accept.audit.command} (auditor ${auditOutcome.reason})`,
                 exitCode: -1,
               },
             }),
-          };
+          });
         }
         if (auditOutcome.kind === 'fail') {
           const settle = settleRetryable(node, attempts, maxAttempts, {});
-          if (settle) {
-            await disposeQuiet(iso);
-            return settle;
-          }
+          if (settle) return handBack(settle);
           evidence = auditOutcome.evidence;
           continue; // audit-fail → re-prompt a FRESH build worker, SAME tree
         }

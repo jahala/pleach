@@ -18,6 +18,7 @@ function summary(over: Partial<RunSummary> = {}): RunSummary {
     partial: [],
     skipped: [],
     blocked: [],
+    quarantined: [],
     alreadyVerified: [],
     ...over,
   };

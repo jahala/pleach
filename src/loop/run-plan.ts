@@ -20,6 +20,10 @@ import { type RunNodeResult, runNode } from './run-node.ts';
 export interface RunPlanOpts {
   repoRoot: string;
   maxConcurrency?: number;
+  // The conductor's fallback when neither the flag nor the plan caps
+  // concurrency. The CONTRACT says cores−2 (plan-schema.md) — the face computes
+  // that (the loop stays environment-free) and passes it here.
+  defaultConcurrency?: number;
   defaultTimeoutMs?: number;
 }
 
@@ -37,7 +41,7 @@ export async function runPlan(
   const defaultTimeoutMs = opts.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxConcurrency = Math.max(
     1,
-    opts.maxConcurrency ?? plan.maxConcurrency ?? FALLBACK_CONCURRENCY,
+    opts.maxConcurrency ?? plan.maxConcurrency ?? opts.defaultConcurrency ?? FALLBACK_CONCURRENCY,
   );
 
   const lock = await deps.lock.acquire(opts.repoRoot, plan.source);
@@ -96,6 +100,8 @@ async function runUnderLock(
   // Audit nodes that reached a 'done' verdict (work committed, gates green) but
   // tend declined to verify-close — published, unverified, terminal (never re-run).
   const partial = new Set<string>();
+  // Failed nodes whose evidence was preserved on quarantine/<id> before dispose.
+  const quarantined = new Set<string>();
   const inflight = new Map<string, Promise<void>>();
 
   // A node is schedulable when pending, not yet failed/blocked/partial/inflight,
@@ -137,6 +143,33 @@ async function runUnderLock(
     }
 
     await settle(node, outcome);
+  }
+
+  // Failed work is evidence, not garbage: commit the tree's changes to
+  // quarantine/<id> — never node/<id>, nothing was verified — so the operator
+  // can inspect what the agent actually wrote instead of debugging from a
+  // 2000-char output tail. Best-effort: a quarantine failure journals and
+  // never masks the real verdict. An unchanged tree quarantines nothing.
+  async function quarantineOrJournal(node: Node, iso: Isolation): Promise<void> {
+    try {
+      const changed = await deps.isolate.changedFiles(iso.cwd);
+      if (changed.length === 0) return;
+      await deps.isolate.stage(iso.cwd, changed);
+      const branch = `quarantine/${node.id}`;
+      const { sha } = await deps.isolate.commitBranch(
+        iso.cwd,
+        branch,
+        `pleach: ${node.id} quarantined\n\nsource: ${plan.source}\ngoal: ${plan.goal}`,
+      );
+      quarantined.add(node.id);
+      await deps.journal.append({ event: 'quarantined', node: node.id, branch, sha });
+    } catch (err) {
+      await deps.journal.append({
+        event: 'quarantine-failed',
+        node: node.id,
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   // Node promises NEVER reject (run-plan.ts:115). A dispose() failure must not
@@ -183,10 +216,14 @@ async function runUnderLock(
     }
 
     if (verdict.status !== 'done' || iso === undefined) {
-      // failed / dead / timeout — emit for the record, no commit.
+      // failed / dead / timeout — emit for the record; no node/<id> publish.
+      // The evidence is quarantined first (the tree is gone after dispose).
       failed.add(node.id);
       await deps.ledger.emitVerdict(verdict, plan.source);
-      if (iso) await disposeOrJournal(iso, node.id);
+      if (iso) {
+        await quarantineOrJournal(node, iso);
+        await disposeOrJournal(iso, node.id);
+      }
       return;
     }
 
@@ -289,6 +326,7 @@ async function runUnderLock(
     partial: [...partial],
     skipped,
     blocked: [...blocked],
+    quarantined: [...quarantined],
     alreadyVerified,
   };
   await deps.journal.append({ event: 'run-end', ...summary });
