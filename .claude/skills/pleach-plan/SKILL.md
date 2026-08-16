@@ -34,6 +34,11 @@ plan wastes agent runs; a good one parallelizes cleanly and verifies honestly.
      they become git branch names.
    - 3–6 nodes is the sweet spot. One node = pleach adds only verification;
      ten = the decomposition is probably guesswork.
+   - **Anti-conformity** (identical models make identical choices): keep
+     siblings' helper surface disjoint — two siblings that each "helpfully"
+     write the same util will merge cleanly and duplicate logic, which no gate
+     catches. Name in each sibling's prompt what it must NOT create, and have
+     the integration node's prompt check for duplicated logic after the merge.
 
 4. **Choose each node's work shape:**
    - `{ command }` — deterministic steps (codegen, scaffolding). Exit-code
