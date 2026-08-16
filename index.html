@@ -742,6 +742,15 @@ code {
   font-size: var(--text-h4);
   margin-bottom: var(--sp-xs);
 }
+.gf-plot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 32px; padding-bottom: 28px; margin-bottom: 40px; border-bottom: 1px solid rgba(250,245,233,0.12); }
+.gf-plotbrand { display: inline-flex; align-items: center; gap: 10px; }
+.gf-plotword { font-family: var(--font-heading); font-weight: 600; font-size: 1.45rem; letter-spacing: -0.01em; color: var(--pp-bg); }
+.gf-plotmark { width: 28px; height: 28px; flex: none; }
+.ppm-stem { fill: none; stroke: var(--pp-term-green); stroke-width: 2; stroke-linecap: round; }
+.ppm-leaf { fill: var(--pp-term-green); }
+.ppm-bloom { fill: #E89227; }
+.gf-plotline { margin: 0; flex: 1; min-width: 18ch; color: rgba(250,245,233,0.62); font-size: 1rem; }
+.gf-plotlink { font-family: var(--font-code); font-size: 0.85rem; white-space: nowrap; }
 .foot-grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: var(--sp-lg); }
 .foot-soft { color: rgba(250,245,233,0.62); font-size: var(--text-small); line-height: 1.6; }
 .garden { display: flex; flex-wrap: wrap; gap: var(--sp-2xs); margin-top: var(--sp-4xs); }
@@ -1215,6 +1224,19 @@ code {
 <!-- ═══ footer / the garden ═══════════════════════════════════════════════════ -->
 <footer class="footer" role="contentinfo">
   <div class="container">
+    <div class="gf-plot reveal">
+      <a class="gf-plotbrand" href="https://plotplot.ai" aria-label="plotplot home">
+        <svg class="gf-plotmark" viewBox="0 0 28 28" aria-hidden="true">
+          <path class="ppm-stem" d="M14 26 V12"/>
+          <path class="ppm-leaf" d="M14 18.5 C9 17.5 6 13.5 6.6 9 C11 9.8 14 13.2 14 18.5 Z"/>
+          <path class="ppm-leaf" d="M14 15.5 C19 14.5 22 10.5 21.4 6 C17 6.8 14 10.2 14 15.5 Z"/>
+          <circle class="ppm-bloom" cx="14" cy="8" r="3"/>
+        </svg>
+        <span class="gf-plotword">plotplot</span>
+      </a>
+      <p class="gf-plotline">a garden of small, sharp tools for building with AI.</p>
+      <a class="gf-plotlink" href="https://plotplot.ai">plotplot.ai &rarr;</a>
+    </div>
     <div class="foot-grid">
       <div class="reveal">
         <h4>pleach</h4>

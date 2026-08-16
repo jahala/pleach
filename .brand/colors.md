@@ -47,11 +47,9 @@ Each tool in the garden claims one accent; the primary palette is shared across 
 | tilth | #4E88A6 | code intelligence — sky |
 | tend | #D6502F | feature mapping & narration — poppy |
 | petals | #E588A0 | brand intelligence for agents — petal |
-| pleach | #97539B | composition / weaving — plum |
-| trellis | #E89227 | orchestrate agent CLIs — sunlight |
-
-[FLAG: identity-pleach] pleach's one-line purpose is a placeholder ("composition / weaving"); replace once the product is described. Its accent #97539B is fine to keep.
-[FLAG: identity-trellis] "trellis" is the proposed garden rename of umbel (orchestrate agent CLIs in tmux); confirm before public use.
+| pleach | #97539B | the conductor — plum |
+| umbel | #E89227 | fan out agent CLIs — sunlight |
+| copeca | #1F8A7B | cost-per-correct benchmarking — juniper |
 
 ## Contrast Pairings
 
@@ -81,6 +79,7 @@ Color is only on-brand when it is legible. Classes: **reading** ≥ 4.5:1 (body,
 | Sky #4E88A6 on Paper #FAF5E9 | 3.6 | labels |
 | Plum #97539B on Paper #FAF5E9 | 4.8 | labels |
 | Petal #E588A0 on Paper #FAF5E9 | 2.3 | decorative |
+| Juniper #1F8A7B on Paper #FAF5E9 | 3.9 | labels |
 | Night-text #F3ECD9 on Night #1C1610 | 15.2 | reading |
 | Night-soft #C9BBA0 on Night #1C1610 | 9.5 | reading |
 | Night-green #84C56A on Night #1C1610 | 8.7 | reading |
@@ -157,7 +156,8 @@ Dark mode is "soil at night," not a harsh developer theme. Embedded terminal pan
   --pp-tend:   #D6502F;
   --pp-petals: #E588A0;
   --pp-pleach: #97539B;
-  --pp-trellis:#E89227;
+  --pp-umbel:  #E89227;
+  --pp-copeca: #1F8A7B;
 
   /* soil-night terminal */
   --pp-term-bg:      #1C1610;
