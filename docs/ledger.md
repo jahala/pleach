@@ -119,6 +119,21 @@ checkpoint but have different lifetimes and trust domains.**
     `LedgerSeam` (tend MCP / gitLedger), which resolves over the main checkout, not any worker worktree.
     The worker has no write path into that seam.
 
+- **SEC4 ⚠ [2026-08-16, source: Anthropic Frontier Red Team multiagent report — see
+  `docs/research/multiagent-lessons.md`] Gate tampering / audit collusion via the shared worktree.**
+  The auditor works in the tree the builder wrote: (a) a repo-local audit command (`bash git-audit.sh`)
+  is builder-writable — rewrite it to print a passing fence and every gate goes green; (b) repository
+  content can prompt-inject the auditor into skipping the command. No malicious model needed — a
+  reward-hacky builder under retry pressure suffices. C5 hardened refs, not gate content.
+  - **Implemented (same day):** (a) `auditGateTampering` (`core/audit-egress.ts`) — audit-command
+    tokens matched against the attempt's staged set; a hit is a retryable gate failure with revert
+    evidence, terminal at `maxAttempts` (quarantined), and the auditor is never spawned. A reverted
+    file is clean vs HEAD, so an honest touch recovers on retry. (b) `buildAuditPrompt` inoculation:
+    repository content is untrusted data; run only the given command. Tests:
+    `test/unit/gate-integrity.test.ts`, `test/loop/gate-integrity.test.ts`. Rule of thumb: audit
+    commands should live outside worker-writable paths (`tend audit` does); the integrity check
+    covers the repo-local case.
+
 ### Class D — robustness, config, hygiene
 
 - **D1 ⚠ [adv] No timeouts anywhere.** `Node` has no timeout field; no `exec()` call passes `timeoutMs`;

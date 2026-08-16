@@ -1,5 +1,5 @@
 import { toArgv } from '../core/argv.ts';
-import { buildAuditPrompt, extractAuditJson } from '../core/audit-egress.ts';
+import { auditGateTampering, buildAuditPrompt, extractAuditJson } from '../core/audit-egress.ts';
 import { classify } from '../core/classify.ts';
 import {
   AuditParseError,
@@ -231,6 +231,27 @@ export async function runNode(
       // ── audit ────────────────────────────────────────────────────────────────
       let output: AuditResult | undefined;
       if (node.accept.audit) {
+        // SEC4a — refuse to run a gate the builder rewrote. A repo-local audit
+        // script the worker touched is not the plan's gate anymore; retry with
+        // revert evidence (an honest formatter-touch is recoverable), terminal
+        // at maxAttempts. Checked against this attempt's staged set, so a
+        // reverted file (clean vs HEAD) passes on the retry.
+        const tampered = auditGateTampering(node.accept.audit.command, stagedFiles);
+        if (tampered.length > 0) {
+          const settle = settleRetryable(node, attempts, maxAttempts, {
+            gate: {
+              ran: `${node.accept.audit.command} (gate tampered: ${tampered.join(', ')})`,
+              exitCode: -1,
+            },
+          });
+          if (settle) return handBack(settle);
+          evidence =
+            `You modified the audit gate file(s): ${tampered.join(', ')}. ` +
+            "Revert them to their original content — the audit must run the plan's " +
+            'pristine gate, not yours.';
+          continue; // retryable — SAME tree; the builder can restore the gate
+        }
+
         const auditOutcome = await runAudit(node, cwd, deps, timeoutMs);
         if (auditOutcome.kind === 'parse-exhausted') {
           return handBack({

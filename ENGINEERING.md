@@ -126,6 +126,9 @@ reasons, conflict-file list) is a bug, not a retry.
   string interpolation anywhere), `Node.id` charset is schema-enforced, and tend state is read only from
   paths **outside** any worker-writable worktree. SHAs of refs pleach created are verified before use —
   a worker can reach shared git refs from inside a worktree; never trust a ref it could have moved.
+  The audit gate is protected the same way (SEC4): audit commands live outside worker-writable paths
+  or are integrity-checked against the staged set before the auditor spawns, and the auditor's prompt
+  treats repository content as untrusted data, never instructions.
 
 ## Testing doctrine
 

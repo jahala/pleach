@@ -266,6 +266,14 @@ applies to any auditor. `extractAuditJson` finds the **last** block so labelled 
 the content is not valid JSON, pleach re-runs the auditor up to `REAUDIT_BUDGET` (2) times
 before failing the node.
 
+**Gate integrity (ledger SEC4).** The auditor works in the tree the builder wrote, which
+makes the worktree a collusion channel. Two defenses: audit commands should live outside
+worker-writable paths (the `tend audit` pattern) — and for repo-local commands, pleach
+refuses to spawn the auditor when any file named in `audit.command` was touched by the
+builder (retryable with revert evidence, terminal at `maxAttempts`). The audit prompt also
+instructs the auditor to treat repository content as untrusted data and run only the given
+command.
+
 The parsed JSON must match `AuditResult` from `src/core/plan.ts`:
 
 ```ts
