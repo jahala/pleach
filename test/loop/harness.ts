@@ -133,6 +133,8 @@ export interface HarnessOpts {
   disposeDelay?: (nodeId: string) => Promise<void>;
   // Node ids whose dispose() throws IsolateCatastrophicError (fault injection).
   disposeThrows?: Set<string>;
+  // Make land() throw (fault injection for landPlan's journal paths).
+  landThrows?: Error;
 }
 
 export interface Harness {
@@ -230,6 +232,13 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     },
     async refSha(_cwd, ref): Promise<string | null> {
       return git.refs.get(ref) ?? null;
+    },
+    async land(_repoRoot, refs): Promise<{ branch: string; sha: string }> {
+      log.push('land', undefined, refs.join(','));
+      if (opts.landThrows) throw opts.landThrows;
+      const sha = git.newSha();
+      git.refs.set('main', sha);
+      return { branch: 'main', sha };
     },
   };
 

@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import {
   ConfigError,
+  LandBlockedError,
+  LandConflictError,
   LockHeldError,
   PlanInvalidError,
   RebuildRequiredError,
@@ -10,6 +12,7 @@ import { PlanSchema } from '../core/plan.ts';
 import { planJsonSchema } from '../core/schema-json.ts';
 import { nodeSummaries, validatePlan } from '../core/validate.ts';
 import type { RunSummary } from '../loop/deps.ts';
+import { landPlan } from '../loop/land.ts';
 import { runPlan } from '../loop/run-plan.ts';
 import { buildDeps, resolveSeams } from './config.ts';
 
@@ -17,6 +20,7 @@ const HELP = `pleach — deterministic conductor for DAGs of verified agent work
 
 Usage:
   pleach run <plan.json> [flags]     Execute a plan
+  pleach land <plan.json> [flags]    Merge a verified plan's sinks onto the checked-out branch
   pleach validate <plan.json>        Parse + validate a plan; print the topo order
   pleach schema                      Emit the plan contract as JSON Schema (for planners / codegen)
   pleach --help
@@ -35,9 +39,13 @@ Flags (run):
   --permission-mode MODE  Permission/approval mode for workers (default: bypassPermissions —
                           unattended workers can't answer prompts; safety is external). Rides
                           claude (any mode) and codex (bypassPermissions only).
+  --land                  After a fully-verified close, land the plan (see below); the run
+                          summary gains a "land" object. A red run never lands.
 
-Landing is manual by design: verified work is published as node/<id> branches;
-merge the integration node's branch yourself (git merge node/<feature>).
+Landing: verified work is published as node/<id> branches; \`pleach land\` merges
+the plan's sinks onto the branch checked out in --repo-root. It refuses unless
+EVERY plan node is verified, and a merge conflict or non-fast-forward aborts
+with the repo untouched — resolve those by hand (git merge node/<id>).
 
 Resuming is automatic: re-running a plan skips nodes already verified in the
 ledger (their node/<id> branch exists) — only unbuilt or previously-failed
@@ -60,6 +68,7 @@ interface Flags {
   allowedTools?: string;
   permissionMode: string;
   config?: string;
+  land: boolean;
 }
 
 class UsageError extends Error {
@@ -75,6 +84,7 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
     // (a curated allowlist can't cover MCP tools). Safety is external: disposable
     // worktree + cross-provider audit + gates. Override with --permission-mode.
     permissionMode: 'bypassPermissions',
+    land: false,
   };
   if (process.env.PLEACH_TEND_MODULE !== undefined) {
     flags.tendModule = process.env.PLEACH_TEND_MODULE;
@@ -132,6 +142,9 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         flags.permissionMode = takeValue(arg, next);
         i += 1;
         break;
+      case '--land':
+        flags.land = true;
+        break;
       default:
         throw new UsageError(`unknown flag '${arg}'`);
     }
@@ -187,9 +200,7 @@ export function summaryExitCode(summary: RunSummary): number {
   return clean ? 0 : 1;
 }
 
-async function verbRun(planPath: string, flags: Flags): Promise<number> {
-  const plan = await readPlan(planPath);
-
+async function depsFromFlags(flags: Flags) {
   const { runner, ledger } = await resolveSeams({
     repoRoot: flags.repoRoot,
     umbelBin: flags.umbelBin,
@@ -198,12 +209,17 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     ...(flags.allowedTools !== undefined ? { allowedTools: flags.allowedTools } : {}),
     ...(flags.tendModule !== undefined ? { tendModule: flags.tendModule } : {}),
   });
-  const deps = buildDeps({
+  return buildDeps({
     repoRoot: flags.repoRoot,
     runner,
     ledger,
     ...(flags.journal !== undefined ? { journal: flags.journal } : {}),
   });
+}
+
+async function verbRun(planPath: string, flags: Flags): Promise<number> {
+  const plan = await readPlan(planPath);
+  const deps = await depsFromFlags(flags);
 
   process.stderr.write(`pleach: running ${plan.nodes.length} nodes\n`);
   const summary = await runPlan(plan, deps, {
@@ -217,8 +233,25 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
       `pleach: skipped ${summary.alreadyVerified.length} already-verified node(s)\n`,
     );
   }
+  const code = summaryExitCode(summary);
+  // --land: a fully-verified close lands in the same invocation; a red run
+  // never lands (the summary alone says why).
+  if (flags.land && code === 0) {
+    const land = await landPlan(plan, deps, { repoRoot: flags.repoRoot });
+    process.stdout.write(`${JSON.stringify({ ...summary, land })}\n`);
+    return 0;
+  }
   process.stdout.write(`${JSON.stringify(summary)}\n`);
-  return summaryExitCode(summary);
+  return code;
+}
+
+async function verbLand(planPath: string, flags: Flags): Promise<number> {
+  const plan = await readPlan(planPath);
+  const deps = await depsFromFlags(flags);
+  const land = await landPlan(plan, deps, { repoRoot: flags.repoRoot });
+  process.stderr.write(`pleach: landed ${land.landed.join(', ')} on '${land.branch}'\n`);
+  process.stdout.write(`${JSON.stringify(land)}\n`);
+  return 0;
 }
 
 export async function runCli(argv: readonly string[]): Promise<number> {
@@ -237,6 +270,8 @@ export async function runCli(argv: readonly string[]): Promise<number> {
     switch (verb) {
       case 'run':
         return await verbRun(planPath, flags);
+      case 'land':
+        return await verbLand(planPath, flags);
       case 'validate':
         return await verbValidate(planPath);
       default:
@@ -256,7 +291,12 @@ export async function runCli(argv: readonly string[]): Promise<number> {
       process.stderr.write(`pleach: ${err.message}\n`);
       return 3;
     }
-    if (err instanceof RebuildRequiredError || err instanceof TendTransportError) {
+    if (
+      err instanceof RebuildRequiredError ||
+      err instanceof TendTransportError ||
+      err instanceof LandBlockedError ||
+      err instanceof LandConflictError
+    ) {
       process.stderr.write(`pleach: ${err.message}\n`);
       return 1;
     }

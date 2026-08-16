@@ -33,4 +33,6 @@ export type {
   Worker,
   WorkerResult,
 } from './loop/deps.ts';
+export type { LandOpts, LandSummary } from './loop/land.ts';
+export { landPlan } from './loop/land.ts';
 export { runPlan } from './loop/run-plan.ts';

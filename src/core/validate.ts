@@ -125,6 +125,17 @@ function computeWaves(
   return waves;
 }
 
+// The nodes no other plan node depends on, in plan order. Each node's tree is
+// merged from its deps' verified branches, so the sinks contain the whole
+// plan's work — they are what `pleach land` merges (ledger B3). Pure.
+export function sinkIds(plan: Plan): string[] {
+  const needed = new Set<string>();
+  for (const node of plan.nodes) {
+    for (const dep of node.needs) needed.add(dep);
+  }
+  return plan.nodes.filter((n) => !needed.has(n.id)).map((n) => n.id);
+}
+
 export interface NodeSummary {
   id: string;
   work: 'command' | 'prompt' | 'phases';

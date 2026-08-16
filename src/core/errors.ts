@@ -120,6 +120,33 @@ export class LedgerError extends Error {
   }
 }
 
+// Landing hit a real merge conflict between sink branches (ledger B3). The
+// landing worktree was disposed; the user's checkout is untouched.
+export class LandConflictError extends Error {
+  readonly name = 'LandConflictError';
+  readonly ref: string;
+  readonly files: string[];
+
+  constructor(ref: string, files: string[]) {
+    super(`landing ${ref} conflicts in: ${files.join(', ')} — resolve manually (git merge ${ref})`);
+    this.ref = ref;
+    this.files = files;
+  }
+}
+
+// Landing cannot proceed — detached HEAD, unverified nodes, or a refused
+// fast-forward (branch moved / overlapping uncommitted changes). Nothing was
+// modified.
+export class LandBlockedError extends Error {
+  readonly name = 'LandBlockedError';
+  readonly reason: string;
+
+  constructor(reason: string) {
+    super(`cannot land: ${reason}`);
+    this.reason = reason;
+  }
+}
+
 export class ConfigError extends Error {
   readonly name = 'ConfigError';
   readonly path: string;
