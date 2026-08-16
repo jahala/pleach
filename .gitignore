@@ -4,3 +4,6 @@ dist
 
 # Local tend MCP wiring — hardcodes a machine-specific missoula path
 .mcp.json
+
+# Playwright MCP session droppings (screenshots, page snapshots)
+.playwright-mcp/
