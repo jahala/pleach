@@ -71,6 +71,11 @@ checkpoint but have different lifetimes and trust domains.**
   on the user's branch — tend says verified while the working branch lacks the code. **Fix:** convention:
   every feature's terminal integration node (from A2's fix) is the landing unit; landing policy (auto-merge
   vs human merge) is an explicit conductor flag, not an omission.
+  - **Implemented (2026-08-16):** `pleach land <plan>` + `pleach run --land` (`src/loop/land.ts`,
+    `IsolateSeam.land`). All-or-nothing: refuses unless every plan node is verified-closed; sinks resolve
+    through the B1/C5 baseRef chain; merges build in a throwaway worktree and the checkout is touched only
+    by a final `--ff-only` (conflict → `LandConflictError`, repo untouched). Tests: `test/unit/land.test.ts`,
+    `test/integration/land.test.ts`, `test/loop/land.test.ts`, `test/e2e/land.test.ts`.
 
 - **B4 ⚠ [adv] No single-conductor lock.** Two conductors on one repo race `branch -f`, the worktree pool,
   and the ingester. **Fix:** `O_EXCL` lockfile per (repo, source); refuse to start if held.

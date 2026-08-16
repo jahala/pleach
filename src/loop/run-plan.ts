@@ -299,7 +299,8 @@ async function runUnderLock(
 
 // Every transitive ancestor (via needs) of a closed node is also closed — a
 // closed integration node contains its steps' work, so its steps need not run.
-function seedClosure(plan: Plan, closed: Map<string, string | null>): void {
+// Exported for loop/land.ts, which applies the same closure before landing.
+export function seedClosure(plan: Plan, closed: Map<string, string | null>): void {
   const byId = new Map<string, Node>(plan.nodes.map((n) => [n.id, n]));
   const queue = [...closed.keys()];
   while (queue.length > 0) {
@@ -320,7 +321,8 @@ function seedClosure(plan: Plan, closed: Map<string, string | null>): void {
 // (→ rebuild required). If the branch exists but points to a different SHA
 // than what the conductor recorded, the ref was force-moved (worker attack or
 // external push) — throw RebuildRequiredError immediately (C5 verify-before-use).
-async function resolveBaseRef(
+// Exported for loop/land.ts — landing resolves sinks through the same chain.
+export async function resolveBaseRef(
   deps: ConductorDeps,
   repoRoot: string,
   id: string,
