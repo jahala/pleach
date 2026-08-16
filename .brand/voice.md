@@ -57,7 +57,7 @@ Family-wide canonical terms live here; each product may add its own table in `pr
 ## Capitalization & Microcopy
 
 - **Sentence case everywhere** — headings, buttons, nav items, labels, table headers. Title Case Is Off-Brand. (Uppercase kicker labels are a CSS `text-transform`, not authored case.)
-- **Product names are lowercase, always:** plotplot, tilth, tend, petals, pleach, trellis.
+- **Product names are lowercase, always:** plotplot, tilth, tend, petals, pleach, umbel, copeca.
 - **Buttons are verb-first** and three words or fewer: "Install tilth", "Browse the garden", "View source".
 - **Errors** state what happened, why it matters, and the next action — in that order. No jokes, no "Oops".
 - **No exclamation marks** in interface copy. Numerals for numbers. Playfulness comes from wit and imagery, not punctuation.
