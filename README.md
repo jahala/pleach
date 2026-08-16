@@ -90,6 +90,11 @@ Landing is deterministic and fail-closed: it refuses unless **every** plan node 
 verified, builds the merges in a throwaway worktree, and touches your checkout only
 via a final fast-forward — a conflict aborts with the repo untouched.
 
+**Don't want to write plan.json by hand?** The repo ships a Claude Code skill,
+[`pleach-plan`](.claude/skills/pleach-plan/SKILL.md): give it a goal and a repo and it
+decomposes the work into a gated DAG, then proves the result with `pleach validate`
+before handing it over.
+
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full runtime substrate and flag reference.
 
 Doctrine: [`ENGINEERING.md`](ENGINEERING.md) · Plan contract: [`docs/contract/plan-schema.md`](docs/contract/plan-schema.md).
