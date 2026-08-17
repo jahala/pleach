@@ -156,14 +156,27 @@ async function runUnderLock(
       const changed = await deps.isolate.changedFiles(iso.cwd);
       if (changed.length === 0) return;
       await deps.isolate.stage(iso.cwd, changed);
-      const branch = `quarantine/${node.id}`;
-      const { sha } = await deps.isolate.commitBranch(
-        iso.cwd,
-        branch,
-        `pleach: ${node.id} quarantined\n\nsource: ${plan.source}\ngoal: ${plan.goal}`,
-      );
+      // #12: the quarantine branch may be checked out in a human's worktree
+      // (the owner inspecting the last failure). A busy-branch refusal falls
+      // back to a suffixed ref — evidence must never evaporate over ref
+      // hygiene. Other errors go to the honest quarantine-failed path.
+      const base = `quarantine/${node.id}`;
+      const message = `pleach: ${node.id} quarantined\n\nsource: ${plan.source}\ngoal: ${plan.goal}`;
+      let landedBranch: string | null = null;
+      let sha = '';
+      for (const branch of [base, `${base}.2`, `${base}.3`, `${base}.4`]) {
+        try {
+          ({ sha } = await deps.isolate.commitBranch(iso.cwd, branch, message));
+          landedBranch = branch;
+          break;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (!msg.includes('used by worktree')) throw err;
+        }
+      }
+      if (landedBranch === null) throw new Error(`all quarantine refs for ${base} are busy`);
       quarantined.add(node.id);
-      await deps.journal.append({ event: 'quarantined', node: node.id, branch, sha });
+      await deps.journal.append({ event: 'quarantined', node: node.id, branch: landedBranch, sha });
     } catch (err) {
       await deps.journal.append({
         event: 'quarantine-failed',
