@@ -21,7 +21,7 @@ tolerate unknown events and unknown fields.
 | `node-start` | `node` | a node's attempt ladder began |
 | `gate-fail` | `node`, `gate` (`setup`\|`markers`\|`smoke`\|`red`\|`green`\|`command`\|`audit-parse`\|`commit`\|…) | a gate failed (may retry) |
 | `blocked` | `node`, `reason` (the prompt text) | **needs a human** — worker stopped at a permission prompt; session terminated |
-| `verdict` | `node`, `status`, `attempts`, `evidence`, `telemetry` | a node reached its terminal verdict |
+| `verdict` | `node`, `status`, `attempts`, `telemetry` (worker-reported, e.g. `tokens`), `durationMs` (wall clock), `gate?`, `blockedReason?` | a node reached its terminal verdict |
 | `closed` | `node`, `sha` | verified close — `node/<id>` published at `sha` |
 | `not-closed` | `node` | ledger declined to verify-close (branch published, not verified) |
 | `quarantined` | `node`, `branch` (`quarantine/<id>`), `sha` | failed work preserved for inspection |
@@ -40,8 +40,8 @@ tolerate unknown events and unknown fields.
 - **Liveness**: the file is append-only during a run; tail it. A `blocked` event
   with no later `verdict` for that node means a human is needed *now*.
 - **Cost**: `verdict` events carry `telemetry` (worker-reported tokens where the
-  runner knows them) and `attempts`; duration fields are additive-planned (see
-  CHANGES). Aggregate cost-per-verified-claim = spend on the path that ended in
-  `closed`, divided by claims closed.
+  runner knows them), `durationMs`, and `attempts`. Aggregate
+  cost-per-verified-claim = spend on the path that ended in `closed`, divided by
+  claims closed.
 - **Library callers**: `buildDeps({ narrate })` receives every event after its
   durable append — same stream, in-process.
