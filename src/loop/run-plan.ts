@@ -205,7 +205,18 @@ async function runUnderLock(
       // alone. Journal-only enrichment — the Verdict contract is untouched.
       telemetry: verdict.telemetry,
       durationMs: Date.now() - startedAt,
-      ...(verdict.evidence.gate ? { gate: verdict.evidence.gate } : {}),
+      ...(verdict.evidence.gate
+        ? {
+            gate: {
+              ...verdict.evidence.gate,
+              // Journal-only diagnostics (contract untouched): the failing
+              // gate's actual output, so nobody debugs a red gate blind.
+              ...(outcome.gateOutputTail !== undefined
+                ? { outputTail: outcome.gateOutputTail }
+                : {}),
+            },
+          }
+        : {}),
       ...(verdict.evidence.blockedReason ? { blockedReason: verdict.evidence.blockedReason } : {}),
     });
 

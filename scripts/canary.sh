@@ -1,42 +1,59 @@
 #!/usr/bin/env bash
 # canary.sh — the tend2 × pleach integration canary (joint decision sheet #8).
 #
-# Proves the pair users actually get: a plan EMITTED BY TEND2 runs through
-# pleach to a verified close on plain git. Deterministic by construction — the
-# canary fixture uses command-work nodes only, so no agent, no API key, no
-# subscription is ever needed; CI-safe.
+# Proves the pair users actually get: a plan EMITTED BY TEND2's real CLI runs
+# through pleach's real CLI to a verified close on plain git. Deterministic by
+# construction — the fixture's single node is command-work and the gate is
+# tend2's own verifier, so no agent, no API key, no subscription; CI-safe.
 #
-# Two halves, per the agreed division:
-#   - tend2's CI validates fresh emissions against the vendored schema.
-#   - THIS script runs the canonical emitted plan through pleach's real CLI.
-# The vendored emission lives at test/canary/emitted-plan.json (provided by
-# tend2 from its emitter; re-vendored whenever their emitter changes shape).
+# The vendored emission + fixture live at test/canary/ (provided by tend2's
+# CANARY-0; their CI byte-diffs fresh emissions against this artifact, so
+# emission drift goes red on THEIR side before a stale artifact reaches us).
+#
+# tend2 CLI resolution: $PLEACH_CANARY_TEND2 (full invocation, e.g.
+# "node /path/to/loop/dist/cli.mjs"), else `tend2` on PATH (post-#49).
+# Unresolvable → SKIP (exit 0) locally; CI treats the published CLI as required.
 #
 # Failure protocol (agreed on-channel 2026-08-17): a red canary BLOCKS both
-# release lanes and gets reported on the walkie channel. A canary nobody gates
-# on is theater.
+# release lanes and gets reported on the walkie channel.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 PLAN="$ROOT/test/canary/emitted-plan.json"
+FIXTURE="$ROOT/test/canary/fixture"
 
 if [ ! -f "$PLAN" ]; then
-  echo "canary: SKIP — no vendored emission at test/canary/emitted-plan.json yet" >&2
-  echo "canary: (tend2 provides the canonical command-work emission; requested on-channel)" >&2
+  echo "canary: SKIP — no vendored emission at test/canary/emitted-plan.json" >&2
+  exit 0
+fi
+
+VERIFY_BIN="${PLEACH_CANARY_TEND2:-}"
+if [ -z "$VERIFY_BIN" ] && command -v tend2 > /dev/null 2>&1; then
+  VERIFY_BIN="tend2"
+fi
+if [ -z "$VERIFY_BIN" ]; then
+  echo "canary: SKIP — no tend2 CLI (set PLEACH_CANARY_TEND2 or install tend2)" >&2
   exit 0
 fi
 
 REPO="$(mktemp -d -t pleach-canary.XXXXXX)"
 trap 'rm -rf "$REPO" 2>/dev/null || true' EXIT
+
+cp -R "$FIXTURE/." "$REPO/"
 git -C "$REPO" init -q
-git -C "$REPO" -c user.email=canary@pleach -c user.name=canary commit -q --allow-empty -m seed
+git -C "$REPO" add -A
+git -C "$REPO" -c user.email=canary@pleach -c user.name=canary commit -qm 'seed: canary fixture'
+
+# Substitute the machine-local verifier invocation into the emitted plan.
+RESOLVED_PLAN="$REPO/.canary-plan.json"
+sed "s|{{VERIFY_BIN}}|$VERIFY_BIN|g" "$PLAN" > "$RESOLVED_PLAN"
 
 echo "canary: validate" >&2
-bun "$ROOT/src/main.ts" validate "$PLAN" > /dev/null
+bun "$ROOT/src/main.ts" validate "$RESOLVED_PLAN" > /dev/null
 
-echo "canary: run" >&2
-bun "$ROOT/src/main.ts" run "$PLAN" --repo-root "$REPO" > /tmp/pleach-canary-summary.json
+echo "canary: run (verifier: $VERIFY_BIN)" >&2
+bun "$ROOT/src/main.ts" run "$RESOLVED_PLAN" --repo-root "$REPO" > /tmp/pleach-canary-summary.json
 
 FAILED=$(jq -r '.failed | length' /tmp/pleach-canary-summary.json)
 CLOSED=$(jq -r '.closed | length' /tmp/pleach-canary-summary.json)
