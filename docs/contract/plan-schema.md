@@ -1,4 +1,4 @@
-# `@agent-contract/plan` v1.1.2 — canonical text
+# `@agent-contract/plan` v1.1.5 — canonical text
 
 This repo is the contract's home. `src/core/plan.ts` must match the fenced block below byte-for-byte
 (drift-tested). tend and umbel vendor from this file. Schema changes happen here first — doc + source +
@@ -44,6 +44,11 @@ const Node = z.object({
       provider: z.string(),                                 // MUST ≠ worker.provider — model diversity
       // OPTIONAL — pin the auditor's model; the provider still MUST differ (diversity).
       model: z.string().optional(),
+      // OPTIONAL (v1.1.5) — the command self-checks its audit target's integrity
+      // (e.g. a scoreboard-normalized payload pin) and resolves its executable
+      // out-of-tree; the conductor's tamper rule then exempts this command's
+      // argv tokens. Obligations: "Self-integral audits" prose.
+      selfIntegrity: z.boolean().optional(),
     }).optional(),
   }).default({}),
   policy: z.object({
@@ -187,3 +192,21 @@ canary's first run, 2026-08-17: an emitter assumed shell semantics, the
 conductor's argv-exec made `mkdir -p tools && printf … > tools/wordcount.mjs`
 create a directory named `tools/wordcount.mjs`, exit 0 — silent wrongness now
 structurally refused.
+
+## Self-integral audits (v1.1.5 — DRAFT pending tend2 ratification)
+
+`accept.audit.selfIntegrity: true` declares that the audit command carries its own
+gate-integrity check, and obliges it to: **(1)** refuse — by its own exit — any
+fitness-function change to its audit target since emission (e.g. a
+scoreboard-normalized payload pin: verifier-written stamps and check-state marks do
+not move it; edits to claims, evidence, or structure do); **(2)** resolve its
+executable and every script it runs from OUTSIDE worker-writable paths (LAW 1 — a
+worker-writable wrapper must never carry this declaration). In exchange the
+conductor's tamper rule (v1.1.4 era: refuse when any audit-command argv token was
+touched by the builder) stands down for that command — which is what makes WRITING
+gates (a verifier that stamps its own target file during the worker's mandated
+self-runs) conductible at all. Discovered by the phase-2 hub collision, 2026-08-17:
+two correct rules — stamps-live-in-the-file and the-checked-may-not-touch-the-checker
+— fired against each other on the only audited node; the fix distinguishes the
+scoreboard from the fitness function, the same distinction that fixed the payload
+pin that morning.

@@ -31,6 +31,11 @@ const Node = z.object({
       provider: z.string(),                                 // MUST ≠ worker.provider — model diversity
       // OPTIONAL — pin the auditor's model; the provider still MUST differ (diversity).
       model: z.string().optional(),
+      // OPTIONAL (v1.1.5) — the command self-checks its audit target's integrity
+      // (e.g. a scoreboard-normalized payload pin) and resolves its executable
+      // out-of-tree; the conductor's tamper rule then exempts this command's
+      // argv tokens. Obligations: "Self-integral audits" prose.
+      selfIntegrity: z.boolean().optional(),
     }).optional(),
   }).default({}),
   policy: z.object({
