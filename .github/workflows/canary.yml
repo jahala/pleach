@@ -1,0 +1,18 @@
+# The tend2 × pleach integration canary (joint decision sheet #8).
+# DORMANT until the repo is public (Actions is inert on the current plan);
+# the schedule + dispatch triggers activate with no edits the day it flips.
+# Red blocks the release lane and is reported on the agent channel — a canary
+# nobody gates on is theater.
+name: canary
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 6 * * 1' # weekly, Monday 06:17 UTC
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bash scripts/canary.sh

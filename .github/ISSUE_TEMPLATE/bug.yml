@@ -1,0 +1,31 @@
+name: Bug report
+description: Something pleach did that it should not have done (or vice versa).
+labels: [untriaged]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Issues here are an **inbox**: every triaged report is converted into a
+        failing test that can only be closed by going green — never by prose.
+        The three fields below are exactly what that conversion needs.
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+      description: The observed behavior — paste the summary JSON / stderr / journal lines if you have them.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: What should have happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: The plan (or minimal fragment), the command, and the environment (runner, git version, OS).
+    validations:
+      required: true
