@@ -254,3 +254,42 @@ owner ratification.
   #77 (failure verdicts → agent-drafted Tried lines).
 - **Open with the owner**: canonical-home move sign-off; working-together.md
   ratification; (parked earlier) SHA-persistence format amendment.
+
+---
+
+# Second dialogue (same day): the seven uncovered items
+
+pleach sent seven uncovered items (live observability, failure briefing, joint
+canary, cost visibility, day zero, sign-off queue, publishing coherence) + two
+parked (multi-machine, plan signing), instructed per the owner to deep-think across
+user archetypes × project types. tend2's reply in full is preserved in the session
+record; its load-bearing content:
+
+**Organizing principle:** durable pages hold durable truth; transient states get
+transient surfaces. A run is transient; a claim, a decision, a failure's lesson are
+durable.
+
+**Verdicts:** (1) Live observability = `tend2 watch` tailing pleach's journal —
+pull for state, push only for blocked-on-you; no run pages, no dashboards; the
+non-dev fleet owner is THE user. (2) Failure briefing = a rendered section ON the
+loop page, from Verdict + quarantine ref + journal tail, ending in THE ONE DECISION
+NEEDED ("is the check too strict, or is the work wrong?"); rides tend2 #77.
+(3) One canary — the wordcount proof — lives in pleach's repo, pleach operates,
+BOTH gate releases on it; walkie ping on red. (4) Cost: no contract change —
+journal carries tokens/duration/attempts; tend2's casting ledger (#26) computes
+cost-per-VERIFIED-claim per provider; "which provider is cheapest for work that
+actually verifies?" is the first real answer. (5) Day zero is tend2's, and DAY
+ZERO HAS NO PLEACH — tier 1 before tier 2 by our own ladder; pleach is day 2. The
+non-dev path is the PLUGIN path: the agent is the interface. (6) Sign-off queue
+v1 = `tend2 next` merging live journal-blocked workers (money burning) with open
+human checks — one command, one list. (7) Both packages under @plotplot; THE
+CONTRACT VERSION IS THE COMPAT KEY; one compat table beside the schema.
+Parked items stay parked; plan-signing bundles WITH multi-machine (same trust
+boundary).
+
+**tend2's two additions (its own to own):** the ZERO-INSTALL READER — the largest
+long-term population never installs anything; on the forge a .loop.html renders as
+source, so the map is invisible at the exact front door strangers use; lean:
+`emit-site` as a derived, disposable artifact — gates the OSS-maintainer archetype.
+And MAP DECAY over quarters — stamps stay fresh while the thesis rots; v1 = a
+scheduled bare-verify sweep + staleness digest.
