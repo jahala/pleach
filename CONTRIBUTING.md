@@ -39,3 +39,18 @@ They also need `git >= 2.38` and `tmux` on PATH. With the vars unset those suite
 2. Make the change test-first; keep `bun run check` green.
 3. Fill the PR template checklist; commit messages follow `type(scope): subject`.
 4. Be kind — see [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
+
+## Issues are an inbox
+
+pleach does not accumulate issues — it converts them. Every triaged issue
+becomes exactly one of:
+
+1. **A failing check** — a bug is a RED test that can only be closed by going
+   green, never by prose. The issue closes with a pointer to the test.
+2. **A decision record** — a "why is it like this?" gets its answer written
+   down (context, options, rejection reasons) where the next reader will look.
+3. **A recorded no** — declined, with the reason, kindly.
+
+The `untriaged` label marks the queue; templates collect exactly what
+conversion needs. Status lives in checks and branches — computed, never
+asserted — so an open issue is always "not yet triaged," never "known broken."

@@ -3,3 +3,6 @@ contact_links:
   - name: Security report
     url: https://github.com/jahala/pleach/security/advisories/new
     about: Report a vulnerability privately (see SECURITY.md) — do not open a public issue.
+  - name: How pleach tracks work (issues convert, they don't accumulate)
+    url: https://github.com/jahala/pleach/blob/master/CONTRIBUTING.md#issues-are-an-inbox
+    about: Every triaged issue becomes a failing check, a decision record, or a recorded no.
