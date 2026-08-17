@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lock-journal · garden</title>
+<link rel="stylesheet" href="../../slice/loop.css">
+<body>
+<noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
+<script type="text/markdown" id="loop">
+# Lock and Journal: Run Safety Primitives
+
+**Goal.** O_EXCL PID lockfile per (repoRoot, source) with stale-lock takeover (B4) — prevents two pleach processes from running the same plan concurrently. Append-only JSONL run journal records all plan events (run-start, node-start, verdict, gate-fail, closed, run-end) for post-mortem analysis.
+
+Two conductors on one repo would race the branches and the ledger; and a run no one can replay can't be debugged.
+
+## One conductor owns the repo until it releases
+
+A developer extends `src/seams/lock.ts` and the contract is clear from the first line: `acquire(repoRoot, source)` is the only entry point, and it either succeeds or throws. Internally, `src/seams/lock.ts:tryAcquireExcl` opens `.git/pleach-<sha1(source)[:12]>.lock` with the `'wx'` flag — `O_WRONLY | O_CREAT | O_EXCL` — which is atomic at the filesystem level. There is no window between check and create. If the file exists, `EEXIST` returns immediately and the caller reads the holder's PID from its content.
+
+From there, `src/seams/lock.ts:isAlive` calls `process.kill(pid, 0)`: no signal is sent, but the kernel answers whether the process exists. A successful call, or `EPERM` (process lives but can't be signalled), means a live holder and `LockHeldError` is thrown — `src/core/classify.ts:classify` maps this to `'terminal'`, ending the run cleanly. `ESRCH` — no such process — means the lock is stale: unlink it and retry `'wx'` once. If another process wins the retry race, `LockHeldError` is thrown with the new holder's PID. `release()` calls `unlink` and swallows `ENOENT`, making it idempotent regardless of crash order. The [conductor loop](conductor-loop.loop.html) acquires the lock at startup and holds it for the run's duration.
+
+## The JSONL file is the run's memory
+
+`src/seams/journal.ts:createJournal` returns a single `append(event)` method. Each call serializes the event to `JSON.stringify(event) + '\n'` and calls `appendFile` — one line, one syscall, no buffering. The parent directory is created once via a memoized `ensureDir` promise, so the first append pays `mkdir -p` and subsequent ones do not. Filesystem errors propagate rather than being swallowed: a lost trace is worse than a loud failure.
+
+The [conductor loop](conductor-loop.loop.html) writes `run-start`, `node-start`, `verdict`, `gate-fail`, `blocked`, `closed` or `not-closed`, and `run-end` as events through this seam. A developer reconstructing a misbehaving run opens the JSONL and reads the full sequence — `run-start` → node verdicts → `closed`/`not-closed` decisions → `run-end` with the bucket summary — without paying for real agents or re-executing anything. The scheduler's retry choices, the stale-lock takeover, the dual-close decision: all of it is in the file. See [../overview.html](garden.loop.html) for the project bet this serves.
+
+## Where
+
+src/seams/lock.ts; src/seams/journal.ts
+
+## How
+
+lock: sha1(source).slice(12) → .git/pleach-{sha}.lock; O_EXCL write of pid; stale: ESRCH → unlink + retry; journal: mkdir -p on first append; JSON.stringify per event + newline
+
+## Fit
+
+The run-safety primitives the loop relies on from start to finish.
+
+## Impact
+
+One conductor per (repo, source) is guaranteed, and every run leaves a replayable JSONL trace.
+
+## Tests
+- [!] (code) B4: second acquire from same process on same (repoRoot, source) → LockHeldError with holder pid === process.pid. (inferred from test/integration/lock.test.ts — real filesystem) · src/seams/lock.ts
+- [!] (code) B4: release → reacquire works (lock is deleted on release). (inferred from test/integration/lock.test.ts — real filesystem) · src/seams/lock.ts
+- [!] (code) B4: stale lock with dead pid (999999) → taken over; new lockfile contains current pid. (inferred from test/integration/lock.test.ts — real filesystem) · src/seams/lock.ts
+- [!] (code) B4: lockfile content is the acquiring process pid (decimal string). (inferred from test/integration/lock.test.ts — real filesystem) · src/seams/lock.ts
+- [!] (code) Journal: run-start and run-end events present in JSONL after runPlan completes. (inferred from test/loop/run-plan.test.ts:lock + journal) · src/loop/run-plan.ts
+
+## Needs
+
+## For
+#developer
+
+## Tried
+- 2026-08-17 migrated from v1 (docs/tend/features/lock-journal.tend.html) by `loop migrate`
+</script>
+<script src="../../slice/loop.js"></script>

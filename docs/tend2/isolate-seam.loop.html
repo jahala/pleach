@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>isolate-seam · garden</title>
+<link rel="stylesheet" href="../../slice/loop.css">
+<body>
+<noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
+<script type="text/markdown" id="loop">
+# Isolate Seam: Git Worktree Lifecycle
+
+**Goal.** Creates a detached git worktree per plan node at baseRefs[0], merges additional refs sequentially (keeping conflict markers in committed state for B3/C1), scans for conflict markers (C1), performs scoped staging (S1), commits to node/id branch (B2), resolves refs (B1), and disposes idempotently.
+
+Worktree isolation is the mechanism that lets parallel nodes work on independent copies without interference, and that ensures auditor writes can't contaminate verified commits.
+
+## A disposable worktree per node, never a shared branch
+
+`src/seams/isolate.ts:isolate` opens `src/seams/isolate.ts:createIsolateSeam` by calling `git worktree add --detach` into a `mkdtemp` subdirectory under the OS temp dir. Because every worktree lives at its own path, two nodes can fan out from the same base ref in parallel without git's "already checked out" error — the fan-out test (developer:1) exercises exactly this. The worktree starts at `baseRefs[0]`; each remaining ref is merged in sequence. A clean merge (exit 0) moves straight to the next. An unresolvable conflict (exit 1) commits the marker-laden tree in-place with `git add -u && git commit` — not rolled back, not hidden — and populates `conflictFiles` so the [conductor loop](conductor-loop.loop.html) can surface those paths in the agent's re-prompt. Exit > 1 or an unrelated-histories error triggers `merge --abort`, then `dispose`, then `IsolateCatastrophicError`: the worktree never lands.
+
+`isolate()` detaches a worktree and merges each dependency in turn, with three possible outcomes:
+
+
+
+<svg viewBox="0 0 660 400" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,sans-serif" font-size="11">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M 0 0 L 8 4 L 0 8 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect x="200" y="14" width="260" height="34" rx="6" fill="none" stroke="currentColor" stroke-width="1.5"/>
+  <text x="330" y="28" text-anchor="middle" fill="currentColor" font-size="10" font-style="italic">isolate(node, baseRefs)</text>
+  <text x="330" y="43" text-anchor="middle" fill="currentColor" font-size="11">git worktree add --detach baseRefs[0]</text>
+  <line x1="330" y1="48" x2="330" y2="78" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr)"/>
+  <text x="352" y="67" fill="currentColor" font-size="9" font-style="italic">for each ref in baseRefs[1..]</text>
+  <polygon points="330,80 430,120 330,160 230,120" fill="none" stroke="currentColor" stroke-width="1.5"/>
+  <text x="330" y="115" text-anchor="middle" fill="currentColor" font-size="10">git merge ref</text>
+  <text x="330" y="130" text-anchor="middle" fill="currentColor" font-size="10">outcome?</text>
+  <line x1="430" y1="120" x2="530" y2="120" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr)"/>
+  <text x="480" y="112" text-anchor="middle" fill="currentColor" font-size="9" font-weight="bold">exit 0</text>
+  <text x="480" y="124" text-anchor="middle" fill="currentColor" font-size="9">clean</text>
+  <path d="M 530 120 Q 600 120 600 50 Q 600 14 470 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <text x="614" y="72" fill="currentColor" font-size="9" text-anchor="middle">next ref</text>
+  <line x1="330" y1="160" x2="330" y2="190" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="348" y="178" fill="currentColor" font-size="9" font-weight="bold">exit 1</text>
+  <text x="348" y="190" fill="currentColor" font-size="9">(conflict)</text>
+  <rect x="205" y="192" width="250" height="50" rx="5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+  <text x="330" y="210" text-anchor="middle" fill="currentColor" font-size="11">git add -u &amp;&amp; git commit</text>
+  <text x="330" y="225" text-anchor="middle" fill="currentColor" font-size="10" font-style="italic">markers kept in-place</text>
+  <text x="330" y="239" text-anchor="middle" fill="currentColor" font-size="9">record conflictFiles</text>
+  <path d="M 205 217 Q 120 217 120 80 Q 120 14 210 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <text x="76" y="136" fill="currentColor" font-size="9" text-anchor="middle">next ref</text>
+  <line x1="230" y1="120" x2="100" y2="120" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="165" y="110" text-anchor="middle" fill="currentColor" font-size="9" font-weight="bold">exit &gt;1 /</text>
+  <text x="165" y="122" text-anchor="middle" fill="currentColor" font-size="9">unrelated</text>
+  <text x="165" y="134" text-anchor="middle" fill="currentColor" font-size="9">histories</text>
+  <line x1="100" y1="120" x2="100" y2="268" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="4" y="270" width="192" height="50" rx="5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="100" y="291" text-anchor="middle" fill="currentColor" font-size="11">merge --abort + dispose()</text>
+  <text x="100" y="307" text-anchor="middle" fill="currentColor" font-size="10">throw IsolateCatastrophicError</text>
+  <line x1="330" y1="242" x2="330" y2="318" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="352" y="284" fill="currentColor" font-size="9" font-style="italic">refs exhausted</text>
+  <rect x="190" y="320" width="280" height="40" rx="20" fill="none" stroke="currentColor" stroke-width="2"/>
+  <text x="330" y="337" text-anchor="middle" fill="currentColor" font-size="11" font-weight="bold">worktree ready</text>
+  <text x="330" y="352" text-anchor="middle" fill="currentColor" font-size="10" font-style="italic">returns { cwd, conflictFiles, dispose }</text>
+  <text x="330" y="382" text-anchor="middle" fill="currentColor" font-size="9" opacity="0.7">conductor loop calls scanMarkers / stage / commitBranch after this point</text>
+</svg>
+^caption: isolate() merge logic only. scanMarkers / stage / commitBranch / dispose are conductor-loop steps called after isolate() returns.
+
+
+
+## Markers surface to the agent; the gate decides whether they land
+
+`src/seams/isolate.ts:scanMarkers` runs `git grep -l --untracked -E '^(<{7}|={7}|>{7})'`. Exit 1 from git grep means no matches — clean. Exit 0 means matches — returns the file list. Exit > 1 means git itself failed; the function throws `IsolateCatastrophicError` rather than returning an empty array. A gate that cannot run must fail closed: reporting "clean" here would let conflict markers reach a verified branch (operator:0).
+
+`src/seams/isolate.ts:stage` calls `git add -A -- <files>`, never bare `-A`. The file list comes from the union of `WorkerResult.filesTouched` and `src/seams/isolate.ts:changedFiles` (porcelain, gitignored paths excluded by default). Junk the agent dropped but didn't name cannot enter the commit. `src/seams/isolate.ts:commitBranch` then runs `git commit --allow-empty`, `git branch -f <branch> HEAD`, and `git rev-parse HEAD` — returning a 40-char SHA the loop records as `evidence.diffRef` before calling `emitVerdict` (operator:3). `src/seams/isolate.ts:refSha` resolves any ref to its SHA, returning null if absent — the loop's resume logic uses this to locate a prior verified node's branch without throwing on a first run.
+
+`dispose` calls `git worktree remove --force` and treats "is not a working tree" and "not found" as success (idempotent for double-dispose). Any other non-zero exit throws `IsolateCatastrophicError`, so an unrecognized failure is never silently swallowed. After the worktree is removed, `dispose` deletes the `mkdtemp` parent directory (`tmpBase`) it owns via `fs.rm`. The [conductor loop](conductor-loop.loop.html) holds `dispose` until after `emitVerdict` returns, ensuring a waking dependent never sees its dependency's worktree vanish mid-resolve. See [../overview.html](garden.loop.html) for the project's broader bet.
+
+## Where
+
+src/seams/isolate.ts
+
+## How
+
+git worktree add --detach in os tmpdir; sequential git merge per baseRef[1..]; conflict exit=1 commits markers in-place; IsolateCatastrophicError on exit>1 or unrelated-histories; git grep -E for marker scan; git add -A -- <files> for scoped stage
+
+## Fit
+
+The git substrate the conductor loop isolates, gates, and commits against.
+
+## Impact
+
+Every node builds in a disposable worktree off its verified deps, so conflict markers and junk can never reach a verified branch.
+
+## Tests
+- [x] (code) Fan-out: two concurrent isolates off one ref succeed at independent paths (no 'already checked out' error). (inferred from test/integration/isolate.test.ts — real git repo) · test/integration/isolate.test.ts @cc4d3bc
+- [x] (code) B3/C1 join-with-conflict: merging conflicting branches keeps markers in committed state; conflictFiles populated. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @fb6cf96
+- [x] (code) Clean join: disjoint files merge cleanly; conflictFiles is empty; both files present. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @2a46961
+- [x] (code) B1 missing non-first ref → IsolateCatastrophicError; no leftover worktree in repo. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @f0dfc7a
+- [x] (code) C1 scanMarkers: conflicted file detected after merge; empty array after resolution. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @2eaa9e1
+- [x] (code) S1 scoped stage: only named files committed to branch; junk file excluded from commit. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @de0a0dc
+- [x] (code) B2 commitBranch returns 40-char sha; allow-empty succeeds; refSha resolves to same sha. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @4fc7590
+- [x] (code) dispose: worktree removed from git worktree list; second dispose is a no-op (no throw). (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @b7900ef
+- [x] (code) C1 gate-must-fail-closed: scanMarkers on non-repo path throws IsolateCatastrophicError. (inferred from test/integration/isolate.test.ts lead-review) · test/integration/isolate.test.ts @b18d9e9
+- [x] (code) S1/C2 changedFiles: modified tracked + untracked-unignored listed; gitignored files excluded. (inferred from test/integration/isolate.test.ts lead changedFiles) · test/integration/isolate.test.ts @888fd83
+
+## Needs
+
+## For
+#developer #operator
+
+## Tried
+- 2026-08-17 migrated from v1 (docs/tend/features/isolate-seam.tend.html) by `loop migrate`
+</script>
+<script src="../../slice/loop.js"></script>

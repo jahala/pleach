@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>operator · garden</title>
+<link rel="stylesheet" href="../../slice/loop.css">
+<body>
+<noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
+<script type="text/markdown" id="loop">
+# Operator
+
+**Who.** A practitioner who has already planned work in a tend garden and wants a swarm of stochastic agents to build and verify it unattended — won't read every diff, so the machine, not their own judgment, has to decide what 'done' means. Trusts gates over vibes; measures the run by what landed verified, not by what an agent claimed.
+
+Runs `pleach run plan.json` against a tend-generated DAG and walks away, returning to verified `node/<id>` branches or a RunSummary naming exactly which nodes failed and why. Scenario: it's late; they queue a six-node feature plan before bed — claude builds the leaves, codex audits the integration node, tend's honest-middle decides — and they wake to '5 closed, 1 partial,' with nothing unverified leaked into a branch.
+
+## Needs
+
+## For
+
+## Jobs
+- When I hand a multi-step plan to stochastic agents, because I can't personally review every diff and I won't take an agent's word that it 'finished,' we believe only work that mechanically clears the gates should ever land. We'll know we got it right when every published `node/<id>` branch passed smoke + conflict-marker + cross-provider audit, and no node tend declined to verify is ever reported closed.
+- When one node produces a broken or conflict-marked result, because its dependents would merge from it and inherit the poison silently, we believe the conductor must quarantine that node instead of letting the subtree build on garbage. We'll know we got it right when a node that fails its gates publishes no branch and every dependent is reported `skipped` rather than built on a bad base.
+- When I start a run and leave, because no human is present to answer a worker's permission prompt or kill a hung one, we believe every attempt is bounded and settles cleanly. We'll know we got it right when a worker stalled at a prompt is reported `blocked` with the prompt text, a silent hang is killed at its timeout, and the run never deadlocks holding a slot.
+- When a run crashes or I re-run it tomorrow, because rebuilding already-verified work burns my subscription and risks regressions, we believe verified nodes resume from their recorded commit. We'll know we got it right when the next run isolates dependents off the recorded SHA / `node/<id>` ref and rebuilds nothing already closed.
+- When the run finishes, because I need to know in one glance whether to trust it or intervene, we believe the outcome is unambiguous and scriptable. We'll know we got it right when exit 0 means every node closed verified, and any partial / failed / blocked / skipped node drops the exit to 1 with a per-bucket breakdown on stdout.
+
+## Tried
+- 2026-08-17 migrated from v1 (docs/tend/features/operator.tend.html) by `loop migrate`
+</script>
+<script src="../../slice/loop.js"></script>
