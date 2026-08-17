@@ -154,3 +154,21 @@ export interface WorkerResult {
 - **Work-union mapping pin** (tend's seven-beat pipeline → this contract): PRE → `setup`; VERIFY →
   `accept`; POST/DOC → conductor ledger + tend ingestion. `{command}` nodes are exit-code gated with no
   test wrap.
+
+## Shared law (v1.1.3 — binding prose, DRAFT pending tend2 ratification)
+
+Two laws every implementation of this contract — planner, conductor, runner, ledger — must
+uphold. Converged in the tend2 × pleach dialogue of 2026-08-17 (deliberation archive:
+`docs/research/walkie-dialogue-2026-08-17.md`; explanatory home: tend2's
+`docs/bridge/working-together.md`).
+
+- **LAW 1 — the checker must not be writable by the checked.** No gate, verifier, or audit
+  command may be modifiable by the worker whose output it judges. Instances: pleach's
+  gate-integrity check + auditor inoculation (SEC4); tend2's verifyBin resolved outside the
+  worktree (#76); verifier-only stamps; `accept.audit.provider ≠` builder provider; audits
+  run from checkouts the worker cannot reach.
+- **LAW 2 — status is computed, never asserted.** No agent's claim of done, pass, or verified
+  is ever recorded directly; status is derived by code from evidence. Instances: a pass only
+  a verifier writes; branches only gates publish; an undiscriminated pass caps at `partial`
+  (negctrl); a bug closes only by its RED check going green; exit codes are claims — the
+  verifier reads evidence content.

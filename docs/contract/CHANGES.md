@@ -18,3 +18,10 @@
   auditor's model, mirroring `worker.model`. The provider-diversity rule is unchanged —
   `accept.audit.provider` must still differ from the worker provider. Backward-compatible:
   omitting it preserves the prior behaviour (the runner picks the provider's default model).
+
+- **v1.1.3 (DRAFT, 2026-08-17 — pending tend2 ratification)** — binding-prose-only: adds the
+  "Shared law" section (LAW 1: the checker must not be writable by the checked; LAW 2: status is
+  computed, never asserted), with instances from both implementations. No schema-block change;
+  drift guards unaffected. Converged in the tend2 × pleach walkie dialogue 2026-08-17
+  (archive: docs/research/walkie-dialogue-2026-08-17.md); explanatory companion:
+  tend2 docs/bridge/working-together.md.
