@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>garden</title>
+<link rel="stylesheet" href="../../slice/loop.css">
+<body>
+<noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
+<script type="text/markdown" id="loop">
+# Project Garden
+
+**Goal.** pleach — a deterministic conductor that interweaves a DAG of agent-built work into one verified canopy: it isolates each plan node in its own git worktree, enforces gates, and publishes a branch only for work that mechanically passed them.
+
+Stochastic agents can't be trusted to self-certify, and reviewing every diff defeats the point of delegating to them. pleach makes deterministic code — never agent prose — the sole authority on what counts as done, so a swarm can build unattended without garbage reaching the trunk.
+
+## Agents produce; code decides
+
+pleach occupies the middle of the plot-plot suite. [tend](tend-seam.loop.html) holds the feature ledger and decides what "done" means; [umbel](umbel-seam.loop.html) holds each agent steady over tmux; pleach is the loop between them. Its single invariant: every canonical decision — close, verify, quarantine, retry, skip — is deterministic code. Agent output is parsed evidence, never a control-flow branch.
+
+The design answers a verified defect ledger. Three classes of failure were found in the pre-pleach bridge: semantic deadlocks where honest work could never close (class A), state-lifetime splits where tend's `verified` status outran the git artifact it claimed (class B), and gate holes where conflict markers reached verified branches (class C). Each defect lands as a RED test before its fix (`docs/ledger.md`).
+
+## The shape of a run
+
+A run takes a `Plan` — a DAG of nodes — and drives it to a `RunSummary`. [The conductor loop](conductor-loop.loop.html) is the engine: it schedules ready nodes, runs each through a fixed gate ladder, and publishes a `node/<id>` branch only for work that cleared every gate. The operator reaches it through [pleach run](cli-run.loop.html), after [pleach validate](cli-validate.loop.html) has rejected any malformed or cyclic plan before an agent is spawned.
+
+Under the loop, each seam owns one concern: [isolate](isolate-seam.loop.html) gives every node a disposable git worktree off its verified dependencies, [umbel](umbel-seam.loop.html) drives the agent worker, [the tend seam](tend-seam.loop.html) is the single serial writer to the ledger, [audit egress](audit-egress.loop.html) recovers the cross-provider auditor's verdict intact, and [lock and journal](lock-journal.loop.html) keep one conductor per repo with a replayable trace of every decision. Two invariants bind them: commit-before-emit — the branch exists in git before tend is told "verified" (ledger B2) — and quarantine — a node that fails its gates publishes nothing, and its dependents are skipped rather than built on a bad base. 
+
+<svg viewBox="0 0 640 280" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,monospace" font-size="12">
+  <!-- External systems -->
+  <rect x="10" y="100" width="100" height="44" rx="6" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.6"/>
+  <text x="60" y="120" text-anchor="middle" fill="currentColor" opacity="0.8" font-size="13" font-weight="600">tend</text>
+  <text x="60" y="136" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="10">ledger</text>
+
+  <rect x="530" y="100" width="100" height="44" rx="6" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.6"/>
+  <text x="580" y="120" text-anchor="middle" fill="currentColor" opacity="0.8" font-size="13" font-weight="600">umbel</text>
+  <text x="580" y="136" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="10">agent runner</text>
+
+  <!-- Arrows between external + pleach -->
+  <line x1="110" y1="122" x2="155" y2="122" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)" opacity="0.7"/>
+  <text x="132" y="115" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">verdict</text>
+  <line x1="155" y1="132" x2="110" y2="132" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)" opacity="0.7"/>
+  <text x="132" y="148" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">closed?</text>
+
+  <line x1="485" y1="122" x2="530" y2="122" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)" opacity="0.7"/>
+  <text x="507" y="115" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">spawn</text>
+  <line x1="530" y1="132" x2="485" y2="132" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)" opacity="0.7"/>
+  <text x="507" y="148" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">result</text>
+
+  <!-- pleach outer box -->
+  <rect x="155" y="20" width="330" height="240" rx="8" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"/>
+  <text x="320" y="14" text-anchor="middle" fill="currentColor" opacity="0.5" font-size="10">pleach</text>
+
+  <!-- faces layer -->
+  <rect x="170" y="30" width="300" height="30" rx="4" fill="none" stroke="currentColor" stroke-width="1" opacity="0.5"/>
+  <text x="320" y="50" text-anchor="middle" fill="currentColor" opacity="0.75">faces/  — argv - exit codes - RunSummary</text>
+
+  <!-- loop layer -->
+  <rect x="170" y="76" width="300" height="44" rx="4" fill="none" stroke="currentColor" stroke-width="1" opacity="0.5"/>
+  <text x="320" y="94" text-anchor="middle" fill="currentColor" opacity="0.75" font-weight="600">loop/  — run-plan - run-node - run-work</text>
+  <text x="320" y="111" text-anchor="middle" fill="currentColor" opacity="0.55" font-size="10">DAG scheduler - gate ladder - classify - commit-before-emit</text>
+
+  <!-- seams layer -->
+  <rect x="170" y="136" width="300" height="44" rx="4" fill="none" stroke="currentColor" stroke-width="1" opacity="0.5"/>
+  <text x="320" y="154" text-anchor="middle" fill="currentColor" opacity="0.75">seams/  — all I/O</text>
+  <text x="320" y="171" text-anchor="middle" fill="currentColor" opacity="0.55" font-size="10">umbel - tend - isolate - exec - lock - journal</text>
+
+  <!-- core layer -->
+  <rect x="170" y="196" width="300" height="44" rx="4" fill="none" stroke="currentColor" stroke-width="1" opacity="0.5"/>
+  <text x="320" y="214" text-anchor="middle" fill="currentColor" opacity="0.75">core/  — pure, total</text>
+  <text x="320" y="231" text-anchor="middle" fill="currentColor" opacity="0.55" font-size="10">plan - validate - classify - errors</text>
+
+  <!-- downward arrows inside -->
+  <line x1="320" y1="60" x2="320" y2="74" stroke="currentColor" stroke-width="1" marker-end="url(#arr)" opacity="0.4"/>
+  <line x1="320" y1="120" x2="320" y2="134" stroke="currentColor" stroke-width="1" marker-end="url(#arr)" opacity="0.4"/>
+  <line x1="320" y1="180" x2="320" y2="194" stroke="currentColor" stroke-width="1" marker-end="url(#arr)" opacity="0.4"/>
+
+  <!-- plan.json input -->
+  <text x="320" y="270" text-anchor="middle" fill="currentColor" opacity="0.45" font-size="10">plan.json → faces/ → loop(injected seams) → node/&lt;id&gt; branches</text>
+
+  <defs>
+    <marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L6,3 z" fill="currentColor" opacity="0.7"/>
+    </marker>
+  </defs>
+</svg>
+^caption: tend decides; pleach interweaves; umbel holds each node steady. Core is pure; all I/O lives in seams.
+
+
+
+## The contract
+
+`docs/contract/plan-schema.md` is the canonical home of `@agent-contract/plan` v1.1.1 — the typed vocabulary tend, pleach, and umbel share. `src/core/plan.ts` matches its fenced block byte-for-byte under a drift test, so changing the schema means moving the doc, the source, the drift test, and `docs/contract/CHANGES.md` in one commit. The error taxonomy in `src/core/classify.ts` makes every retry decision a pure function of error type, not ad-hoc branching — the same discipline, one layer down.
+
+## Where
+
+This repo: faces/ (cli) -> loop/ (run-plan, run-node, run-work) -> seams/ (umbel, tend, isolate, exec, lock, journal) -> core/ (plan, validate, classify, errors). Strict downward dependencies; core pure, seams thin I/O.
+
+## How
+
+A pure, total core defines the contract and the classify ladder; thin seams own all I/O; the loop composes injected seams to isolate -> gate -> audit -> commit-before-emit each node, publishing node/<id> only for verified work. Every defect in docs/ledger.md maps to a RED test.
+
+## Fit
+
+The middle leg of the plot-plot suite — tend decides what the garden should bear, pleach interweaves the branches into one verified canopy, umbel holds each grower steady — and the canonical home of the @agent-contract/plan schema all three share.
+
+## Impact
+
+Agent work becomes trustworthy by construction: only verified nodes publish branches, failures quarantine their own subtree, and the operator reads one RunSummary instead of auditing N diffs. Agents produce; code decides.
+
+## Needs
+
+## Children #audit-egress #cli-land #cli-run #cli-validate #conductor-loop #isolate-seam #lock-journal #pluggable-adapters #scripted-runner #tend-seam #umbel-seam
+
+## For #operator #developer
+
+## Tried
+- 2026-08-17 migrated from v1 (docs/tend/overview.html) by `loop migrate`
+</script>
+<script src="../../slice/loop.js"></script>

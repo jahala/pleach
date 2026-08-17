@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pluggable-adapters · garden</title>
+<link rel="stylesheet" href="../../slice/loop.css">
+<body>
+<noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
+<script type="text/markdown" id="loop">
+# Pluggable Adapters: Any Runner, Any Ledger
+
+**Goal.** Generalizes pleach from the tend+umbel pair into a standalone conductor: RunnerSeam/LedgerSeam ports (loop/deps.ts) with bundled adapters in src/adapters/ (umbelRunner, tendLedger, gitLedger); resolveSeams selects them from a pleach.config.ts or default wiring; gitLedger makes a run standalone (node/* branches = the verified record); pleach schema emits the plan JSON Schema for planners. A src/index.ts barrel exports the programmatic surface (runPlan, buildDeps, validatePlan, planJsonSchema, typed errors, public types) so pleach is importable as a library, not only a CLI; a bundled scriptedRunner adapter (deterministic, no-LLM) joins umbel/tend/git.
+
+pleach was wired to tend (ledger) + umbel (runner) specifically. The ports-and-adapters split lets it pair with any similar runner or ledger and run standalone on git, without changing the loop or core — answering "can it work with other tools?" with a concrete yes.
+
+## One data contract, two pluggable seams
+
+pleach used to be wired to exactly two tools — umbel for the runner, tend for the ledger. The generalization keeps the deterministic loop untouched and turns those two couplings into ports: `RunnerSeam` and `LedgerSeam` in `src/loop/deps.ts`. The loop composes whatever satisfies them and imports no concrete adapter. `src/adapters/` holds the bundled bridges — `umbelRunner`, `tendLedger`, and the new `gitLedger` — beside pleach's own I/O in `src/seams/`. The integration surface is exactly one data contract (the [plan](cli-validate.loop.html)) plus those two code seams; a new tool is a new adapter file and the engine never changes. The full contracts live in `docs/adapters.md`.
+
+## gitLedger makes a run standalone
+
+`src/adapters/git.ts:gitLedger` is the unlock: a `LedgerSeam` backed by git itself. `readClosed` lists the `node/*` branches pleach has already published and returns each one's commit SHA — the verified record and the resume base, with no external service. `emitVerdict` is pure — `{ closed: verdict.status === 'done' }` — because pleach commits the branch before it asks (commit-before-emit). With gitLedger, `pleach run plan.json` works on git + a runner alone; tend becomes an opt-in rigor upgrade, not a requirement.
+
+## The config selects the pair
+
+`src/faces/config.ts:resolveSeams` decides which adapters a run uses, in precedence: an explicit `--config <path>`, else a `pleach.config.ts` at the repo root, else the defaults — `umbelRunner` plus `tendLedger` (when `--tend-module` is given) or `gitLedger`. A `pleach.config.ts` exports `{ runner, ledger }` built from the bundled factories or your own; a missing or malformed one throws the typed `ConfigError`. `loadConfig` also duck-types the resolved adapters — checking that the runner has `spawnWorker` and the ledger has `readClosed`/`emitVerdict` as functions — so a wrong-shape config fails at the boundary with `ConfigError`, not deep in a run (`src/faces/config.ts:68–76`). The plan stays portable: it names the provider per node (`worker.provider`) while the config names the tools — so the same plan runs whether the runner is umbel, an API wrapper, or a test double. For programmatic planners, `pleach schema` emits the plan contract as JSON Schema (`src/core/schema-json.ts:planJsonSchema`, kept out of the drift-pinned `plan.ts`).
+
+pleach conducts **local** executors over git worktrees with **automatable** verification — that is the boundary. Cloud-autonomous agents or human-gated approval need an adapter that bridges into the sync send→wait→kill and deterministic-emitVerdict contracts. See `docs/adapters.md` and the [project bet](garden.loop.html).
+
+## Where
+
+src/loop/deps.ts; src/adapters/git.ts; src/faces/config.ts; src/core/schema-json.ts; src/index.ts; src/adapters/scripted.ts
+
+## How
+
+RunnerSeam/LedgerSeam interfaces (loop/deps.ts) the loop composes but never imports; src/adapters/{umbel,tend,git}.ts bundled bridges + package.json exports ./adapters/* + ./config; resolveSeams precedence (--config | <repoRoot>/pleach.config.ts | defaults: umbelRunner + (tendModule ? tendLedger : gitLedger)); gitLedger reads node/* branches via git for-each-ref; planJsonSchema via z.toJSONSchema; typed ConfigError + LedgerError; buildDeps(opts) assembles a ConductorDeps from the four pleach seams plus an injected runner/ledger; src/index.ts re-exports the public surface and the package '.' export points at it (the bin stays main.ts); scriptedRunner(scenarios) is a deterministic RunnerSeam exported at ./adapters/scripted
+
+## Fit
+
+The generalization layer: the two ports the loop depends on, the bundled adapters that satisfy them, and the config that selects a pair. "plot-plot" (tend + umbel) becomes pleach's batteries-included default, not its only mode.
+
+## Impact
+
+A non-tend, non-umbel user runs pleach standalone on git, or wires any runner/ledger via a pleach.config.ts, without forking the engine. tend + umbel become reference adapters, not requirements. pleach is also usable as a library — import { runPlan, buildDeps } from 'pleach' — and runnable with zero external tooling via the scripted runner.
+
+## Tests
+- [x] (code) resolveSeams loads a pleach.config.ts and returns its custom runner + ledger (not the defaults). · test/integration/config-resolve.test.ts @549f5d3
+- [x] (code) With no config and no --tend-module, resolveSeams defaults to gitLedger — pleach runs standalone. · test/integration/config-resolve.test.ts @10c8d7a
+- [ ] (code) A missing (explicit --config) or malformed pleach.config.ts throws the typed ConfigError. · /no/such/pleach.config.ts
+- [x] (code) gitLedger.readClosed lists node/* branches → Map<id,sha> (resume record, non-node branches excluded); emitVerdict returns {closed: status==='done'}. · test/integration/git-ledger.test.ts @d8bc07c
+- [x] (code) planJsonSchema() emits the @agent-contract/plan contract as a JSON Schema describing nodes/goal/source — kept OUT of the drift-pinned plan.ts. · test/unit/plan-schema-export.test.ts @ebdb652
+- [x] (code) The package root ('pleach' / src/index.ts) exports the programmatic surface: runPlan, validatePlan, planJsonSchema, buildDeps, the typed errors, and the public types. · test/unit/library-export.test.ts @e99b033
+- [x] (code) buildDeps(opts) assembles a ConductorDeps from the four pleach seams (exec/isolate/lock/journal) plus an injected runner + ledger. · test/unit/library-export.test.ts @938cd88
+- [x] (code) The bundled directCliRunner (headless claude -p / codex exec) is selectable with `pleach run --runner direct-cli` and reaches a verified close with no umbel and no tmux; --runner with a config file is a contradiction and errors (no silent fallback). · test/e2e/direct-cli.test.ts @79b2e31
+
+## Needs
+
+## For
+#developer #operator
+
+## Tried
+- 2026-08-17 migrated from v1 (docs/tend/features/pluggable-adapters.tend.html) by `loop migrate`
+- 2026-08-17 v1 steps collapsed; history in git
+- 2026-08-17 Adapters are runtime-injected code seams (RunnerSeam/LedgerSeam instances in a config file or --runner selection), not a plugin registry or declarative adapter names in the plan. — The plan stays a pure data contract (worker.provider is intent; the config decides how a provider is reached), portable across environments. A string-keyed plugin registry was rejected: it reintroduces interpretation at the loop boundary and makes the integration surface a lookup convention instead of two typed interfaces. Explicit contradiction (--runner + config) errors rather than silently preferring one.
+- 2026-08-17 v1: enabled #cli-run (user-journey edge — v2 `## Needs` is dependency-only; not migrated as a graph edge)
+</script>
+<script src="../../slice/loop.js"></script>

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>umbel-seam · garden</title>
+<link rel="stylesheet" href="../../slice/loop.css">
+<body>
+<noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
+<script type="text/markdown" id="loop">
+# umbel Runner Adapter: Agent Worker Bridge
+
+**Goal.** Spawns umbel-managed agent workers (claude, codex) over ExecFn arg-arrays, drives them with send/wait/kill, threads sinceMtime for race-free stop detection, gathers finalMessage+actions+diff after stop, and passes provider-specific flags (allowedTools for claude, permissionMode for claude+codex).
+
+The umbel seam is the only path to spawning and communicating with agent workers; correctness of sinceMtime threading and reason classification determines whether the loop can safely distinguish stop/timeout/dead/blocked.
+
+## One typed exit for every way an agent can stop
+
+`umbelRunner(opts)` in `src/adapters/umbel.ts` is the bundled runner adapter's public factory — over an exec-injectable `createUmbelSeam(exec, opts)` core — and returns a value satisfying the `RunnerSeam` port (`loop/deps.ts`): a single `spawnWorker` call yielding a `Worker` of three methods and a name. Every interaction with a stochastic agent flows through this port; nothing else in the codebase touches umbel directly, and a `pleach.config.ts` can swap umbel for any other runner. The [conductor loop](conductor-loop.loop.html) receives the runner at startup and calls `spawnWorker` per node; the [audit egress](audit-egress.loop.html) runs its cross-provider auditor through the exact same runner.
+
+`spawnWorker` assembles an `umbel spawn` argv — `--name pl-<hex> --cwd` plus `--provider`, `--model`, `--allowed-tools` (claude only), `--permission-mode` (claude + codex), and any `--env K=V` pairs for test injection — and throws `WorkerSpawnError` on a non-zero exit or a missing name echo. From there the adapter is stateful in exactly one way: a `sinceMtime` number captured from `send --json` output and threaded into the next `wait --json --since <mtime>`. This is the race-free stop detection the spec names: `sinceMtime` pins the pre-send filesystem snapshot, so a stop file written before the send cannot satisfy the wait, and after `wait` returns `stop` the adapter advances `sinceMtime` to `Date.now()` — a second wait without a new send gets `timeout`, not a stale match on the same file.
+
+## Dead tmux session and hung workers never hold a slot
+
+The six `wait` reasons (`stop`, `dead`, `timeout`, `aborted`, `input`, `idle`) split cleanly in `gatherWorkerResult`. Only `stop` triggers the three subsidiary calls: `umbel read` for the untruncated `finalMessage` (ledger C4 — audit egress parses this text), `umbel actions --json` for `filesEdited ∪ filesWritten` (deduplicated into `filesTouched`), and `umbel diff`. Everything else returns an empty `finalMessage` and empty `filesTouched`. `input` and `idle` carry the umbel `message` field so the loop can surface the blocking prompt text in the verdict before skipping dependents. A `dead` result — the tmux session killed out-of-band — surfaces immediately; a `timeout` fires when umbel's own deadline expires and umbel kills the process before returning. Neither path leaves the adapter waiting. `kill` is tolerant of already-dead workers (non-zero exit is ignored), so the loop can always call it on teardown without a guard.
+
+
+
+<svg viewBox="0 0 560 320" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,monospace" font-size="12">
+  <!-- Background: transparent so light/dark host backgrounds show through -->
+  <defs>
+    <marker id="ah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <!-- Nodes -->
+  <!-- spawn -->
+  <rect x="20" y="130" width="90" height="36" rx="6" fill="none" stroke="currentColor" stroke-width="1.5"/>
+  <text x="65" y="153" text-anchor="middle" fill="currentColor">spawnWorker</text>
+
+  <!-- send -->
+  <rect x="170" y="130" width="70" height="36" rx="6" fill="none" stroke="currentColor" stroke-width="1.5"/>
+  <text x="205" y="153" text-anchor="middle" fill="currentColor">send</text>
+
+  <!-- wait -->
+  <rect x="300" y="130" width="70" height="36" rx="6" fill="none" stroke="currentColor" stroke-width="1.5"/>
+  <text x="335" y="148" text-anchor="middle" fill="currentColor">wait</text>
+  <text x="335" y="161" text-anchor="middle" fill="currentColor" font-size="10">(reason)</text>
+
+  <!-- stop branch -->
+  <rect x="420" y="60" width="120" height="36" rx="6" fill="none" stroke="currentColor" stroke-width="1.5"/>
+  <text x="480" y="78" text-anchor="middle" fill="currentColor">read / actions</text>
+  <text x="480" y="91" text-anchor="middle" fill="currentColor">/ diff</text>
+
+  <!-- kill -->
+  <rect x="420" y="130" width="70" height="36" rx="6" fill="none" stroke="currentColor" stroke-width="1.5"/>
+  <text x="455" y="153" text-anchor="middle" fill="currentColor">kill</text>
+
+  <!-- blocked box -->
+  <rect x="420" y="200" width="120" height="36" rx="6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="480" y="218" text-anchor="middle" fill="currentColor">blocked</text>
+  <text x="480" y="231" text-anchor="middle" fill="currentColor" font-size="10">(input | idle)</text>
+
+  <!-- WorkerSpawnError label -->
+  <text x="110" y="185" fill="currentColor" font-size="10">WorkerSpawnError</text>
+  <line x1="65" y1="166" x2="65" y2="195" stroke="currentColor" stroke-width="1" stroke-dasharray="3,2"/>
+  <line x1="65" y1="195" x2="108" y2="195" stroke="currentColor" stroke-width="1" stroke-dasharray="3,2"/>
+
+  <!-- spawn → send -->
+  <line x1="110" y1="148" x2="168" y2="148" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah)"/>
+  <text x="139" y="143" text-anchor="middle" fill="currentColor" font-size="10">Worker</text>
+
+  <!-- send → wait -->
+  <line x1="240" y1="148" x2="298" y2="148" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah)"/>
+  <text x="269" y="143" text-anchor="middle" fill="currentColor" font-size="10">sinceMtime</text>
+
+  <!-- wait → stop branch (read/actions/diff) -->
+  <line x1="370" y1="138" x2="418" y2="90" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah)"/>
+  <text x="385" y="108" text-anchor="start" fill="currentColor" font-size="10">stop</text>
+
+  <!-- wait → kill (dead|timeout|aborted) -->
+  <line x1="370" y1="148" x2="418" y2="148" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah)"/>
+  <text x="382" y="143" text-anchor="middle" fill="currentColor" font-size="10">dead|timeout</text>
+  <text x="382" y="155" text-anchor="middle" fill="currentColor" font-size="10">|aborted</text>
+
+  <!-- wait → blocked -->
+  <line x1="370" y1="158" x2="418" y2="210" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah)"/>
+  <text x="385" y="196" text-anchor="start" fill="currentColor" font-size="10">input|idle</text>
+
+  <!-- read/actions/diff → kill -->
+  <line x1="480" y1="96" x2="480" y2="128" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <!-- send loop-back arrow -->
+  <path d="M205 130 Q205 90 205 90 Q205 72 205 72 Q205 56 240 56 Q290 56 310 56 Q335 56 335 128" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#ah)"/>
+  <text x="270" y="50" text-anchor="middle" fill="currentColor" font-size="10">loop: next turn</text>
+
+  <!-- Caption -->
+  <text x="280" y="310" text-anchor="middle" fill="currentColor" font-size="10" opacity="0.7">Worker lifecycle — spawn once, drive with send→wait, gather on stop, always kill</text>
+</svg>
+^caption: Worker lifecycle in the umbel seam. Dashed loop = multi-turn conversation. Dashed border = loop-layer concern (blocked surfaced to caller).
+
+
+
+## Where
+
+src/adapters/umbel.ts
+
+## How
+
+umbel spawn --name --cwd [--provider] [--model] [--allowed-tools] [--permission-mode] [--env K=V]; send --json captures sinceMtime; wait --json --since --timeout; read/actions/diff gathered on stop; WorkerSpawnError/WorkerSeamError on failures
+
+## Fit
+
+The execution boundary between the deterministic loop and the vendor-churning agent providers; isolates umbel/provider churn behind one seam.
+
+## Impact
+
+Stochastic agents are driven through one reliable spawn->send->wait->kill boundary, with dead/timeout/blocked surfaced as typed reasons the loop can act on.
+
+## Tests
+- [x] (code) Happy path: spawn→send→wait(stop)→kill; finalMessage non-empty and contains sent text; filesTouched is array; telemetry defined; actions manifest has numeric turnCount. (inferred from test/integration/umbel-seam.test.ts — requires real umbel binary + fake-claude) · test/integration/umbel-seam.test.ts @c8cbe8a
+- [x] (code) Two-turn conversation: sinceMtime threads correctly; r2.finalMessage reflects turn-two prompt, not stale turn-one stop. (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @83633cb
+- [x] (code) Timeout: second wait without new send returns reason=timeout (sinceMtime advances past existing stop file). (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @a5b8a50
+- [x] (code) Dead: killing tmux session out-of-band returns reason=dead. (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @227f140
+- [x] (code) Spawn failure on nonexistent cwd throws WorkerSpawnError. (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @853b69f
+
+## Needs
+
+## For
+#developer #operator
+
+## Tried
+- 2026-08-17 migrated from v1 (docs/tend/features/umbel-seam.tend.html) by `loop migrate`
+</script>
+<script src="../../slice/loop.js"></script>
