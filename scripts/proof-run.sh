@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # proof-run.sh — run the pleach wordcount proof end-to-end.
 #
+# NOTE (2026-08-18): this script drives the V1 TEND LANE, sunset upstream (tag v1-final
+# in the tend2 repo). It remains as the historical wordcount proof; new proofs use the
+# tend2 lane (see examples/three-ways + test/canary).
 # Usage:
 #   bash scripts/proof-run.sh [--skip-setup] [--max-concurrency N]
 #

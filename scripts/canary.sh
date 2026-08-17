@@ -11,7 +11,7 @@
 # emission drift goes red on THEIR side before a stale artifact reaches us).
 #
 # tend2 CLI resolution: $PLEACH_CANARY_TEND2 (full invocation, e.g.
-# "node /path/to/loop/dist/cli.mjs"), else `tend2` on PATH (post-#49).
+# "node /path/to/dist/cli.js"), else `tend2` on PATH (post-#49).
 # Unresolvable → SKIP (exit 0) locally; CI treats the published CLI as required.
 #
 # Failure protocol (agreed on-channel 2026-08-17): a red canary BLOCKS both
