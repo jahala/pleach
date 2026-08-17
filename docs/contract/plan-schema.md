@@ -154,3 +154,36 @@ export interface WorkerResult {
 - **Work-union mapping pin** (tend's seven-beat pipeline → this contract): PRE → `setup`; VERIFY →
   `accept`; POST/DOC → conductor ledger + tend ingestion. `{command}` nodes are exit-code gated with no
   test wrap.
+
+## Shared law (v1.1.3 — binding prose, tend2-ratified 2026-08-17)
+
+Two laws every implementation of this contract — planner, conductor, runner, ledger — must
+uphold. Converged in the tend2 × pleach dialogue of 2026-08-17 (deliberation archive:
+`docs/research/walkie-dialogue-2026-08-17.md`; explanatory home: tend2's
+`docs/bridge/working-together.md`).
+
+- **LAW 1 — the checker must not be writable by the checked.** No gate, verifier, or audit
+  command may be modifiable by the worker whose output it judges. Instances: pleach's
+  gate-integrity check + auditor inoculation (SEC4); tend2's verifyBin resolved outside the
+  worktree (#76); verifier-only stamps; `accept.audit.provider ≠` builder provider; audits
+  run from checkouts the worker cannot reach.
+- **LAW 2 — status is computed, never asserted.** No agent's claim of done, pass, or verified
+  is ever recorded directly; status is derived by code from evidence. Instances: a pass only
+  a verifier writes; branches only gates publish; an undiscriminated pass caps at `partial`
+  (negctrl); a bug closes only by its RED check going green; exit codes are claims — the
+  verifier reads evidence content.
+
+## Exec semantics (v1.1.4 — binding prose, tend2-ratified 2026-08-17)
+
+Every plan-authored command string — `work.command`, `work.test`, `setup`,
+`accept.smoke` — is parsed to an argv by POSIX-quoting rules and executed
+**without a shell** (deterministic, injection-resistant; the conductor never
+interprets `&&`, `|`, `;`, or redirection). A bare shell-operator token is
+refused loudly with the escape hatch named: authors wanting shell features
+write them explicitly — `bash -lc '<command>'`. (`accept.audit.command` is
+relayed as text to the auditor agent, which runs it in its own shell; the
+no-shell rule governs what the CONDUCTOR execs.) Discovered by the joint
+canary's first run, 2026-08-17: an emitter assumed shell semantics, the
+conductor's argv-exec made `mkdir -p tools && printf … > tools/wordcount.mjs`
+create a directory named `tools/wordcount.mjs`, exit 0 — silent wrongness now
+structurally refused.

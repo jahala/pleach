@@ -976,10 +976,11 @@ code {
         <div>
           <div class="beat-title">work</div>
           <p class="beat-desc">
-            The configured agent adapter drives the worker inside the worktree — one unit of agent work, isolated, observable.
-            This is the only beat the agent controls. umbel is the batteries-included adapter; a <code>pleach.config.ts</code> swaps in any other.
+            The configured runner drives the worker inside the worktree — one unit of agent work, isolated, observable.
+            This is the only beat the agent controls. Two runners ship in the box: umbel drives interactive agent CLIs in tmux;
+            direct-cli needs only the claude and codex CLIs on PATH. A <code>pleach.config.ts</code> swaps in any other.
           </p>
-          <span class="beat-cmd" aria-label="umbel command example">umbel run --node &lt;id&gt;</span>
+          <span class="beat-cmd" aria-label="runner flag example">pleach run plan.json --runner direct-cli</span>
         </div>
       </div>
 
@@ -989,8 +990,8 @@ code {
           <div class="beat-title">gates</div>
           <p class="beat-desc">
             Conflict-marker scan catches unresolved merges. Smoke runs the node's declared test command.
-            Cross-provider audit sends the diff to a different model — if claude built the node, codex audits —
-            so no model grades its own work.
+            Cross-provider audit re-runs the plan's check command in a fresh session from a different vendor —
+            if claude built the node, codex audits — so no model grades its own work.
           </p>
         </div>
       </div>
@@ -1012,9 +1013,10 @@ code {
           <div class="beat-title">publish</div>
           <p class="beat-desc">
             Only verified nodes publish a <code>node/&lt;id&gt;</code> branch.
-            Dependents build from that branch.
-            A failed or quarantined node publishes nothing — its dependents are skipped,
-            not built on a bad base.
+            Dependents build from that branch, and <code>pleach land</code> merges the verified
+            result onto your working branch. A failed node publishes no node branch — its final
+            tree is kept on <code>quarantine/&lt;id&gt;</code> as evidence, and its dependents are
+            skipped, not built on a bad base.
           </p>
         </div>
       </div>
@@ -1048,15 +1050,19 @@ code {
         </p>
 
         <p>
-          <strong>Cross-provider audit</strong> — a different AI model reviews the diff.
-          If claude built the node, codex audits. The auditor has no stake in a green result.
-          This is the gate that makes the others honest.
+          <strong>Cross-provider audit</strong> — an agent from a different vendor re-runs the
+          plan's check command in a fresh session and relays its machine-parsed verdict.
+          If claude built the node, codex audits. The auditor executes; it does not opine —
+          and pleach refuses to run a gate the builder edited, so a node cannot rewrite its
+          own audit. This is the gate that makes the others honest.
         </p>
 
         <div class="audit-note">
           <strong>Quarantine.</strong>
-          A failed node publishes nothing. Its dependents are skipped — they are not built on a bad base,
-          and they are not marked failed either. They wait until the upstream is resolved.
+          A failed node publishes no node branch — its final tree is kept on
+          <code>quarantine/&lt;id&gt;</code> so the evidence survives. Its dependents are skipped —
+          they are not built on a bad base, and they are not marked failed either. They wait
+          until the upstream is resolved.
         </div>
       </div>
 
@@ -1134,7 +1140,7 @@ code {
 
     <div class="stats-row" aria-label="Project statistics">
       <div class="stat-card reveal d1">
-        <span class="stat-num" data-target="9" aria-label="9 features">0</span>
+        <span class="stat-num" data-target="18" aria-label="18 features">0</span>
         <span class="stat-label">features</span>
       </div>
       <div class="stat-card reveal d2">
@@ -1142,11 +1148,11 @@ code {
         <span class="stat-label">verified</span>
       </div>
       <div class="stat-card reveal d3">
-        <span class="stat-num" data-target="77" aria-label="77 checks">0</span>
+        <span class="stat-num" data-target="82" aria-label="82 checks">0</span>
         <span class="stat-label">checks</span>
       </div>
       <div class="stat-card reveal d4">
-        <span class="stat-num" data-target="217" aria-label="217 tests passing">0</span>
+        <span class="stat-num" data-target="277" aria-label="277 tests passing">0</span>
         <span class="stat-label">tests passing</span>
       </div>
       <div class="stat-card reveal d5">
@@ -1179,7 +1185,7 @@ code {
         <div class="scope-col-title" id="scope-for-label">for</div>
         <ul class="scope-list" role="list">
           <li>Unattended multi-step agent builds where gates decide what lands</li>
-          <li>A concrete plan — a real DAG of nodes, not a vague list (tend, a hand-authored JSON, or any planner)</li>
+          <li>A concrete plan — a real DAG of nodes, not a vague list (tend, the bundled pleach-plan skill, or any planner)</li>
           <li>Work you will not review diff-by-diff yourself</li>
           <li>Projects where a bad node silently poisoning its dependents is not acceptable</li>
           <li>Teams that need audit evidence, not just a green suite</li>
@@ -1191,7 +1197,7 @@ code {
           <li>A single quick edit you'll review before merging</li>
           <li>Interactive pairing sessions where you're guiding each step</li>
           <li>Anything you'll hand-review anyway — the gates add overhead for no benefit</li>
-          <li>Projects without a concrete plan (tend, a hand-authored JSON, or any other planner) first</li>
+          <li>Projects without a concrete plan first — though the bundled pleach-plan skill will write one with you</li>
         </ul>
       </div>
     </div>
@@ -1202,15 +1208,16 @@ code {
 <section class="start-band" id="start" aria-labelledby="start-heading">
   <div class="container">
     <p class="kicker reveal">start</p>
-    <h2 id="start-heading" class="reveal d1" style="max-width: 22ch;">run a plan, publish only what's verified</h2>
+    <h2 id="start-heading" class="reveal d1" style="max-width: 22ch;">run a plan, land only what's verified</h2>
 
     <div class="cmd-block reveal d2" aria-label="pleach CLI usage">
       <div class="cmd-line">pleach validate plan.json</div>
-      <div class="cmd-line">pleach run plan.json</div>
+      <div class="cmd-line">pleach run plan.json --runner direct-cli</div>
+      <div class="cmd-line">pleach land plan.json</div>
     </div>
 
     <p class="start-family reveal d3">
-      Part of the plotplot garden — pleach runs standalone on git + any agent tool: the bundled examples run on git + bun alone, no agent and no API keys, and you can drive the conductor from your own code with <code>import { runPlan } from 'pleach'</code>. tend and umbel are the batteries-included reference adapters; swap either via <code>pleach.config.ts</code>. <a href="docs/adapters.md" style="color:rgba(250,245,233,0.75)">Read the adapters guide →</a>
+      Part of the plotplot garden — pleach runs standalone on git + any agent tool. With the claude and codex CLIs on PATH, <code>--runner direct-cli</code> needs nothing else; the bundled examples run on git + bun alone, no agent and no API keys; and your own code can drive the conductor with <code>import { runPlan } from 'pleach'</code>. tend and umbel are the batteries-included reference adapters; swap either via <code>pleach.config.ts</code>. <a href="docs/adapters.md" style="color:rgba(250,245,233,0.75)">Read the adapters guide →</a>
     </p>
 
     <div class="start-actions reveal d4">

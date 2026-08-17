@@ -62,3 +62,14 @@ export function toArgv(command: string): string[] {
   if (hasToken) argv.push(current);
   return argv;
 }
+
+// Canary catch (2026-08-17): pleach execs plan command strings WITHOUT a
+// shell (SEC1 arg-array). A bare shell-operator token means the author
+// expected shell semantics — exec'ing it would pass '&&' or '>' as literal
+// arguments and do silently-wrong things (mkdir happily creates a directory
+// named 'tools/w.mjs'). Callers fail loud and name the escape hatch instead.
+const SHELL_OPERATORS = new Set(['&&', '||', '|', ';', '>', '>>', '<', '&', '2>', '2>&1']);
+
+export function shellOperatorTokens(tokens: readonly string[]): string[] {
+  return tokens.filter((t) => SHELL_OPERATORS.has(t));
+}

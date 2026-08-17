@@ -1,0 +1,25 @@
+name: Feature request
+description: Something pleach should do that it doesn't.
+labels: [untriaged]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Requests here are an **inbox**: a triaged request becomes a planned
+        check on the roadmap, a decision record explaining why not, or a
+        recorded no. Small-and-sharp is the bar — most "wouldn't it be nice"
+        features belong in an adapter, not the conductor.
+  - type: textarea
+    id: job
+    attributes:
+      label: The job to be done
+      description: What are you trying to accomplish when you reach for this — the situation, not the feature.
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: What happens today
+      description: How pleach currently falls short of that job (commands, output, workaround if any).
+    validations:
+      required: true

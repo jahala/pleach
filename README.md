@@ -14,6 +14,12 @@ ledger). Agents produce; code decides.
 **Status — v1.** The end-to-end proof run closes: a multi-step feature builds through real agent
 workers, is cross-provider audited, and verifies ([`docs/research/proof-run.md`](docs/research/proof-run.md)).
 
+> **New to the plotplot tools?** pleach is *day 2* — reach for it when work runs unattended,
+> in parallel, or must be trusted later. Day 1 is a single verifier loop
+> (tend2's quickstart, linked here when it publishes); a two-line edit you review
+> yourself needs neither. The full when-to-use ladder: [`docs/journal.md`](docs/journal.md)'s
+> companion in the joint doc, and each tool's skill carries its own "not for" list.
+
 ## Install
 
 pleach is a Bun CLI. It requires `git >= 2.38` at run time. The default
