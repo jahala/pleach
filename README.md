@@ -76,6 +76,8 @@ export default {
 
 Swap either line for your own adapter without touching the plan or any other config.
 
+> **Note:** upstream tend v1 is sunset (tend2 ships without it); this lane serves frozen v1 estates.
+
 **Opting into tend.** Pass `--tend-module <path-to-tend-ingester>` to replace `gitLedger` with the
 tend ledger. tend then owns verdict verification and the feature's close state. `--umbel-bin` (or
 `$PLEACH_UMBEL_BIN`) selects the umbel binary when using the default runner.
