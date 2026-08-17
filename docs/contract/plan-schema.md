@@ -173,7 +173,7 @@ uphold. Converged in the tend2 × pleach dialogue of 2026-08-17 (deliberation ar
   (negctrl); a bug closes only by its RED check going green; exit codes are claims — the
   verifier reads evidence content.
 
-## Exec semantics (v1.1.4 — binding prose, DRAFT pending tend2 ratification)
+## Exec semantics (v1.1.4 — binding prose, tend2-ratified 2026-08-17)
 
 Every plan-authored command string — `work.command`, `work.test`, `setup`,
 `accept.smoke` — is parsed to an argv by POSIX-quoting rules and executed
