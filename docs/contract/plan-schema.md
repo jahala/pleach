@@ -193,7 +193,7 @@ conductor's argv-exec made `mkdir -p tools && printf … > tools/wordcount.mjs`
 create a directory named `tools/wordcount.mjs`, exit 0 — silent wrongness now
 structurally refused.
 
-## Self-integral audits (v1.1.5 — DRAFT pending tend2 ratification)
+## Self-integral audits (v1.1.5 — tend2-ratified 2026-08-17)
 
 `accept.audit.selfIntegrity: true` declares that the audit command carries its own
 gate-integrity check, and obliges it to: **(1)** refuse — by its own exit — any

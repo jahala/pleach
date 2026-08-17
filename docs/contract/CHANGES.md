@@ -32,7 +32,7 @@
   canary's first run: tend2's emitter assumed shell semantics, pleach's arg-array exec turned
   `&&`/`>` into literal mkdir arguments (exit 0, silent garbage). No schema-block change.
 
-- **v1.1.5 (DRAFT, 2026-08-17 — pending tend2 ratification)** — `accept.audit.selfIntegrity?:
+- **v1.1.5 (2026-08-17 — tend2-ratified same day, on-channel, against 7239484)** — `accept.audit.selfIntegrity?:
   boolean` (backward-compatible optional) + "Self-integral audits" binding prose: a declared
   command self-checks its audit target's fitness-function integrity (scoreboard-normalized pin)
   and resolves out-of-tree; the conductor's argv-token tamper rule stands down for it. Fix for
