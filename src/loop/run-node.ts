@@ -250,14 +250,28 @@ export async function runNode(
         // revert evidence (an honest formatter-touch is recoverable), terminal
         // at maxAttempts. Checked against this attempt's staged set, so a
         // reverted file (clean vs HEAD) passes on the retry.
-        const tampered = auditGateTampering(node.accept.audit.command, stagedFiles);
+        // v1.1.5 selfIntegrity: the audit command carries its own
+        // fitness-function pin (scoreboard-normalized) and an out-of-tree
+        // binary — the phase-2 hub collision's fix. Declared → the token rule
+        // stands down; the audit itself refuses real tampering ("base is
+        // stale"). Undeclared commands keep the strict rule.
+        const tampered = node.accept.audit.selfIntegrity
+          ? []
+          : auditGateTampering(node.accept.audit.command, stagedFiles);
         if (tampered.length > 0) {
-          const settle = settleRetryable(node, attempts, maxAttempts, {
-            gate: {
-              ran: `${node.accept.audit.command} (gate tampered: ${tampered.join(', ')})`,
-              exitCode: -1,
+          const tamperMsg = `${node.accept.audit.command} (gate tampered: ${tampered.join(', ')})`;
+          const settle = settleRetryable(
+            node,
+            attempts,
+            maxAttempts,
+            {
+              gate: {
+                ran: tamperMsg,
+                exitCode: -1,
+              },
             },
-          });
+            tamperMsg,
+          );
           if (settle) return handBack(settle);
           evidence =
             `You modified the audit gate file(s): ${tampered.join(', ')}. ` +

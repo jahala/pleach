@@ -31,3 +31,9 @@
   shell-operator tokens are refused loudly (escape hatch: `bash -lc '…'`). Found by the joint
   canary's first run: tend2's emitter assumed shell semantics, pleach's arg-array exec turned
   `&&`/`>` into literal mkdir arguments (exit 0, silent garbage). No schema-block change.
+
+- **v1.1.5 (DRAFT, 2026-08-17 — pending tend2 ratification)** — `accept.audit.selfIntegrity?:
+  boolean` (backward-compatible optional) + "Self-integral audits" binding prose: a declared
+  command self-checks its audit target's fitness-function integrity (scoreboard-normalized pin)
+  and resolves out-of-tree; the conductor's argv-token tamper rule stands down for it. Fix for
+  the phase-2 hub collision (writing verifier × tamper heuristic — finding #10).
