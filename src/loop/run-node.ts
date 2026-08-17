@@ -377,7 +377,18 @@ async function runAudit(
       parsed = AuditResultSchema.parse(raw);
     } catch (err) {
       // Zod failure or AuditParseError → reaudit (bad egress), bounded.
-      if (classify({ kind: 'error', error: asError(err) }) === 'reaudit') continue;
+      if (classify({ kind: 'error', error: asError(err) }) === 'reaudit') {
+        // #13: the raw auditor message is the ONE artifact that diagnoses an
+        // egress failure — keep it (capped) or debug blind, as the phase-2
+        // hub rerun proved.
+        await deps.journal.append({
+          event: 'audit-egress-unparseable',
+          node: node.id,
+          reaudit,
+          egress: res.finalMessage.slice(-2000),
+        });
+        continue;
+      }
       // A non-reaudit error from parsing is unexpected; rethrow honestly.
       throw err;
     }
