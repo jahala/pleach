@@ -155,7 +155,7 @@ export interface WorkerResult {
   `accept`; POST/DOC → conductor ledger + tend ingestion. `{command}` nodes are exit-code gated with no
   test wrap.
 
-## Shared law (v1.1.3 — binding prose, DRAFT pending tend2 ratification)
+## Shared law (v1.1.3 — binding prose, tend2-ratified 2026-08-17)
 
 Two laws every implementation of this contract — planner, conductor, runner, ledger — must
 uphold. Converged in the tend2 × pleach dialogue of 2026-08-17 (deliberation archive:
