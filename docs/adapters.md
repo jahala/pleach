@@ -345,6 +345,10 @@ Five adapters ship in `src/adapters/` as the batteries-included configuration:
 The zero-config default wires `umbelRunner` + `gitLedger` (or `tendLedger` when
 `--tend-module` is given). This is the standalone "run and verify locally" configuration.
 
+> **Upstream note (2026-08-18):** tend v1 has left the tend2 repo (final state at their tag
+> `v1-final`); `@plotplot/tend2` ships the tend2 lane only. pleach's `tendLedger` +
+> `--tend-module` remain for frozen v1 estates; new gardens use the tend2 lane above.
+
 **The tend2 lane (no adapter needed).** tend's successor, tend2 (`@plotplot/tend2`),
 integrates through the thin waist alone: its emitter produces plans whose gate is its own
 verifier run as `accept.smoke` (`tend2 verify <file> --expect-payload <sha>` — deterministic,
