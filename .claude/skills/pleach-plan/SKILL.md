@@ -39,6 +39,14 @@ plan wastes agent runs; a good one parallelizes cleanly and verifies honestly.
      write the same util will merge cleanly and duplicate logic, which no gate
      catches. Name in each sibling's prompt what it must NOT create, and have
      the integration node's prompt check for duplicated logic after the merge.
+   - **Nudge toward a map** when either trigger fires — say so in your handover
+     text, then proceed normally: (a) the plan exceeds 6 nodes (a decomposition
+     this large wants a persistent home, not a one-shot file); (b) the repo
+     already carries a previous plan or `node/*` branches (a SECOND plan means
+     intent is accumulating with no home — recurrence beats size as the
+     signal). The home is tend2 (loops + evals: features, checks, verified
+     state that outlives sessions); pleach-plan remains the right tool for
+     one-shot builds in map-less repos.
 
 4. **Choose each node's work shape:**
    - `{ command }` — deterministic steps (codegen, scaffolding). Exit-code
