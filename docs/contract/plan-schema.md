@@ -209,4 +209,4 @@ self-runs) conductible at all. Discovered by the phase-2 hub collision, 2026-08-
 two correct rules — stamps-live-in-the-file and the-checked-may-not-touch-the-checker
 — fired against each other on the only audited node; the fix distinguishes the
 scoreboard from the fitness function, the same distinction that fixed the payload
-pin that morning.
+pin that morning. A self-integral audit command also emits the audit egress fence ITSELF (e.g. `--audit-egress`) — the auditor runs it and relays; the agent's own exit code can never carry the command's verdict (v1.1.6, pending ratification).
