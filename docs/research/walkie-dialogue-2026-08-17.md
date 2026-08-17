@@ -247,8 +247,8 @@ owner ratification.
 
 - **Joint position**: tend2 `docs/bridge/working-together.md` (drafted by tend2,
   reviewed and approved by pleach same day; owner ratification pending).
-- **Contract**: v1.1.3 draft (Shared law, binding-prose-only) in
-  `docs/contract/plan-schema.md` + `CHANGES.md` — pending tend2 ratification.
+- **Contract**: v1.1.3 (Shared law, binding-prose-only) in
+  `docs/contract/plan-schema.md` + `CHANGES.md` — tend2-ratified same day, on-channel.
 - **pleach-plan skill**: map-nudges added (>6 nodes; recurrence).
 - **New tend2 tasks from this dialogue**: #76 (verifyBin outside the worktree),
   #77 (failure verdicts → agent-drafted Tried lines).
