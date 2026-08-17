@@ -26,7 +26,7 @@
   (archive: docs/research/walkie-dialogue-2026-08-17.md); explanatory companion:
   tend2 docs/bridge/working-together.md.
 
-- **v1.1.4 (DRAFT, 2026-08-17 — pending tend2 ratification)** — binding-prose-only: "Exec
+- **v1.1.4 (2026-08-17 — tend2-ratified same day, on-channel)** — binding-prose-only: "Exec
   semantics" pinned — plan-authored command strings exec argv-style with NO shell; bare
   shell-operator tokens are refused loudly (escape hatch: `bash -lc '…'`). Found by the joint
   canary's first run: tend2's emitter assumed shell semantics, pleach's arg-array exec turned
