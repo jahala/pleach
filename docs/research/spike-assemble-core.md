@@ -43,3 +43,38 @@ belonging to neither agent, gated by tend2's verifier with a content-pinned payl
 
 Map-side story: tend2's repo (cross-linked from their loop pages). Landing the branch is one
 command (`pleach land`), owner-timed, per the leave-for-review call.
+
+---
+
+# Phase 2–3 addendum: the full product (VERIFIED, LANDED)
+
+**Owner mandate: "wouldn't that be natural? multi agent build out."** Six-node plan on the
+forest's real DAG, emitted by tend2, conducted by pleach, three claude workers in parallel,
+codex auditing the hub. Final state: **all six features verified, product landed on the
+venue's master @ `abdfc02`** — a client-side PDF unifier (Word/Excel/PowerPoint/images →
+one PDF, no upload, no server) built end to end with zero human diff-reviews.
+
+The road there was the payoff — findings #5 through #13, three ratified contract
+amendments born from live fire:
+
+- **v1.1.4** (exec semantics) — the canary's catch, pre-buildout.
+- **v1.1.5** (self-integral audits) — the hub collision: tend2's WRITING verifier
+  (stamps in the file it verifies) × pleach's tamper rule; every audited tend2 node
+  obeying its own work order was structurally guaranteed a refusal. Fix: the audit
+  command carries its own scoreboard-normalized pin; the token rule stands down for
+  declared commands.
+- **v1.1.6-shape** (audit egress) — the second collision one layer deeper: the v1 fence
+  expectation met a tend2-lane command that spoke plain verify. Fix: `--audit-egress`,
+  the command emits the fence itself; the agent's exit can never carry the verdict.
+- **Quarantine lifecycle proven live**: dead worker's partial work preserved → read by
+  the planner → written into Tried → the NEXT worker briefed by its predecessor's
+  failure → convert-engine verified on the briefed retry. The failure-memory loop, real.
+- **#12**: the owner exploring the quarantined product had its branch checked out —
+  quarantine now falls back to suffixed refs. **#13**: unparseable audit egress is now
+  journaled raw.
+- Interventions: 2 (account switch; session-limit recovery) — at the criterion, within it.
+- Cost note: duration+attempts journaled per node; direct-cli carries no token telemetry
+  (the casting ledger's first feed is honest-partial).
+
+The run-3 audit was the program's last untested claim executed: cross-vendor,
+self-integral, fence-relayed, parsed, closed. Map-side story: tend2's repo, cross-linked.
