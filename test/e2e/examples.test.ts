@@ -82,6 +82,23 @@ describe('examples e2e — runnable without umbel or API keys', () => {
     expect(r.code).toBe(1); // not every node closed — broken failed by design
     // The verified nodes are published; nothing is published for the quarantined node.
     expect(await nodeBranches(repo)).toEqual(['node/check', 'node/lib']);
+    // W1 narration floor: stderr narrates the run in plain language.
+    expect(r.stderr).toContain('published node/lib');
+    expect(r.stderr).toContain('▶ broken: building');
+    expect(r.stderr).toContain('run complete');
+  }, 60_000);
+
+  test('command-dag with --quiet: stderr carries no narration', async () => {
+    const r = await pleach([
+      'run',
+      join(EXAMPLES, 'command-dag/plan.json'),
+      '--repo-root',
+      repo,
+      '--quiet',
+    ]);
+    expect(r.code).toBe(1);
+    expect(r.stderr).not.toContain('▶');
+    expect(r.stderr).not.toContain('run complete');
   }, 60_000);
 
   test('scripted-agent: prompt work + cross-provider audit close via the scripted runner', async () => {

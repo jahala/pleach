@@ -126,6 +126,7 @@ async function runUnderLock(
   async function runOne(node: Node): Promise<void> {
     const baseRefs = baseRefsFor(node, baseRefForClosed);
     await deps.journal.append({ event: 'node-start', node: node.id });
+    const startedAt = Date.now();
 
     let outcome: RunNodeResult;
     try {
@@ -142,7 +143,7 @@ async function runUnderLock(
       return;
     }
 
-    await settle(node, outcome);
+    await settle(node, outcome, startedAt);
   }
 
   // Failed work is evidence, not garbage: commit the tree's changes to
@@ -190,7 +191,7 @@ async function runUnderLock(
   // Commit-before-emit + dual-close, then dispose — all inside this promise so
   // the closed.set happens-before dispose, and dispose happens-before any
   // dependent's isolate (the scheduler only schedules dependents after closed).
-  async function settle(node: Node, outcome: RunNodeResult): Promise<void> {
+  async function settle(node: Node, outcome: RunNodeResult, startedAt: number): Promise<void> {
     const { verdict, iso } = outcome;
     // Record the full diagnostic shape — a failed run must be explainable from
     // the journal alone (the worktrees and sessions are gone by then).
@@ -199,7 +200,23 @@ async function runUnderLock(
       node: node.id,
       status: verdict.status,
       attempts: verdict.attempts,
-      ...(verdict.evidence.gate ? { gate: verdict.evidence.gate } : {}),
+      // The cost feed (#18): worker-reported telemetry + wall clock, so the
+      // casting ledger can compute cost-per-verified-claim from the journal
+      // alone. Journal-only enrichment — the Verdict contract is untouched.
+      telemetry: verdict.telemetry,
+      durationMs: Date.now() - startedAt,
+      ...(verdict.evidence.gate
+        ? {
+            gate: {
+              ...verdict.evidence.gate,
+              // Journal-only diagnostics (contract untouched): the failing
+              // gate's actual output, so nobody debugs a red gate blind.
+              ...(outcome.gateOutputTail !== undefined
+                ? { outputTail: outcome.gateOutputTail }
+                : {}),
+            },
+          }
+        : {}),
       ...(verdict.evidence.blockedReason ? { blockedReason: verdict.evidence.blockedReason } : {}),
     });
 
