@@ -55,6 +55,47 @@ describe('gate integrity (SEC4a)', () => {
     expect(h.log.count('spawn:audit')).toBe(0);
   });
 
+  test('selfIntegrity: a touched audit target still audits — the command self-guards (v1.1.5)', async () => {
+    // The phase-2 hub collision: a WRITING verifier stamps its own loop file
+    // during mandated self-runs; with accept.audit.selfIntegrity declared, the
+    // command carries its own fitness-function pin, so pleach's token rule
+    // stands down and the auditor spawns.
+    const h = makeHarness({ changedByNode: { x: ['x.loop.html'] } });
+    const plan = PlanSchema.parse({
+      goal: 'g',
+      source: 's',
+      nodes: [
+        {
+          id: 'x',
+          work: { prompt: 'build x' },
+          accept: {
+            audit: {
+              command: 'verify x.loop.html --expect-payload abc123',
+              provider: 'codex',
+              selfIntegrity: true,
+            },
+          },
+          policy: { maxAttempts: 1 },
+        },
+      ],
+    });
+
+    const summary = await runPlan(plan, h.deps, OPTS);
+
+    expect(summary.closed).toEqual(['x']);
+    expect(h.log.count('spawn:audit')).toBe(1);
+  });
+
+  test('tamper refusal journals its reason as the gate outputTail', async () => {
+    const h = makeHarness({ changedByNode: { x: ['git-audit.sh'] } });
+
+    await runPlan(auditedPlan(1), h.deps, OPTS);
+
+    const verdict = h.journal.find((e) => e.event === 'verdict' && e.node === 'x');
+    const gate = verdict?.gate as Record<string, unknown>;
+    expect(String(gate.outputTail)).toContain('git-audit.sh');
+  });
+
   test('an untouched audit script audits and closes normally', async () => {
     const h = makeHarness({ changedByNode: { x: ['src/x.ts'] } });
 
