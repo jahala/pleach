@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tend-seam · garden</title>
+<link rel="stylesheet" href="../../slice/loop.css">
+<body>
+<noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
+<script type="text/markdown" id="loop">
+# tend Ledger Adapter: Ledger Bridge with Serial Queue
+
+**Goal.** Wraps tend's dynamically-imported ingester module in a serial promise-chain queue (single-ingester invariant), adapts pre-T1 Set returns to Map&lt;id, sha|null&gt;, routes plan.source paths to project roots, and validates required exports on import.
+
+The tend seam is the gatekeeper between pleach's execution verdicts and tend's verifiable ledger; incorrect serialization or transport errors would silently corrupt the feature verification state.
+
+## One writer, no matter how many nodes finish at once
+
+The tend ledger adapter (`tendLedger({module})` in `src/adapters/tend.ts`, over the `createTendSeam` core) is pleach's bundled `LedgerSeam` — and the single serial writer to tend. An operator kicks off a six-node plan and walks away. Three leaf nodes finish in the same second — each wants to tell tend it's closed. Without coordination, those concurrent writes race into the ledger and the second writer can corrupt what the first recorded. `src/adapters/tend.ts:createTendSeam` prevents this with a single tail-chained promise: every `readClosed` and `emitVerdict` call appends to the same `tail` via `tail.then(fn, fn)`, so calls resolve in arrival order and the transport is never entered twice simultaneously. This is the single-ingester invariant; the [conductor loop](conductor-loop.loop.html) fires `emitVerdict` only after `commitBranch` completes, but it is the adapter's serial queue that guarantees no two concurrent commits race each other into tend.
+
+
+
+<svg viewBox="0 0 480 220" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,monospace" font-size="12">
+  <!-- Background -->
+  <rect width="480" height="220" fill="none"/>
+  <!-- Labels: concurrent callers -->
+  <text x="40" y="30" fill="currentColor" opacity="0.7" text-anchor="middle">node A</text>
+  <text x="120" y="30" fill="currentColor" opacity="0.7" text-anchor="middle">node B</text>
+  <text x="200" y="30" fill="currentColor" opacity="0.7" text-anchor="middle">node C</text>
+  <!-- Caller boxes -->
+  <rect x="10" y="36" width="60" height="28" rx="4" fill="none" stroke="currentColor" opacity="0.4" stroke-width="1.2"/>
+  <text x="40" y="55" fill="currentColor" text-anchor="middle" opacity="0.85">emitVerdict</text>
+  <rect x="90" y="36" width="60" height="28" rx="4" fill="none" stroke="currentColor" opacity="0.4" stroke-width="1.2"/>
+  <text x="120" y="55" fill="currentColor" text-anchor="middle" opacity="0.85">emitVerdict</text>
+  <rect x="170" y="36" width="60" height="28" rx="4" fill="none" stroke="currentColor" opacity="0.4" stroke-width="1.2"/>
+  <text x="200" y="55" fill="currentColor" text-anchor="middle" opacity="0.85">emitVerdict</text>
+  <!-- Arrows into queue -->
+  <line x1="40" y1="64" x2="230" y2="100" stroke="currentColor" opacity="0.35" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="120" y1="64" x2="240" y2="100" stroke="currentColor" opacity="0.35" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="200" y1="64" x2="250" y2="100" stroke="currentColor" opacity="0.35" stroke-width="1" stroke-dasharray="3,3"/>
+  <!-- FIFO queue box -->
+  <rect x="220" y="94" width="120" height="36" rx="6" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.7"/>
+  <text x="280" y="107" fill="currentColor" text-anchor="middle" font-weight="600" opacity="0.95">FIFO queue</text>
+  <text x="280" y="121" fill="currentColor" text-anchor="middle" opacity="0.65">tail.then(fn, fn)</text>
+  <!-- Arrow queue → transport -->
+  <line x1="340" y1="112" x2="390" y2="112" stroke="currentColor" stroke-width="1.5" opacity="0.7" marker-end="url(#arr)"/>
+  <!-- Transport box -->
+  <rect x="390" y="94" width="72" height="36" rx="6" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.7"/>
+  <text x="426" y="107" fill="currentColor" text-anchor="middle" font-weight="600" opacity="0.95">transport</text>
+  <text x="426" y="121" fill="currentColor" text-anchor="middle" opacity="0.65">tend ledger</text>
+  <!-- Label: one in flight -->
+  <text x="365" y="105" fill="currentColor" text-anchor="middle" font-size="10" opacity="0.6">one at</text>
+  <text x="365" y="117" fill="currentColor" text-anchor="middle" font-size="10" opacity="0.6">a time</text>
+  <!-- Arrow def -->
+  <defs>
+    <marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="currentColor" opacity="0.7"/>
+    </marker>
+  </defs>
+  <!-- Caption -->
+  <text x="240" y="165" fill="currentColor" text-anchor="middle" font-size="11" opacity="0.55">N concurrent completions → single serial writer</text>
+  <text x="240" y="180" fill="currentColor" text-anchor="middle" font-size="11" opacity="0.55">(single-ingester invariant)</text>
+</svg>
+^caption: N parallel node completions enter the FIFO queue; the transport is never entered twice simultaneously.
+
+
+
+## A failed verdict changes nothing in the ledger
+
+When tend's honest-middle declines a node — a check lacked a negative control, a smoke run didn't produce clean output — `emitVerdict` returns `{closed: false}`. The operator waking to their run summary sees `1 partial`, not `1 failed`: the branch is published, every conductor gate passed, but tend won't flip the feature verified. The operator:4 job is concrete here: the feature polyglot's `status` and `audit` field are both untouched. Nothing is overwritten speculatively. The adapter simply relays tend's answer back to the loop, which marks the node `partial` and skips its dependents.
+
+## Resume reads the SHA the ledger recorded
+
+When a run restarts, `readClosed` is called before any node is scheduled. The return is always `Map<id, sha | null>` — but tend's ingester currently returns a `Set<string>` (pre-T1, no SHAs persisted yet). `src/adapters/tend.ts:adaptToMap` converts the set in-place: each verified id maps to `null`. The loop treats `null` as "verified by some prior run, no recorded SHA" and resolves the base ref from the published `node/<id>` branch instead. When tend ships SHA-persistence (the T1 / B1-B2 work tracked cross-repo), the adapter upgrades transparently — `adaptToMap` short-circuits on `instanceof Map` and the loop gets the real SHA directly. Until then the operator:3 job is already satisfied: verified nodes are isolated off their branch ref, nothing already closed is rebuilt.
+
+The path translation is the other half of resume: `src/adapters/tend.ts:toProjectRoot` strips `/docs/tend/features/` and everything after it from `plan.source`, routing the ingester to the project root the transport expects. A path that doesn't contain the marker is returned unchanged — the adapter doesn't assume a fixed structure. `src/adapters/tend.ts:createModuleTransport` handles the other failure mode: a bad `--tend-module` path throws `TendTransportError` (not a generic `Error`) before any node runs, so the developer:1 job — transport validation is ledger-tested — distinguishes misconfiguration from a real ingester failure at the type level. The adapter is selected by `resolveSeams` when `--tend-module` is given; without it (and no `pleach.config.ts`), pleach uses the bundled `gitLedger` instead. See [../overview.html](garden.loop.html) for the full system bet.
+
+## Where
+
+src/adapters/tend.ts
+
+## How
+
+createModuleTransport: dynamic import + export validation; createTendSeam: FIFO promise chain (tail.then(fn,fn)); toProjectRoot strips /docs/tend/features/ suffix; adaptToMap converts Set to Map&lt;id,null&gt;
+
+## Fit
+
+pleach's bridge to tend's gated ledger; the only writer to the source polyglots during a run.
+
+## Impact
+
+Verdicts reach tend's ledger through a single serial writer, and resume reads back each verified node's commit — claim and artifact stay in lockstep.
+
+## Tests
+- [!] (code) createModuleTransport rejects a module missing readClosed/emitVerdict exports → TendTransportError. (inferred from test/integration/tend-seam.test.ts — real missoula required) · src/adapters/tend.ts
+- [!] (code) createModuleTransport rejects non-existent path → TendTransportError. (inferred from test/integration/tend-seam.test.ts) · src/adapters/tend.ts
+- [!] (code) readClosed on empty garden → Map instance with size 0. (inferred from test/integration/tend-seam.test.ts — real missoula) · src/adapters/tend.ts
+- [!] (code) readClosed returns Map with verified feature present; in-progress feature excluded. (inferred from test/integration/tend-seam.test.ts — real missoula) · src/adapters/tend.ts
+- [!] (code) emitVerdict with failed Verdict → {closed:false}; feature polyglot status and audit field unchanged. (inferred from test/integration/tend-seam.test.ts — real missoula) · src/adapters/tend.ts
+
+## Needs
+
+## For
+#developer #operator
+
+## Tried
+- 2026-08-17 migrated from v1 (docs/tend/features/tend-seam.tend.html) by `loop migrate`
+</script>
+<script src="../../slice/loop.js"></script>

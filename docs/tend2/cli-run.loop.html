@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cli-run · garden</title>
+<link rel="stylesheet" href="../../slice/loop.css">
+<body>
+<noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
+<script type="text/markdown" id="loop">
+# pleach run: Execute a Plan
+
+**Goal.** Execute a plan.json through the deterministic conductor loop, driving workers via the configured runner (umbel by default) and recording verdicts in the configured ledger (git ledger by default; tend when `--tend-module` is given). Exits 0 only when every node closes verified; partial/failed/blocked/skipped maps to exit 1. Re-running a plan resumes: nodes already verified in the ledger are skipped and reported — RunSummary.alreadyVerified lists them and stderr notes how many — so only unbuilt or previously-failed nodes run.
+
+The primary value of pleach: running a plan behind enforced gates (smoke, conflict-marker scan, cross-provider audit) with deterministic DAG ordering on git + any runner — tend and umbel are the batteries-included defaults, not requirements.
+
+## One command, one truth
+
+It's late. An operator queues a six-node plan before bed: claude builds the leaves, a second provider audits the integration node, and a ledger decides what counts as verified. They won't read every diff. The only glance they get is the exit code.
+
+`pleach run plan.json` is what they type — standalone, on git + the bundled umbel runner + the git ledger. To verify through tend instead, they add `--tend-module ./missoula/dist/tend-ingester.js`; to wire any other runner or ledger, they drop a `pleach.config.ts`. `src/main.ts` delegates immediately to `src/faces/cli.ts:runCli`, which parses flags, reads the plan, resolves the seams, and calls `runPlan` — then maps the result to a process exit via the pure `summaryExitCode` function.
+
+## Wiring is policy, not plumbing
+
+`parseFlags` resolves nine flags from argv and env. `--permission-mode` defaults to `bypassPermissions` because unattended workers cannot answer prompts — safety is external (disposable worktree, cross-provider audit, gate ladder). The ledger is not pinned: with no `--tend-module` and no `pleach.config.ts`, pleach runs standalone on `gitLedger` (the `node/*` branches are the record); `--tend-module` opts into the tend ledger; `--config <path>` points at an explicit config.
+
+`readPlan` is the only gatekeep before deps come alive. It reads the file, parses JSON, then runs `PlanSchema.safeParse` — a Zod structural check. A malformed plan throws `PlanInvalidError` with every failing path and message, exits 2, and nothing else runs. The plan that enters `runPlan` is schema-valid.
+
+The runner and ledger come from `src/faces/config.ts:resolveSeams` — a `pleach.config.ts` if present, else the default `umbelRunner` plus `tendLedger` (when `--tend-module` is set) or `gitLedger`. `verbRun` then assembles `ConductorDeps` from pleach's own I/O seams (`createIsolateSeam`, `createLockSeam`, `createJournal`, `exec`) and the resolved runner + ledger. The [conductor loop](conductor-loop.loop.html) receives a `ConductorDeps` object and never touches the filesystem or CLI args directly. The CLI is pure wiring; the engine is pure logic.
+
+## Exit code is the contract
+
+`summaryExitCode` is a four-field boolean: if `failed`, `partial`, `blocked`, and `skipped` are all empty, return 0. Otherwise return 1. `partial` is not success — a node whose work landed but whose ledger verification was declined gets no free pass. The `RunSummary` JSON on stdout carries the per-bucket breakdown for any script that needs to tell them apart.
+
+Errors outside the loop collapse to typed exits: `LockHeldError` → 3 (another conductor holds this repo); `UsageError`, `PlanInvalidError`, or `ConfigError` → 2; `RebuildRequiredError` or `TendTransportError` → 1. Nothing falls through silently.
+
+Landing is manual by design — verified work publishes as `node/<id>` branches; the HELP text says so explicitly. There is no `--land` flag. The operator merges `node/<feature>` themselves. The sibling verbs round out the surface: [pleach validate](cli-validate.loop.html) checks plan structure without running anything, and `pleach schema` emits the plan contract as JSON Schema for planners. The [conductor loop](conductor-loop.loop.html) is the engine `run` drives; the [isolate](isolate-seam.loop.html), [umbel](umbel-seam.loop.html), and [tend](tend-seam.loop.html) seams are the bundled adapters it wires into deps (see `docs/adapters.md` for swapping them). The [project bet](garden.loop.html) is why those seams exist at all.
+
+## Where
+
+src/faces/cli.ts; src/main.ts
+
+## How
+
+parseFlags → readPlan (Zod) → assemble ConductorDeps via buildDeps → runPlan → summaryExitCode; JSON RunSummary on stdout; errors → stderr + typed exit code; a stderr line names already-verified nodes skipped (resume)
+
+## Fit
+
+pleach's primary entry point — the operator's surface over the conductor loop.
+
+## Impact
+
+One command turns a tend plan into verified branches; the exit code alone tells the operator whether to trust the run or intervene.
+
+## Tests
+- [!] (code) All nodes close verified → exit 0; RunSummary.closed contains all node IDs; failed/blocked/skipped empty. (inferred from test/e2e/cli.test.ts — requires real umbel binary + missoula module) · examples/proof/plan.json
+- [ ] (code) partial/failed/blocked nodes → exit 1; JSON summary has non-empty bucket(s). (inferred from src/faces/cli.ts:summaryExitCode + test/unit/cli-summary.test.ts)
+- [ ] (code) Invalid plan JSON → exit 2; error message on stderr. (inferred from test/e2e/cli.test.ts:invalid plan JSON) · bad.json
+- [ ] (code) Missing --tend-module (and no $PLEACH_TEND_MODULE) → exit 2 with usage error. (inferred from src/faces/cli.ts:verbRun guard) · plan.json
+- [ ] (code) Lock held by live process → exit 3 with error on stderr. (inferred from src/faces/cli.ts catch LockHeldError → return 3)
+- [ ] (code) Retry ladder: flaky command node (fails once) retries and closes; node/id branch published with retry evidence. (inferred from test/e2e/cli.test.ts — requires real umbel + missoula) · flaky.sh
+- [x] (code) Resume surfacing: an already-verified node is reported, not re-run — RunSummary.alreadyVerified lists it and verbRun's stderr says 'skipped N already-verified node(s)'. · test/loop/run-plan.test.ts @84ed1ac
+
+## Needs
+
+## For
+#operator
+
+## Tried
+- 2026-08-17 migrated from v1 (docs/tend/features/cli-run.tend.html) by `loop migrate`
+- 2026-08-17 v1: enabled #cli-validate (user-journey edge — v2 `## Needs` is dependency-only; not migrated as a graph edge)
+- 2026-08-17 v1: enabled by #pluggable-adapters (same v1 user-journey edge, recorded on this side too)
+</script>
+<script src="../../slice/loop.js"></script>
