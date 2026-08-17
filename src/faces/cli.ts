@@ -16,6 +16,7 @@ import type { RunSummary } from '../loop/deps.ts';
 import { landPlan } from '../loop/land.ts';
 import { runPlan } from '../loop/run-plan.ts';
 import { buildDeps, resolveSeams } from './config.ts';
+import { narrateEvent } from './narrate.ts';
 
 const HELP = `pleach — deterministic conductor for DAGs of verified agent work
 
@@ -45,6 +46,9 @@ Flags (run):
                           claude (any mode) and codex (bypassPermissions only).
   --land                  After a fully-verified close, land the plan (see below); the run
                           summary gains a "land" object. A red run never lands.
+  --quiet                 Suppress the per-event narration on stderr (one plain line per
+                          node event; a worker blocked on you is shouted). The JSONL
+                          journal records everything regardless.
 
 Landing: verified work is published as node/<id> branches; \`pleach land\` merges
 the plan's sinks onto the branch checked out in --repo-root. It refuses unless
@@ -79,6 +83,7 @@ interface Flags {
   permissionMode: string;
   config?: string;
   land: boolean;
+  quiet: boolean;
   runnerKind?: 'umbel' | 'direct-cli';
 }
 
@@ -96,6 +101,7 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
     // worktree + cross-provider audit + gates. Override with --permission-mode.
     permissionMode: 'bypassPermissions',
     land: false,
+    quiet: false,
   };
   if (process.env.PLEACH_TEND_MODULE !== undefined) {
     flags.tendModule = process.env.PLEACH_TEND_MODULE;
@@ -155,6 +161,9 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         break;
       case '--land':
         flags.land = true;
+        break;
+      case '--quiet':
+        flags.quiet = true;
         break;
       case '--runner': {
         const kind = takeValue(arg, next);
@@ -235,6 +244,16 @@ async function depsFromFlags(flags: Flags) {
     runner,
     ledger,
     ...(flags.journal !== undefined ? { journal: flags.journal } : {}),
+    // The narration floor: every journal event a human should glance at gets
+    // one plain stderr line; --quiet silences it (the journal file remains).
+    ...(flags.quiet
+      ? {}
+      : {
+          narrate: (event: Record<string, unknown>) => {
+            const line = narrateEvent(event);
+            if (line !== null) process.stderr.write(`${line}\n`);
+          },
+        }),
   });
 }
 
@@ -242,7 +261,6 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
   const plan = await readPlan(planPath);
   const deps = await depsFromFlags(flags);
 
-  process.stderr.write(`pleach: running ${plan.nodes.length} nodes\n`);
   const summary = await runPlan(plan, deps, {
     repoRoot: flags.repoRoot,
     // The contract's conductor default when neither flag nor plan caps it:
@@ -252,11 +270,6 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     ...(flags.timeoutMs !== undefined ? { defaultTimeoutMs: flags.timeoutMs } : {}),
   });
 
-  if (summary.alreadyVerified.length > 0) {
-    process.stderr.write(
-      `pleach: skipped ${summary.alreadyVerified.length} already-verified node(s)\n`,
-    );
-  }
   const code = summaryExitCode(summary);
   // --land: a fully-verified close lands in the same invocation; a red run
   // never lands (the summary alone says why).

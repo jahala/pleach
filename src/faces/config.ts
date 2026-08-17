@@ -134,6 +134,10 @@ export interface BuildDepsOpts {
   // Run journal path; defaults to <git-dir>/pleach/journal.jsonl (the git dir
   // is resolved through seams/gitdir.ts, so linked worktrees work).
   journal?: string;
+  // Optional per-event observer (the narration floor): called with each event
+  // after its durable journal append. The CLI passes a stderr renderer; a
+  // library caller can pass anything (or nothing).
+  narrate?: (event: Record<string, unknown>) => void;
 }
 
 // Assemble a ConductorDeps for runPlan from the four pleach-owned seams
@@ -146,7 +150,7 @@ export function buildDeps(opts: BuildDepsOpts): ConductorDeps {
     exec,
     isolate: createIsolateSeam(exec, opts.repoRoot),
     lock: createLockSeam(),
-    journal: createJournal(journalPath),
+    journal: createJournal(journalPath, opts.narrate),
     runner: opts.runner,
     ledger: opts.ledger,
   };
