@@ -1,0 +1,3 @@
+{
+  "wordcount": "mkdir -p tools && printf 'export const wordcount = (s) => s.trim() === \"\" ? 0 : s.trim().split(/\\\\s+/).length;\\n' > tools/wordcount.mjs"
+}

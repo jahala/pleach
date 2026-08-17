@@ -1,7 +1,30 @@
-import { toArgv } from '../core/argv.ts';
+import { shellOperatorTokens, toArgv } from '../core/argv.ts';
 import { GateFailedError } from '../core/errors.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, Worker, WorkerResult } from './deps.ts';
+
+// Exec a plan-authored command string with the no-shell guard: a bare shell
+// operator would be passed as a literal argument and do silently-wrong things
+// (the 2026-08-17 canary catch). Guard hits report exitCode -1 with the
+// escape hatch named, flowing through each gate's existing failure path.
+export async function guardedExec(
+  exec: ExecFn,
+  command: string,
+  opts: { cwd: string; timeoutMs: number },
+): Promise<{ output: string; exitCode: number }> {
+  const tokens = toArgv(command);
+  const ops = shellOperatorTokens(tokens);
+  if (ops.length > 0) {
+    return {
+      output:
+        `command contains bare shell operator(s): ${ops.join(' ')} — pleach execs ` +
+        `without a shell (arg-array; contract exec semantics). For shell features, ` +
+        `wrap the command: bash -lc '<command>'`,
+      exitCode: -1,
+    };
+  }
+  return exec(tokens, opts);
+}
 
 // runWork drives one attempt of a node's Work through its worker + exec gates.
 // It is given everything; it never reaches for a seam module. The caller
@@ -45,7 +68,7 @@ export async function runWork(
   const { work } = node;
 
   if ('command' in work) {
-    const { output, exitCode } = await exec(toArgv(work.command), {
+    const { output, exitCode } = await guardedExec(exec, work.command, {
       cwd,
       timeoutMs: opts.timeoutMs,
     });
@@ -78,7 +101,7 @@ export async function runWork(
       if (last.reason !== 'stop') return last;
 
       if (phase.phase === 'red') {
-        const { output, exitCode } = await exec(toArgv(work.test), {
+        const { output, exitCode } = await guardedExec(exec, work.test, {
           cwd,
           timeoutMs: opts.timeoutMs,
         });
@@ -86,7 +109,7 @@ export async function runWork(
         // written (or a harness error) — the TDD guarantee is void.
         if (exitCode === 0) throw new GateFailedError('red', output, exitCode);
       } else if (phase.phase === 'green') {
-        const { output, exitCode } = await exec(toArgv(work.test), {
+        const { output, exitCode } = await guardedExec(exec, work.test, {
           cwd,
           timeoutMs: opts.timeoutMs,
         });

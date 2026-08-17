@@ -1,0 +1,19 @@
+{
+  "goal": "prove the tend2×pleach seam end-to-end with zero agents",
+  "source": ".",
+  "nodes": [
+    {
+      "id": "wordcount",
+      "work": {
+        "command": "mkdir -p tools && printf 'export const wordcount = (s) => s.trim() === \"\" ? 0 : s.trim().split(/\\\\s+/).length;\\n' > tools/wordcount.mjs"
+      },
+      "accept": {
+        "smoke": "{{VERIFY_BIN}} verify wordcount.loop.html --repo-root . --expect-payload 5a5a266e9f1e --runner 'node {evidence}'"
+      },
+      "policy": {
+        "timeoutMs": 1800000
+      }
+    }
+  ],
+  "warnings": []
+}

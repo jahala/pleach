@@ -1,0 +1,14 @@
+<!doctype html>
+<title>wordcount · canary</title>
+<body>
+<script type="text/markdown" id="loop">
+# wordcount — canary
+**Goal.** The canonical deterministic canary: command work makes a real check green and the verifier stamps it — zero agents anywhere in the pipeline.
+
+## Tests
+- [ ] (code) wordcount counts whitespace-separated words, ignoring leading, trailing, and repeated spaces · tests/wordcount.check.mjs
+
+## Tried
+- 2026-08-17 born as the joint tend2×pleach canary fixture — the compat table's living top row. Emission is pinned by tend2's canary.test.ts; a shape change on either side goes red before it ships.
+</script>
+<script src="loop.js"></script>

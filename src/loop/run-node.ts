@@ -1,4 +1,3 @@
-import { toArgv } from '../core/argv.ts';
 import { auditGateTampering, buildAuditPrompt, extractAuditJson } from '../core/audit-egress.ts';
 import { classify } from '../core/classify.ts';
 import {
@@ -10,7 +9,7 @@ import {
 import { type AuditResult, AuditResultSchema, type Node, type Verdict } from '../core/plan.ts';
 import { DEFAULT_WORKER_PROVIDER } from '../core/validate.ts';
 import type { ConductorDeps, Isolation, WorkerResult } from './deps.ts';
-import { runWork } from './run-work.ts';
+import { guardedExec, runWork } from './run-work.ts';
 
 // ── run-node: the per-node ladder ────────────────────────────────────────────
 //
@@ -35,6 +34,10 @@ export interface RunNodeResult {
   // turn, there is nothing worth keeping) and for never-isolated failures.
   iso?: Isolation;
   stagedFiles?: string[];
+  // Last failing gate's output tail (capped) — journal-only diagnostics; the
+  // Verdict contract is untouched. The 2026-08-17 canary debug needed a
+  // wrapper script to see WHY a command gate failed; never again.
+  gateOutputTail?: string;
 }
 
 const REAUDIT_BUDGET = 2;
@@ -120,11 +123,15 @@ export async function runNode(
 
       // ── setup ───────────────────────────────────────────────────────────────
       if (node.setup) {
-        const { output, exitCode } = await deps.exec(toArgv(node.setup), { cwd, timeoutMs });
+        const { output, exitCode } = await guardedExec(deps.exec, node.setup, { cwd, timeoutMs });
         if (exitCode !== 0) {
-          const settle = settleRetryable(node, attempts, maxAttempts, {
-            gate: { ran: node.setup, exitCode },
-          });
+          const settle = settleRetryable(
+            node,
+            attempts,
+            maxAttempts,
+            { gate: { ran: node.setup, exitCode } },
+            output,
+          );
           if (settle) return handBack(settle);
           evidence = gateEvidence('setup', exitCode, output);
           continue; // retry — SAME tree (setup idempotent by contract)
@@ -217,11 +224,18 @@ export async function runNode(
 
       // ── smoke ────────────────────────────────────────────────────────────────
       if (node.accept.smoke) {
-        const { output, exitCode } = await deps.exec(toArgv(node.accept.smoke), { cwd, timeoutMs });
+        const { output, exitCode } = await guardedExec(deps.exec, node.accept.smoke, {
+          cwd,
+          timeoutMs,
+        });
         if (exitCode !== 0) {
-          const settle = settleRetryable(node, attempts, maxAttempts, {
-            gate: { ran: node.accept.smoke, exitCode },
-          });
+          const settle = settleRetryable(
+            node,
+            attempts,
+            maxAttempts,
+            { gate: { ran: node.accept.smoke, exitCode } },
+            output,
+          );
           if (settle) return handBack(settle);
           evidence = gateEvidence('smoke', exitCode, output);
           continue;
@@ -375,9 +389,13 @@ function handleGate(
   maxAttempts: number,
   err: GateFailedError,
 ): { settle?: RunNodeResult; evidence?: string } {
-  const settle = settleRetryable(node, attempts, maxAttempts, {
-    gate: { ran: gateRanLabel(node, err), exitCode: err.exitCode },
-  });
+  const settle = settleRetryable(
+    node,
+    attempts,
+    maxAttempts,
+    { gate: { ran: gateRanLabel(node, err), exitCode: err.exitCode } },
+    err.evidence,
+  );
   if (settle) return { settle };
   return { evidence: gateEvidence(err.gate, err.exitCode, err.evidence) };
 }
@@ -407,9 +425,15 @@ function settleRetryable(
   attempts: number,
   maxAttempts: number,
   extra: { gate?: { ran: string; exitCode: number } },
+  outputTail?: string,
 ): RunNodeResult | undefined {
   if (attempts < maxAttempts) return undefined;
-  return { verdict: failedVerdict(node, attempts, extra) };
+  return {
+    verdict: failedVerdict(node, attempts, extra),
+    ...(outputTail !== undefined && outputTail.length > 0
+      ? { gateOutputTail: outputTail.slice(-2000) }
+      : {}),
+  };
 }
 
 const EVIDENCE_TAIL = 2000;

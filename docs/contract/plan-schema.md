@@ -172,3 +172,18 @@ uphold. Converged in the tend2 × pleach dialogue of 2026-08-17 (deliberation ar
   a verifier writes; branches only gates publish; an undiscriminated pass caps at `partial`
   (negctrl); a bug closes only by its RED check going green; exit codes are claims — the
   verifier reads evidence content.
+
+## Exec semantics (v1.1.4 — binding prose, DRAFT pending tend2 ratification)
+
+Every plan-authored command string — `work.command`, `work.test`, `setup`,
+`accept.smoke` — is parsed to an argv by POSIX-quoting rules and executed
+**without a shell** (deterministic, injection-resistant; the conductor never
+interprets `&&`, `|`, `;`, or redirection). A bare shell-operator token is
+refused loudly with the escape hatch named: authors wanting shell features
+write them explicitly — `bash -lc '<command>'`. (`accept.audit.command` is
+relayed as text to the auditor agent, which runs it in its own shell; the
+no-shell rule governs what the CONDUCTOR execs.) Discovered by the joint
+canary's first run, 2026-08-17: an emitter assumed shell semantics, the
+conductor's argv-exec made `mkdir -p tools && printf … > tools/wordcount.mjs`
+create a directory named `tools/wordcount.mjs`, exit 0 — silent wrongness now
+structurally refused.
