@@ -345,6 +345,14 @@ Five adapters ship in `src/adapters/` as the batteries-included configuration:
 The zero-config default wires `umbelRunner` + `gitLedger` (or `tendLedger` when
 `--tend-module` is given). This is the standalone "run and verify locally" configuration.
 
+**The tend2 lane (no adapter needed).** tend's successor, tend2 (`@plotplot/tend2`),
+integrates through the thin waist alone: its emitter produces plans whose gate is its own
+verifier run as `accept.smoke` (`tend2 verify <file> --expect-payload <sha>` — deterministic,
+content-pinned), with `gitLedger` recording the close. No ledger adapter, no audit block —
+the verifier IS the check, per the shared law (a pass only a verifier writes). This repo's
+integration canary (`scripts/canary.sh`, `test/canary/`) runs exactly that lane end-to-end
+with zero agents. `tend audit <id>` and `tendLedger` remain the v1 tend lane, unchanged.
+
 ---
 
 ## Boundaries (honest)
