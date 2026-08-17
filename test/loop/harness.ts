@@ -126,6 +126,9 @@ export interface HarnessOpts {
   conflicts?: Record<string, string[]>;
   // changed files a worker leaves in its cwd, keyed by node id.
   changedByNode?: Record<string, string[]>;
+  // Branches whose commitBranch refuses like real git's checked-out-branch
+  // guard (exit 128 'used by worktree') — the #12 quarantine-collision seam.
+  commitBranchBusy?: (branch: string) => boolean;
   // marker files left in cwd, keyed by node id (simulates auditor droppings).
   markersByNode?: Record<string, string[]>;
   // Awaited inside dispose(node) between 'dispose-start' and 'dispose' — lets a
@@ -225,6 +228,10 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       return git.changed.get(cwd) ?? [];
     },
     async commitBranch(_cwd, branch, _message): Promise<{ sha: string }> {
+      if (opts.commitBranchBusy?.(branch)) {
+        log.push('commitBranch-busy', branch);
+        throw new Error(`cannot force update the branch '${branch}' used by worktree at /w`);
+      }
       const sha = git.newSha();
       git.refs.set(branch, sha);
       log.push('commitBranch', branch, sha);
