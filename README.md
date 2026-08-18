@@ -12,7 +12,11 @@ ledger). Agents produce; code decides.
 > *Pleaching: the craft of training and interweaving living branches into a single structure.*
 
 **Status — v1.** The end-to-end proof run closes: a multi-step feature builds through real agent
-workers, is cross-provider audited, and verifies ([`docs/research/proof-run.md`](docs/research/proof-run.md)).
+workers, is cross-provider audited, and verifies — and a six-feature product (a client-side PDF
+unifier) has been built the same way, plan to landed code, with zero human diff-reviews. pleach's
+own development is tracked in its verified garden: [`docs/tend2/garden.loop.html`](docs/tend2/garden.loop.html)
+(self-contained pages — open in a browser; rendered by the [`slice/`](slice/) assets, tend2's
+consuming-project convention).
 
 > **New to the plotplot tools?** pleach is *day 2* — reach for it when work runs unattended,
 > in parallel, or must be trusted later. Day 1 is a single verifier loop

@@ -30,10 +30,10 @@ A bundled reference adapter alongside umbel/tend/git — the deterministic count
 Onboarding drops from "install umbel + get API keys" to "bun test". It doubles as a regression target for the gate ladder (isolation, smoke, cross-provider audit, quarantine) and a copy-paste template for writing any RunnerSeam.
 
 ## Tests
-- [ ] (code) scriptedRunner: a matched build scenario writes its files into cwd and the worker returns the canned WorkerResult (finalMessage, filesTouched, reason='stop'). · test/unit/scripted-runner.test.ts
-- [ ] (code) scriptedAuditResult formats a tend-audit-result fence that extractAuditJson + AuditResultSchema parse to a passing verdict. · test/unit/scripted-runner.test.ts
-- [ ] (code) examples/command-dag runs via the real CLI with no runner spawned: verified nodes publish node/<id>, the failed-gate node is quarantined, its dependent skipped. · test/e2e/examples.test.ts
-- [ ] (code) examples/scripted-agent reaches verified closes through the cross-provider audit, driven by the scripted runner via a pleach.config.ts. · test/e2e/examples.test.ts
+- [x] (code) scriptedRunner: a matched build scenario writes its files into cwd and the worker returns the canned WorkerResult (finalMessage, filesTouched, reason='stop'). · test/unit/scripted-runner.test.ts @7b8d4c9
+- [x] (code) scriptedAuditResult formats a tend-audit-result fence that extractAuditJson + AuditResultSchema parse to a passing verdict. · test/unit/scripted-runner.test.ts @dd55dd8
+- [x] (code) examples/command-dag runs via the real CLI with no runner spawned: verified nodes publish node/<id>, the failed-gate node is quarantined, its dependent skipped. · test/e2e/examples.test.ts @1432f2b
+- [x] (code) examples/scripted-agent reaches verified closes through the cross-provider audit, driven by the scripted runner via a pleach.config.ts. · test/e2e/examples.test.ts @0b6f77a
 
 ## Needs
 #pluggable-adapters #conductor-loop
