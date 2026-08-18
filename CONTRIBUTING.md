@@ -54,3 +54,9 @@ becomes exactly one of:
 The `untriaged` label marks the queue; templates collect exactly what
 conversion needs. Status lives in checks and branches — computed, never
 asserted — so an open issue is always "not yet triaged," never "known broken."
+
+## Brand checks are local
+
+`.brand/` is a pulled cache (see `.petalsrc`) and is not in the repo, so CI cannot brand-check.
+Landing-page and copy changes are checked locally with the petals skill (`/petals check index.html`)
+before committing — the page's "passes /petals check" badge is a maintainer promise, not a CI gate.
