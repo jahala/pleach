@@ -93,23 +93,21 @@ The git substrate the conductor loop isolates, gates, and commits against.
 Every node builds in a disposable worktree off its verified deps, so conflict markers and junk can never reach a verified branch.
 
 ## Tests
-- [x] (code) Fan-out: two concurrent isolates off one ref succeed at independent paths (no 'already checked out' error). (inferred from test/integration/isolate.test.ts — real git repo) · test/integration/isolate.test.ts @cc4d3bc
-- [x] (code) B3/C1 join-with-conflict: merging conflicting branches keeps markers in committed state; conflictFiles populated. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @fb6cf96
-- [x] (code) Clean join: disjoint files merge cleanly; conflictFiles is empty; both files present. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @2a46961
-- [x] (code) B1 missing non-first ref → IsolateCatastrophicError; no leftover worktree in repo. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @f0dfc7a
-- [x] (code) C1 scanMarkers: conflicted file detected after merge; empty array after resolution. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @2eaa9e1
-- [x] (code) S1 scoped stage: only named files committed to branch; junk file excluded from commit. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @de0a0dc
-- [x] (code) B2 commitBranch returns 40-char sha; allow-empty succeeds; refSha resolves to same sha. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @4fc7590
-- [x] (code) dispose: worktree removed from git worktree list; second dispose is a no-op (no throw). (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @b7900ef
-- [x] (code) C1 gate-must-fail-closed: scanMarkers on non-repo path throws IsolateCatastrophicError. (inferred from test/integration/isolate.test.ts lead-review) · test/integration/isolate.test.ts @b18d9e9
-- [x] (code) S1/C2 changedFiles: modified tracked + untracked-unignored listed; gitignored files excluded. (inferred from test/integration/isolate.test.ts lead changedFiles) · test/integration/isolate.test.ts @888fd83
-
-## Needs
+- [x] (code) Fan-out: two concurrent isolates off one ref succeed at independent paths (no 'already checked out' error). (inferred from test/integration/isolate.test.ts — real git repo) · test/integration/isolate.test.ts
+- [x] (code) B3/C1 join-with-conflict: merging conflicting branches keeps markers in committed state; conflictFiles populated. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts
+- [x] (code) Clean join: disjoint files merge cleanly; conflictFiles is empty; both files present. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts
+- [x] (code) B1 missing non-first ref → IsolateCatastrophicError; no leftover worktree in repo. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts
+- [x] (code) C1 scanMarkers: conflicted file detected after merge; empty array after resolution. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts
+- [x] (code) S1 scoped stage: only named files committed to branch; junk file excluded from commit. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts
+- [x] (code) B2 commitBranch returns 40-char sha; allow-empty succeeds; refSha resolves to same sha. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts
+- [x] (code) dispose: worktree removed from git worktree list; second dispose is a no-op (no throw). (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts
+- [x] (code) C1 gate-must-fail-closed: scanMarkers on non-repo path throws IsolateCatastrophicError. (inferred from test/integration/isolate.test.ts lead-review) · test/integration/isolate.test.ts
+- [x] (code) S1/C2 changedFiles: modified tracked + untracked-unignored listed; gitignored files excluded. (inferred from test/integration/isolate.test.ts lead changedFiles) · test/integration/isolate.test.ts
 
 ## For
 #developer #operator
 
 ## Tried
-- 2026-08-17 migrated from v1 (docs/tend/features/isolate-seam.tend.html) by `loop migrate`
+- 2026-08-18 migrated from v1 (docs/tend/features/isolate-seam.tend.html) by `loop migrate`
 </script>
 <script src="../../slice/loop.js"></script>

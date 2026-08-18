@@ -118,18 +118,16 @@ The execution boundary between the deterministic loop and the vendor-churning ag
 Stochastic agents are driven through one reliable spawn->send->wait->kill boundary, with dead/timeout/blocked surfaced as typed reasons the loop can act on.
 
 ## Tests
-- [x] (code) Happy path: spawn→send→wait(stop)→kill; finalMessage non-empty and contains sent text; filesTouched is array; telemetry defined; actions manifest has numeric turnCount. (inferred from test/integration/umbel-seam.test.ts — requires real umbel binary + fake-claude) · test/integration/umbel-seam.test.ts @c8cbe8a
-- [x] (code) Two-turn conversation: sinceMtime threads correctly; r2.finalMessage reflects turn-two prompt, not stale turn-one stop. (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @83633cb
-- [x] (code) Timeout: second wait without new send returns reason=timeout (sinceMtime advances past existing stop file). (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @a5b8a50
-- [x] (code) Dead: killing tmux session out-of-band returns reason=dead. (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @227f140
-- [x] (code) Spawn failure on nonexistent cwd throws WorkerSpawnError. (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @853b69f
-
-## Needs
+- [x] (code) Happy path: spawn→send→wait(stop)→kill; finalMessage non-empty and contains sent text; filesTouched is array; telemetry defined; actions manifest has numeric turnCount. (inferred from test/integration/umbel-seam.test.ts — requires real umbel binary + fake-claude) · test/integration/umbel-seam.test.ts
+- [ ] (code) Two-turn conversation: sinceMtime threads correctly; r2.finalMessage reflects turn-two prompt, not stale turn-one stop. (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts
+- [x] (code) Timeout: second wait without new send returns reason=timeout (sinceMtime advances past existing stop file). (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts
+- [x] (code) Dead: killing tmux session out-of-band returns reason=dead. (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts
+- [x] (code) Spawn failure on nonexistent cwd throws WorkerSpawnError. (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts
 
 ## For
 #developer #operator
 
 ## Tried
-- 2026-08-17 migrated from v1 (docs/tend/features/umbel-seam.tend.html) by `loop migrate`
+- 2026-08-18 migrated from v1 (docs/tend/features/umbel-seam.tend.html) by `loop migrate`
 </script>
 <script src="../../slice/loop.js"></script>
