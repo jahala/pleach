@@ -63,7 +63,7 @@ updated, the next session starts blind.
 
 ## Gotchas
 
-- **The garden lives at `docs/tend2/` (tend2 format)** — `garden.loop.html` is the hub; the pages
+- **The garden lives at `docs/tend2/` (tend2 format)** — `garden.tend2.html` is the hub; the pages
   are self-contained (loop.css/loop.js live inside `docs/tend2/`). Verify with the tend2 CLI: `node <tend2-checkout>/dist/cli.js verify <page> --repo-root .
   --runner "bun test {evidence}"`. **A pass only the verifier writes**; stamps live in the page and are
   content-keyed — re-migration resets un-earned state, so re-run the sweep after any `migrate`. Current:

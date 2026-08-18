@@ -15,7 +15,7 @@ pleach was wired to tend (ledger) + umbel (runner) specifically. The ports-and-a
 
 ## One data contract, two pluggable seams
 
-pleach used to be wired to exactly two tools — umbel for the runner, tend for the ledger. The generalization keeps the deterministic loop untouched and turns those two couplings into ports: `RunnerSeam` and `LedgerSeam` in `src/loop/deps.ts`. The loop composes whatever satisfies them and imports no concrete adapter. `src/adapters/` holds the bundled bridges — `umbelRunner`, `tendLedger`, and the new `gitLedger` — beside pleach's own I/O in `src/seams/`. The integration surface is exactly one data contract (the [plan](cli-validate.loop.html)) plus those two code seams; a new tool is a new adapter file and the engine never changes. The full contracts live in `docs/adapters.md`.
+pleach used to be wired to exactly two tools — umbel for the runner, tend for the ledger. The generalization keeps the deterministic loop untouched and turns those two couplings into ports: `RunnerSeam` and `LedgerSeam` in `src/loop/deps.ts`. The loop composes whatever satisfies them and imports no concrete adapter. `src/adapters/` holds the bundled bridges — `umbelRunner`, `tendLedger`, and the new `gitLedger` — beside pleach's own I/O in `src/seams/`. The integration surface is exactly one data contract (the [plan](cli-validate.tend2.html)) plus those two code seams; a new tool is a new adapter file and the engine never changes. The full contracts live in `docs/adapters.md`.
 
 ## gitLedger makes a run standalone
 
@@ -25,7 +25,7 @@ pleach used to be wired to exactly two tools — umbel for the runner, tend for 
 
 `src/faces/config.ts:resolveSeams` decides which adapters a run uses, in precedence: an explicit `--config <path>`, else a `pleach.config.ts` at the repo root, else the defaults — `umbelRunner` plus `tendLedger` (when `--tend-module` is given) or `gitLedger`. A `pleach.config.ts` exports `{ runner, ledger }` built from the bundled factories or your own; a missing or malformed one throws the typed `ConfigError`. `loadConfig` also duck-types the resolved adapters — checking that the runner has `spawnWorker` and the ledger has `readClosed`/`emitVerdict` as functions — so a wrong-shape config fails at the boundary with `ConfigError`, not deep in a run (`src/faces/config.ts:68–76`). The plan stays portable: it names the provider per node (`worker.provider`) while the config names the tools — so the same plan runs whether the runner is umbel, an API wrapper, or a test double. For programmatic planners, `pleach schema` emits the plan contract as JSON Schema (`src/core/schema-json.ts:planJsonSchema`, kept out of the drift-pinned `plan.ts`).
 
-pleach conducts **local** executors over git worktrees with **automatable** verification — that is the boundary. Cloud-autonomous agents or human-gated approval need an adapter that bridges into the sync send→wait→kill and deterministic-emitVerdict contracts. See `docs/adapters.md` and the [project bet](garden.loop.html).
+pleach conducts **local** executors over git worktrees with **automatable** verification — that is the boundary. Cloud-autonomous agents or human-gated approval need an adapter that bridges into the sync send→wait→kill and deterministic-emitVerdict contracts. See `docs/adapters.md` and the [project bet](garden.tend2.html).
 
 ## Where
 
