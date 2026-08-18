@@ -25,7 +25,7 @@ It's late. An operator queues a six-node plan before bed: claude builds the leav
 
 `readPlan` is the only gatekeep before deps come alive. It reads the file, parses JSON, then runs `PlanSchema.safeParse` — a Zod structural check. A malformed plan throws `PlanInvalidError` with every failing path and message, exits 2, and nothing else runs. The plan that enters `runPlan` is schema-valid.
 
-The runner and ledger come from `src/faces/config.ts:resolveSeams` — a `pleach.config.ts` if present, else the default `umbelRunner` plus `tendLedger` (when `--tend-module` is set) or `gitLedger`. `verbRun` then assembles `ConductorDeps` from pleach's own I/O seams (`createIsolateSeam`, `createLockSeam`, `createJournal`, `exec`) and the resolved runner + ledger. The [conductor loop](conductor-loop.loop.html) receives a `ConductorDeps` object and never touches the filesystem or CLI args directly. The CLI is pure wiring; the engine is pure logic.
+The runner and ledger come from `src/faces/config.ts:resolveSeams` — a `pleach.config.ts` if present, else the default `umbelRunner` plus `tendLedger` (when `--tend-module` is set) or `gitLedger`. `verbRun` then assembles `ConductorDeps` from pleach's own I/O seams (`createIsolateSeam`, `createLockSeam`, `createJournal`, `exec`) and the resolved runner + ledger. The [conductor loop](conductor-loop.tend2.html) receives a `ConductorDeps` object and never touches the filesystem or CLI args directly. The CLI is pure wiring; the engine is pure logic.
 
 ## Exit code is the contract
 
@@ -33,7 +33,7 @@ The runner and ledger come from `src/faces/config.ts:resolveSeams` — a `pleach
 
 Errors outside the loop collapse to typed exits: `LockHeldError` → 3 (another conductor holds this repo); `UsageError`, `PlanInvalidError`, or `ConfigError` → 2; `RebuildRequiredError` or `TendTransportError` → 1. Nothing falls through silently.
 
-Landing is manual by design — verified work publishes as `node/<id>` branches; the HELP text says so explicitly. There is no `--land` flag. The operator merges `node/<feature>` themselves. The sibling verbs round out the surface: [pleach validate](cli-validate.loop.html) checks plan structure without running anything, and `pleach schema` emits the plan contract as JSON Schema for planners. The [conductor loop](conductor-loop.loop.html) is the engine `run` drives; the [isolate](isolate-seam.loop.html), [umbel](umbel-seam.loop.html), and [tend](tend-seam.loop.html) seams are the bundled adapters it wires into deps (see `docs/adapters.md` for swapping them). The [project bet](garden.loop.html) is why those seams exist at all.
+Landing is manual by design — verified work publishes as `node/<id>` branches; the HELP text says so explicitly. There is no `--land` flag. The operator merges `node/<feature>` themselves. The sibling verbs round out the surface: [pleach validate](cli-validate.tend2.html) checks plan structure without running anything, and `pleach schema` emits the plan contract as JSON Schema for planners. The [conductor loop](conductor-loop.tend2.html) is the engine `run` drives; the [isolate](isolate-seam.tend2.html), [umbel](umbel-seam.tend2.html), and [tend](tend-seam.tend2.html) seams are the bundled adapters it wires into deps (see `docs/adapters.md` for swapping them). The [project bet](garden.tend2.html) is why those seams exist at all.
 
 ## Where
 

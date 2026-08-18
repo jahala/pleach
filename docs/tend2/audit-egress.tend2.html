@@ -19,13 +19,13 @@ The cross-provider audit runs a deterministic `tend audit` command and expects a
 
 Without an explicit contract, the auditor's natural behavior is to summarize: the `tend-audit-result` block lands in the tool's stdout while the agent message says "the audit passed" or "I ran the command and found no issues." `extractAuditJson` reads the message. It finds no fenced block. The audit fails with egress unparseable — and a node that genuinely cleared its gates is reported as broken.
 
-`buildAuditPrompt(command)` in `src/core/audit-egress.ts` closes this gap by wrapping the command in an unambiguous machine instruction: reproduce the fenced ` ```tend-audit-result ` block verbatim — character for character, both fences included — as the final content of the reply. Not a summary. Not a paraphrase. The block. The [umbel seam](umbel-seam.loop.html) delivers this prompt to the auditor and reads back the reply untruncated (ledger C4 — the block can appear anywhere in a long response and the last occurrence is authoritative).
+`buildAuditPrompt(command)` in `src/core/audit-egress.ts` closes this gap by wrapping the command in an unambiguous machine instruction: reproduce the fenced ` ```tend-audit-result ` block verbatim — character for character, both fences included — as the final content of the reply. Not a summary. Not a paraphrase. The block. The [umbel seam](umbel-seam.tend2.html) delivers this prompt to the auditor and reads back the reply untruncated (ledger C4 — the block can appear anywhere in a long response and the last occurrence is authoritative).
 
 ## Last block wins, or the raw message goes to the journal
 
 `extractAuditJson(finalMessage)` runs a global match against the exact label `tend-audit-result`. The auditor may produce prose, retry attempts, or other fences before settling; only the last matching block is authoritative. If no block is present, or the block's content is not valid JSON, the function throws `AuditParseError`, carrying the raw message so the journal records what actually arrived.
 
-`AuditParseError` maps to `reaudit` in `src/core/classify.ts` — not `terminal`, not `retryable`. The [conductor loop](conductor-loop.loop.html) treats it as re-audit-only: the build work stands, only the audit step reruns. An operator whose run hits a flaky auditor gets a reaudit attempt, not a node scrapped and rebuilt from scratch. A parse failure cannot silently close a node; it also cannot destroy a node that built cleanly.
+`AuditParseError` maps to `reaudit` in `src/core/classify.ts` — not `terminal`, not `retryable`. The [conductor loop](conductor-loop.tend2.html) treats it as re-audit-only: the build work stands, only the audit step reruns. An operator whose run hits a flaky auditor gets a reaudit attempt, not a node scrapped and rebuilt from scratch. A parse failure cannot silently close a node; it also cannot destroy a node that built cleanly.
 
 ## Where
 

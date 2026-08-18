@@ -6,7 +6,7 @@
 
 ## agent-output-as-truth (opportunity)
 
-Source: `docs/tend/features/agent-output-as-truth.tend.html` → `agent-output-as-truth.loop.html`
+Source: `docs/tend/features/agent-output-as-truth.tend.html` → `agent-output-as-truth.tend2.html`
 
 **Dropped fields:**
 
@@ -20,7 +20,7 @@ Source: `docs/tend/features/agent-output-as-truth.tend.html` → `agent-output-a
 
 ## audit-egress (loop)
 
-Source: `docs/tend/features/audit-egress.tend.html` → `audit-egress.loop.html`
+Source: `docs/tend/features/audit-egress.tend.html` → `audit-egress.tend2.html`
 
 **Dropped fields:**
 
@@ -76,12 +76,12 @@ Source: `docs/tend/features/audit-egress.tend.html` → `audit-egress.loop.html`
 - emitted: ## For #developer #operator (from v1 personas)
 - emitted: solves inverted into ## Solved by on agent-output-as-truth
 - emitted: solves inverted into ## Solved by on logic-io-entanglement
-- 2 intra-map v1 link(s) rewritten to .loop.html
+- 2 intra-map v1 link(s) rewritten to .tend2.html
 
 
 ## cli-land (loop)
 
-Source: `docs/tend/features/cli-land.tend.html` → `cli-land.loop.html`
+Source: `docs/tend/features/cli-land.tend.html` → `cli-land.tend2.html`
 
 **Dropped fields:**
 
@@ -126,7 +126,7 @@ Source: `docs/tend/features/cli-land.tend.html` → `cli-land.loop.html`
 
 ## cli-run (loop)
 
-Source: `docs/tend/features/cli-run.tend.html` → `cli-run.loop.html`
+Source: `docs/tend/features/cli-run.tend.html` → `cli-run.tend2.html`
 
 **Dropped fields:**
 
@@ -191,12 +191,12 @@ Source: `docs/tend/features/cli-run.tend.html` → `cli-run.loop.html`
 - c007: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
 - emitted: ## For #operator (from v1 personas)
 - emitted: solves inverted into ## Solved by on agent-output-as-truth
-- 7 intra-map v1 link(s) rewritten to .loop.html
+- 7 intra-map v1 link(s) rewritten to .tend2.html
 
 
 ## cli-validate (loop)
 
-Source: `docs/tend/features/cli-validate.tend.html` → `cli-validate.loop.html`
+Source: `docs/tend/features/cli-validate.tend.html` → `cli-validate.tend2.html`
 
 **Dropped fields:**
 
@@ -268,12 +268,12 @@ Source: `docs/tend/features/cli-validate.tend.html` → `cli-validate.loop.html`
 - emitted: ## For #operator #developer (from v1 personas)
 - emitted: solves inverted into ## Solved by on silent-contract-drift
 - emitted: solves inverted into ## Solved by on poison-propagation
-- 3 intra-map v1 link(s) rewritten to .loop.html
+- 3 intra-map v1 link(s) rewritten to .tend2.html
 
 
 ## conductor-loop (loop)
 
-Source: `docs/tend/features/conductor-loop.tend.html` → `conductor-loop.loop.html`
+Source: `docs/tend/features/conductor-loop.tend.html` → `conductor-loop.tend2.html`
 
 **Dropped fields:**
 
@@ -400,12 +400,12 @@ Source: `docs/tend/features/conductor-loop.tend.html` → `conductor-loop.loop.h
 - emitted: solves inverted into ## Solved by on agent-output-as-truth
 - emitted: solves inverted into ## Solved by on poison-propagation
 - emitted: solves inverted into ## Solved by on status-artifact-split
-- 2 intra-map v1 link(s) rewritten to .loop.html
+- 2 intra-map v1 link(s) rewritten to .tend2.html
 
 
 ## developer (persona)
 
-Source: `docs/tend/features/developer.tend.html` → `developer.loop.html`
+Source: `docs/tend/features/developer.tend.html` → `developer.tend2.html`
 
 **Dropped fields:**
 
@@ -414,7 +414,7 @@ Source: `docs/tend/features/developer.tend.html` → `developer.loop.html`
 
 ## isolate-seam (loop)
 
-Source: `docs/tend/features/isolate-seam.tend.html` → `isolate-seam.loop.html`
+Source: `docs/tend/features/isolate-seam.tend.html` → `isolate-seam.tend2.html`
 
 **Dropped fields:**
 
@@ -497,12 +497,12 @@ Source: `docs/tend/features/isolate-seam.tend.html` → `isolate-seam.loop.html`
 - emitted: solves inverted into ## Solved by on poison-propagation
 - emitted: solves inverted into ## Solved by on status-artifact-split
 - emitted: solves inverted into ## Solved by on logic-io-entanglement
-- 3 intra-map v1 link(s) rewritten to .loop.html
+- 3 intra-map v1 link(s) rewritten to .tend2.html
 
 
 ## lock-journal (loop)
 
-Source: `docs/tend/features/lock-journal.tend.html` → `lock-journal.loop.html`
+Source: `docs/tend/features/lock-journal.tend.html` → `lock-journal.tend2.html`
 
 **Dropped fields:**
 
@@ -557,12 +557,12 @@ Source: `docs/tend/features/lock-journal.tend.html` → `lock-journal.loop.html`
 - c005: anchored at the runnable test test/loop/run-plan.test.ts; source module src/loop/run-plan.ts demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - emitted: ## For #developer (from v1 personas)
 - emitted: solves inverted into ## Solved by on logic-io-entanglement
-- 3 intra-map v1 link(s) rewritten to .loop.html
+- 3 intra-map v1 link(s) rewritten to .tend2.html
 
 
 ## logic-io-entanglement (opportunity)
 
-Source: `docs/tend/features/logic-io-entanglement.tend.html` → `logic-io-entanglement.loop.html`
+Source: `docs/tend/features/logic-io-entanglement.tend.html` → `logic-io-entanglement.tend2.html`
 
 **Dropped fields:**
 
@@ -576,7 +576,7 @@ Source: `docs/tend/features/logic-io-entanglement.tend.html` → `logic-io-entan
 
 ## operator (persona)
 
-Source: `docs/tend/features/operator.tend.html` → `operator.loop.html`
+Source: `docs/tend/features/operator.tend.html` → `operator.tend2.html`
 
 **Dropped fields:**
 
@@ -585,7 +585,7 @@ Source: `docs/tend/features/operator.tend.html` → `operator.loop.html`
 
 ## pluggable-adapters (loop)
 
-Source: `docs/tend/features/pluggable-adapters.tend.html` → `pluggable-adapters.loop.html`
+Source: `docs/tend/features/pluggable-adapters.tend.html` → `pluggable-adapters.tend2.html`
 
 **Dropped fields:**
 
@@ -652,12 +652,12 @@ Source: `docs/tend/features/pluggable-adapters.tend.html` → `pluggable-adapter
 - d001: v1 decision had no "at" date — stamped with the migration date instead of a fabricated original date
 - emitted: ## For #developer #operator (from v1 personas)
 - emitted: solves inverted into ## Solved by on logic-io-entanglement
-- 2 intra-map v1 link(s) rewritten to .loop.html
+- 2 intra-map v1 link(s) rewritten to .tend2.html
 
 
 ## poison-propagation (opportunity)
 
-Source: `docs/tend/features/poison-propagation.tend.html` → `poison-propagation.loop.html`
+Source: `docs/tend/features/poison-propagation.tend.html` → `poison-propagation.tend2.html`
 
 **Dropped fields:**
 
@@ -671,7 +671,7 @@ Source: `docs/tend/features/poison-propagation.tend.html` → `poison-propagatio
 
 ## scripted-runner (loop)
 
-Source: `docs/tend/features/scripted-runner.tend.html` → `scripted-runner.loop.html`
+Source: `docs/tend/features/scripted-runner.tend.html` → `scripted-runner.tend2.html`
 
 **Dropped fields:**
 
@@ -712,7 +712,7 @@ Source: `docs/tend/features/scripted-runner.tend.html` → `scripted-runner.loop
 
 ## silent-contract-drift (opportunity)
 
-Source: `docs/tend/features/silent-contract-drift.tend.html` → `silent-contract-drift.loop.html`
+Source: `docs/tend/features/silent-contract-drift.tend.html` → `silent-contract-drift.tend2.html`
 
 **Dropped fields:**
 
@@ -726,7 +726,7 @@ Source: `docs/tend/features/silent-contract-drift.tend.html` → `silent-contrac
 
 ## status-artifact-split (opportunity)
 
-Source: `docs/tend/features/status-artifact-split.tend.html` → `status-artifact-split.loop.html`
+Source: `docs/tend/features/status-artifact-split.tend.html` → `status-artifact-split.tend2.html`
 
 **Dropped fields:**
 
@@ -740,7 +740,7 @@ Source: `docs/tend/features/status-artifact-split.tend.html` → `status-artifac
 
 ## tend-seam (loop)
 
-Source: `docs/tend/features/tend-seam.tend.html` → `tend-seam.loop.html`
+Source: `docs/tend/features/tend-seam.tend.html` → `tend-seam.tend2.html`
 
 **Dropped fields:**
 
@@ -797,12 +797,12 @@ Source: `docs/tend/features/tend-seam.tend.html` → `tend-seam.loop.html`
 - emitted: ## For #developer #operator (from v1 personas)
 - emitted: solves inverted into ## Solved by on status-artifact-split
 - emitted: solves inverted into ## Solved by on logic-io-entanglement
-- 2 intra-map v1 link(s) rewritten to .loop.html
+- 2 intra-map v1 link(s) rewritten to .tend2.html
 
 
 ## umbel-seam (loop)
 
-Source: `docs/tend/features/umbel-seam.tend.html` → `umbel-seam.loop.html`
+Source: `docs/tend/features/umbel-seam.tend.html` → `umbel-seam.tend2.html`
 
 **Dropped fields:**
 
@@ -854,12 +854,12 @@ Source: `docs/tend/features/umbel-seam.tend.html` → `umbel-seam.loop.html`
 - emitted: ## For #developer #operator (from v1 personas)
 - emitted: solves inverted into ## Solved by on agent-output-as-truth
 - emitted: solves inverted into ## Solved by on logic-io-entanglement
-- 2 intra-map v1 link(s) rewritten to .loop.html
+- 2 intra-map v1 link(s) rewritten to .tend2.html
 
 
 ## garden (garden)
 
-Source: `docs/tend/overview.html` → `garden.loop.html`
+Source: `docs/tend/overview.html` → `garden.tend2.html`
 
 **Dropped fields:**
 
@@ -875,4 +875,4 @@ Source: `docs/tend/overview.html` → `garden.loop.html`
 
 - replaced a literal " · " with " - " (would otherwise split a check/Tried line) in: <svg viewBox="0 0 640 280" xmlns="http://www.w3.org/2000/svg" font-family="ui-mo
 - emitted: ## Children (11 loops) from the migrated set
-- 10 intra-map v1 link(s) rewritten to .loop.html
+- 10 intra-map v1 link(s) rewritten to .tend2.html

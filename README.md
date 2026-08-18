@@ -14,7 +14,7 @@ ledger). Agents produce; code decides.
 **Status — v1.** The end-to-end proof run closes: a multi-step feature builds through real agent
 workers, is cross-provider audited, and verifies — and a six-feature product (a client-side PDF
 unifier) has been built the same way, plan to landed code, with zero human diff-reviews. pleach's
-own development is tracked in its verified garden: [`docs/tend2/garden.loop.html`](docs/tend2/garden.loop.html)
+own development is tracked in its verified garden: [`docs/tend2/garden.tend2.html`](docs/tend2/garden.tend2.html)
 (self-contained pages — open any of them in a browser).
 
 > **New to the plotplot tools?** pleach is *day 2* — reach for it when work runs unattended,
