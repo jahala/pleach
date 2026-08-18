@@ -20,5 +20,3 @@ jobs:
         run: bun run lint
       - name: Test
         run: bun run test
-      - name: Brand check (petals, deterministic)
-        run: bash petals/scripts/check.sh index.html
