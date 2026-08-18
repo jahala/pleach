@@ -15,7 +15,7 @@ Worktree isolation is the mechanism that lets parallel nodes work on independent
 
 ## A disposable worktree per node, never a shared branch
 
-`src/seams/isolate.ts:isolate` opens `src/seams/isolate.ts:createIsolateSeam` by calling `git worktree add --detach` into a `mkdtemp` subdirectory under the OS temp dir. Because every worktree lives at its own path, two nodes can fan out from the same base ref in parallel without git's "already checked out" error — the fan-out test (developer:1) exercises exactly this. The worktree starts at `baseRefs[0]`; each remaining ref is merged in sequence. A clean merge (exit 0) moves straight to the next. An unresolvable conflict (exit 1) commits the marker-laden tree in-place with `git add -u && git commit` — not rolled back, not hidden — and populates `conflictFiles` so the [conductor loop](conductor-loop.loop.html) can surface those paths in the agent's re-prompt. Exit > 1 or an unrelated-histories error triggers `merge --abort`, then `dispose`, then `IsolateCatastrophicError`: the worktree never lands.
+`src/seams/isolate.ts:isolate` opens `src/seams/isolate.ts:createIsolateSeam` by calling `git worktree add --detach` into a `mkdtemp` subdirectory under the OS temp dir. Because every worktree lives at its own path, two nodes can fan out from the same base ref in parallel without git's "already checked out" error — the fan-out test (developer:1) exercises exactly this. The worktree starts at `baseRefs[0]`; each remaining ref is merged in sequence. A clean merge (exit 0) moves straight to the next. An unresolvable conflict (exit 1) commits the marker-laden tree in-place with `git add -u && git commit` — not rolled back, not hidden — and populates `conflictFiles` so the [conductor loop](conductor-loop.tend2.html) can surface those paths in the agent's re-prompt. Exit > 1 or an unrelated-histories error triggers `merge --abort`, then `dispose`, then `IsolateCatastrophicError`: the worktree never lands.
 
 `isolate()` detaches a worktree and merges each dependency in turn, with three possible outcomes:
 
@@ -74,7 +74,7 @@ Worktree isolation is the mechanism that lets parallel nodes work on independent
 
 `src/seams/isolate.ts:stage` calls `git add -A -- <files>`, never bare `-A`. The file list comes from the union of `WorkerResult.filesTouched` and `src/seams/isolate.ts:changedFiles` (porcelain, gitignored paths excluded by default). Junk the agent dropped but didn't name cannot enter the commit. `src/seams/isolate.ts:commitBranch` then runs `git commit --allow-empty`, `git branch -f <branch> HEAD`, and `git rev-parse HEAD` — returning a 40-char SHA the loop records as `evidence.diffRef` before calling `emitVerdict` (operator:3). `src/seams/isolate.ts:refSha` resolves any ref to its SHA, returning null if absent — the loop's resume logic uses this to locate a prior verified node's branch without throwing on a first run.
 
-`dispose` calls `git worktree remove --force` and treats "is not a working tree" and "not found" as success (idempotent for double-dispose). Any other non-zero exit throws `IsolateCatastrophicError`, so an unrecognized failure is never silently swallowed. After the worktree is removed, `dispose` deletes the `mkdtemp` parent directory (`tmpBase`) it owns via `fs.rm`. The [conductor loop](conductor-loop.loop.html) holds `dispose` until after `emitVerdict` returns, ensuring a waking dependent never sees its dependency's worktree vanish mid-resolve. See [../overview.html](garden.loop.html) for the project's broader bet.
+`dispose` calls `git worktree remove --force` and treats "is not a working tree" and "not found" as success (idempotent for double-dispose). Any other non-zero exit throws `IsolateCatastrophicError`, so an unrecognized failure is never silently swallowed. After the worktree is removed, `dispose` deletes the `mkdtemp` parent directory (`tmpBase`) it owns via `fs.rm`. The [conductor loop](conductor-loop.tend2.html) holds `dispose` until after `emitVerdict` returns, ensuring a waking dependent never sees its dependency's worktree vanish mid-resolve. See [../overview.html](garden.tend2.html) for the project's broader bet.
 
 ## Where
 
@@ -93,16 +93,16 @@ The git substrate the conductor loop isolates, gates, and commits against.
 Every node builds in a disposable worktree off its verified deps, so conflict markers and junk can never reach a verified branch.
 
 ## Tests
-- [x] (code) Fan-out: two concurrent isolates off one ref succeed at independent paths (no 'already checked out' error). (inferred from test/integration/isolate.test.ts — real git repo) · test/integration/isolate.test.ts
-- [x] (code) B3/C1 join-with-conflict: merging conflicting branches keeps markers in committed state; conflictFiles populated. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts
-- [x] (code) Clean join: disjoint files merge cleanly; conflictFiles is empty; both files present. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts
-- [x] (code) B1 missing non-first ref → IsolateCatastrophicError; no leftover worktree in repo. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts
-- [x] (code) C1 scanMarkers: conflicted file detected after merge; empty array after resolution. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts
-- [x] (code) S1 scoped stage: only named files committed to branch; junk file excluded from commit. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts
-- [x] (code) B2 commitBranch returns 40-char sha; allow-empty succeeds; refSha resolves to same sha. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts
-- [x] (code) dispose: worktree removed from git worktree list; second dispose is a no-op (no throw). (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts
-- [x] (code) C1 gate-must-fail-closed: scanMarkers on non-repo path throws IsolateCatastrophicError. (inferred from test/integration/isolate.test.ts lead-review) · test/integration/isolate.test.ts
-- [x] (code) S1/C2 changedFiles: modified tracked + untracked-unignored listed; gitignored files excluded. (inferred from test/integration/isolate.test.ts lead changedFiles) · test/integration/isolate.test.ts
+- [x] (code) Fan-out: two concurrent isolates off one ref succeed at independent paths (no 'already checked out' error). (inferred from test/integration/isolate.test.ts — real git repo) · test/integration/isolate.test.ts @cc4d3bc
+- [x] (code) B3/C1 join-with-conflict: merging conflicting branches keeps markers in committed state; conflictFiles populated. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @fb6cf96
+- [x] (code) Clean join: disjoint files merge cleanly; conflictFiles is empty; both files present. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @2a46961
+- [x] (code) B1 missing non-first ref → IsolateCatastrophicError; no leftover worktree in repo. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @f0dfc7a
+- [x] (code) C1 scanMarkers: conflicted file detected after merge; empty array after resolution. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @2eaa9e1
+- [x] (code) S1 scoped stage: only named files committed to branch; junk file excluded from commit. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @de0a0dc
+- [x] (code) B2 commitBranch returns 40-char sha; allow-empty succeeds; refSha resolves to same sha. (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @4fc7590
+- [x] (code) dispose: worktree removed from git worktree list; second dispose is a no-op (no throw). (inferred from test/integration/isolate.test.ts — real git) · test/integration/isolate.test.ts @b7900ef
+- [x] (code) C1 gate-must-fail-closed: scanMarkers on non-repo path throws IsolateCatastrophicError. (inferred from test/integration/isolate.test.ts lead-review) · test/integration/isolate.test.ts @b18d9e9
+- [x] (code) S1/C2 changedFiles: modified tracked + untracked-unignored listed; gitignored files excluded. (inferred from test/integration/isolate.test.ts lead changedFiles) · test/integration/isolate.test.ts @888fd83
 
 ## For
 #developer #operator
