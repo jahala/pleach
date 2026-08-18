@@ -15,8 +15,7 @@ ledger). Agents produce; code decides.
 workers, is cross-provider audited, and verifies — and a six-feature product (a client-side PDF
 unifier) has been built the same way, plan to landed code, with zero human diff-reviews. pleach's
 own development is tracked in its verified garden: [`docs/tend2/garden.loop.html`](docs/tend2/garden.loop.html)
-(self-contained pages — open in a browser; rendered by the [`slice/`](slice/) assets, tend2's
-consuming-project convention).
+(self-contained pages — open any of them in a browser).
 
 > **New to the plotplot tools?** pleach is *day 2* — reach for it when work runs unattended,
 > in parallel, or must be trusted later. Day 1 is a single verifier loop

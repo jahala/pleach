@@ -3,7 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>pluggable-adapters · garden</title>
-<link rel="stylesheet" href="../../slice/loop.css">
+<link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
 <script type="text/markdown" id="loop">
@@ -62,4 +62,4 @@ A non-tend, non-umbel user runs pleach standalone on git, or wires any runner/le
 - 2026-08-18 Adapters are runtime-injected code seams (RunnerSeam/LedgerSeam instances in a config file or --runner selection), not a plugin registry or declarative adapter names in the plan. — The plan stays a pure data contract (worker.provider is intent; the config decides how a provider is reached), portable across environments. A string-keyed plugin registry was rejected: it reintroduces interpretation at the loop boundary and makes the integration surface a lookup convention instead of two typed interfaces. Explicit contradiction (--runner + config) errors rather than silently preferring one.
 - 2026-08-18 v1: enabled #cli-run (user-journey edge — v2 `## Needs` is dependency-only; not migrated as a graph edge)
 </script>
-<script src="../../slice/loop.js"></script>
+<script src="./loop.js"></script>
