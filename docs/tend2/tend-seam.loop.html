@@ -91,18 +91,16 @@ pleach's bridge to tend's gated ledger; the only writer to the source polyglots 
 Verdicts reach tend's ledger through a single serial writer, and resume reads back each verified node's commit — claim and artifact stay in lockstep.
 
 ## Tests
-- [!] (code) createModuleTransport rejects a module missing readClosed/emitVerdict exports → TendTransportError. (inferred from test/integration/tend-seam.test.ts — real missoula required) · src/adapters/tend.ts
-- [!] (code) createModuleTransport rejects non-existent path → TendTransportError. (inferred from test/integration/tend-seam.test.ts) · src/adapters/tend.ts
-- [!] (code) readClosed on empty garden → Map instance with size 0. (inferred from test/integration/tend-seam.test.ts — real missoula) · src/adapters/tend.ts
-- [!] (code) readClosed returns Map with verified feature present; in-progress feature excluded. (inferred from test/integration/tend-seam.test.ts — real missoula) · src/adapters/tend.ts
-- [!] (code) emitVerdict with failed Verdict → {closed:false}; feature polyglot status and audit field unchanged. (inferred from test/integration/tend-seam.test.ts — real missoula) · src/adapters/tend.ts
-
-## Needs
+- [x] (code) createModuleTransport rejects a module missing readClosed/emitVerdict exports → TendTransportError. (inferred from test/integration/tend-seam.test.ts — real missoula required) · test/integration/tend-seam.test.ts @5e65818
+- [x] (code) createModuleTransport rejects non-existent path → TendTransportError. (inferred from test/integration/tend-seam.test.ts) · test/integration/tend-seam.test.ts @e30b6e1
+- [x] (code) readClosed on empty garden → Map instance with size 0. (inferred from test/integration/tend-seam.test.ts — real missoula) · test/integration/tend-seam.test.ts @d64d041
+- [x] (code) readClosed returns Map with verified feature present; in-progress feature excluded. (inferred from test/integration/tend-seam.test.ts — real missoula) · test/integration/tend-seam.test.ts @278fef5
+- [x] (code) emitVerdict with failed Verdict → {closed:false}; feature polyglot status and audit field unchanged. (inferred from test/integration/tend-seam.test.ts — real missoula) · test/integration/tend-seam.test.ts @7d2bfc5
 
 ## For
 #developer #operator
 
 ## Tried
-- 2026-08-17 migrated from v1 (docs/tend/features/tend-seam.tend.html) by `loop migrate`
+- 2026-08-18 migrated from v1 (docs/tend/features/tend-seam.tend.html) by `loop migrate`
 </script>
 <script src="../../slice/loop.js"></script>

@@ -132,16 +132,14 @@ An operator runs a whole DAG unattended and only verified work publishes a branc
 - [ ] (code) Smoke gate fail evidence: re-prompt on retry contains the smoke output tail. (inferred from test/loop/run-node.test.ts:retry carries evidence A3)
 - [ ] (code) {command} work: exit 0 → synthetic stop WorkerResult; non-zero → GateFailedError(command). (inferred from test/loop/run-work.test.ts:{command})
 - [ ] (code) {test,phases} work: RED must fail (exit 0 throws GateFailedError(red)); GREEN must pass (non-zero throws GateFailedError(green)). (inferred from test/loop/run-work.test.ts:{test,phases})
-- [x] (code) Lazy worker spawn: a {command} node reaches a verified close without the runner ever spawning a worker. · test/loop/run-node.test.ts @183d1e7
-- [x] (code) Resume: a node already verified in the ledger is reported in RunSummary.alreadyVerified and never re-run. · test/loop/run-plan.test.ts @fb9024e
-- [x] (code) accept.audit.model: the cross-provider auditor is spawned at the requested model when the plan pins one. · test/loop/run-node.test.ts @2b6ba15
-
-## Needs
+- [ ] (code) Lazy worker spawn: a {command} node reaches a verified close without the runner ever spawning a worker. · test/loop/run-node.test.ts
+- [ ] (code) Resume: a node already verified in the ledger is reported in RunSummary.alreadyVerified and never re-run. · test/loop/run-plan.test.ts
+- [ ] (code) accept.audit.model: the cross-provider auditor is spawned at the requested model when the plan pins one. · test/loop/run-node.test.ts
 
 ## For
 #operator #developer
 
 ## Tried
-- 2026-08-17 migrated from v1 (docs/tend/features/conductor-loop.tend.html) by `loop migrate`
+- 2026-08-18 migrated from v1 (docs/tend/features/conductor-loop.tend.html) by `loop migrate`
 </script>
 <script src="../../slice/loop.js"></script>

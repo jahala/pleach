@@ -13,10 +13,6 @@
 
 Opens the repo to add a provider to the umbel seam or tighten a gate. Finds the ledger item, writes the failing test first, then leans on the faces->loop->seams->core boundaries so they never have to wonder whether a function is allowed to touch git. Scenario: a schema field needs to change — they edit the doc, the source, the drift test, and CHANGES.md in one commit, because tend and umbel vendor the contract byte-for-byte.
 
-## Needs
-
-## For
-
 ## Jobs
 - When I add a capability, because I must not let I/O leak into pure logic or a scheduling decision leak into a seam, we believe the layer boundaries make the wrong place to put code obviously wrong. We'll know we got it right when a change lands in exactly one of faces / loop / seams / core without debate, and the import graph stays strictly downward — core imports nothing, the loop receives seams it never imports.
 - When I fix a defect or change behavior, because a fix without a demonstrating test is a guess, we believe every change begins as a failing, ledger-tagged test. We'll know we got it right when the behavior maps to a `// ledger: <id>` test that was RED before the change and GREEN after, and `bun run check` (typecheck + lint + the full suite) is green before merge.
@@ -25,6 +21,6 @@ Opens the repo to add a provider to the umbel seam or tighten a gate. Finds the 
 - When a run misbehaves, because I need to reconstruct what the conductor decided without paying for real agents, we believe every decision leaves a durable, replayable trace. We'll know we got it right when the JSONL journal replays the whole run (run-start -> verdicts -> closes -> run-end) and the in-memory loop tests reproduce any scheduling or retry path deterministically.
 
 ## Tried
-- 2026-08-17 migrated from v1 (docs/tend/features/developer.tend.html) by `loop migrate`
+- 2026-08-18 migrated from v1 (docs/tend/features/developer.tend.html) by `loop migrate`
 </script>
 <script src="../../slice/loop.js"></script>
