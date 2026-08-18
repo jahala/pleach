@@ -228,3 +228,40 @@ F, G                          ── woven in wherever a batch has room
 
 Nothing above outranks the launch itself except A. Every item: RED first, ledger entry,
 `bun run check` green, CI-watched merge — the usual rhythm.
+
+---
+
+## Review outcome (tend2, 2026-08-18 — outsider review, ground-truth-checked)
+
+All sections AGREED; amendments folded below. One real finding earned the review its
+keep before a line was written: **§A would have been vacuous for tend2-emitted plans** —
+their smokes shipped without `--force`, and verify's staleness keys to claim/evidence
+content, so at the land tip a just-stamped check skip-freshes even when a sibling sink
+changed the source under test. Fix is theirs (emit `--force`; lanes become consistent);
+the canary fixture re-pins when their PR lands.
+
+**§A amendments:** dedupe identical smoke command strings before running the union
+(exact-string only); DOCUMENT that gate commands may write to the throwaway worktree
+(tend2's verifier stamps on re-run) — never add a clean-tree-after-gate assertion.
+**§D amendments:** journal keeps VERBATIM output tails (receipts hold `outputTailSha`
+referencing them — their failure briefing reads the journal for text; confirmed);
+receipt facts gain `contractVersion` + `pleachVersion` (a version fence so old receipts
+fail derivation honestly, not mysteriously); `land-culprit` carries the failing smoke's
+output tail; **degraded[] surfaces in the close-time narration/summary line** (trust
+decisions happen at close, not at receipt-inspection); G4a folds into D.
+**§E amendments:** empty-diff retry evidence appends "if no change is needed, run the
+gate so the stamp lands in your diff" (the tend2-lane already-green case self-heals in
+one retry); known trap recorded — hygiene's own test fixtures contain lookalike secrets,
+so the first node editing them trips the battery on itself (fixture naming/allowlist at
+build time).
+**Cut:** G3 (merge-tree pre-probe) — informational noise; bisect names culprits with
+evidence. Revive only on a real conflict postmortem.
+
+**v1.2: all four amendments RATIFY-READY** with prose requirements accepted: escalation
+semantics live in contract prose (attempt N runs `escalation[N-2]`, saturating;
+provider-unchanged is contract LAW; which classes climb is runner policy); the budget
+unenforceable-warning is NORMATIVE ("a runner that cannot count tokens MUST warn, never
+silently pretend enforcement"); promptPath resolves in the node's worktree post-merge,
+missing = gate failure (same rule as context files); when both present, context block
+prefixes promptPath content. tend2 ships emission support post-ratification; canary
+re-pins with (4). Draft-on-convergence is armed — drafting awaits the owner's build go.
