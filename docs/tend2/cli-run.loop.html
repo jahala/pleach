@@ -52,13 +52,13 @@ pleach's primary entry point — the operator's surface over the conductor loop.
 One command turns a tend plan into verified branches; the exit code alone tells the operator whether to trust the run or intervene.
 
 ## Tests
-- [ ] (code) All nodes close verified → exit 0; RunSummary.closed contains all node IDs; failed/blocked/skipped empty. (inferred from test/e2e/cli.test.ts — requires real umbel binary + missoula module) · test/e2e/cli.test.ts
+- [x] (code) All nodes close verified → exit 0; RunSummary.closed contains all node IDs; failed/blocked/skipped empty. (inferred from test/e2e/cli.test.ts — requires real umbel binary + missoula module) · test/e2e/cli.test.ts @2dcbe35
 - [ ] (code) partial/failed/blocked nodes → exit 1; JSON summary has non-empty bucket(s). (inferred from src/faces/cli.ts:summaryExitCode + test/unit/cli-summary.test.ts)
-- [ ] (code) Invalid plan JSON → exit 2; error message on stderr. (inferred from test/e2e/cli.test.ts:invalid plan JSON) · test/e2e/cli.test.ts
+- [x] (code) Invalid plan JSON → exit 2; error message on stderr. (inferred from test/e2e/cli.test.ts:invalid plan JSON) · test/e2e/cli.test.ts @29eb1a0
 - [ ] (code) Missing --tend-module (and no $PLEACH_TEND_MODULE) → exit 2 with usage error. (inferred from src/faces/cli.ts:verbRun guard) · plan.json
 - [ ] (code) Lock held by live process → exit 3 with error on stderr. (inferred from src/faces/cli.ts catch LockHeldError → return 3)
-- [ ] (code) Retry ladder: flaky command node (fails once) retries and closes; node/id branch published with retry evidence. (inferred from test/e2e/cli.test.ts — requires real umbel + missoula) · test/e2e/cli.test.ts
-- [ ] (code) Resume surfacing: an already-verified node is reported, not re-run — RunSummary.alreadyVerified lists it and verbRun's stderr says 'skipped N already-verified node(s)'. · test/loop/run-plan.test.ts
+- [x] (code) Retry ladder: flaky command node (fails once) retries and closes; node/id branch published with retry evidence. (inferred from test/e2e/cli.test.ts — requires real umbel + missoula) · test/e2e/cli.test.ts @6787751
+- [x] (code) Resume surfacing: an already-verified node is reported, not re-run — RunSummary.alreadyVerified lists it and verbRun's stderr says 'skipped N already-verified node(s)'. · test/loop/run-plan.test.ts @84ed1ac
 
 ## For
 #operator

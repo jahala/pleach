@@ -22,10 +22,10 @@ Policy in src/loop/land.ts (all-or-nothing: refuses unless EVERY plan node is ve
 One command takes an operator from 'plan verified' to 'code on my branch'. No hand-merging node branches, no half-landed plans, no way to land unverified work.
 
 ## Tests
-- [ ] (code) landPlan refuses when any plan node is not verified-closed, naming the unverified nodes; nothing reaches the git seam · test/loop/land.test.ts
-- [ ] (code) Conflicting sinks refuse to land and leave the repo byte-identical: branch tip unmoved, no merge in progress, no leaked worktree, error names the files · test/integration/land.test.ts
-- [ ] (code) End-to-end through the real CLI: run then land puts the sink's tree (containing its dependency's work) on the checked-out branch; run --land does it in one invocation; a red run never lands · test/e2e/land.test.ts
-- [ ] (code) An uncommitted overlapping edit blocks the fast-forward and survives untouched (fail-closed toward the user's work) · test/integration/land.test.ts
+- [x] (code) landPlan refuses when any plan node is not verified-closed, naming the unverified nodes; nothing reaches the git seam · test/loop/land.test.ts @29b35fd
+- [x] (code) Conflicting sinks refuse to land and leave the repo byte-identical: branch tip unmoved, no merge in progress, no leaked worktree, error names the files · test/integration/land.test.ts @ca02e57
+- [x] (code) End-to-end through the real CLI: run then land puts the sink's tree (containing its dependency's work) on the checked-out branch; run --land does it in one invocation; a red run never lands · test/e2e/land.test.ts @62f4ea5
+- [x] (code) An uncommitted overlapping edit blocks the fast-forward and survives untouched (fail-closed toward the user's work) · test/integration/land.test.ts @1194953
 
 ## Needs
 #conductor-loop #isolate-seam
