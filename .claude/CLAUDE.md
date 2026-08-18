@@ -63,9 +63,8 @@ updated, the next session starts blind.
 
 ## Gotchas
 
-- **The garden lives at `docs/tend2/` (tend2 format)** — `garden.loop.html` is the hub; pages render
-  via the `slice/` assets (loop.css/loop.js, tend2's consuming-project renderer convention — don't
-  delete them). Verify with the tend2 CLI: `node <tend2-checkout>/dist/cli.js verify <page> --repo-root .
+- **The garden lives at `docs/tend2/` (tend2 format)** — `garden.loop.html` is the hub; the pages
+  are self-contained (loop.css/loop.js live inside `docs/tend2/`). Verify with the tend2 CLI: `node <tend2-checkout>/dist/cli.js verify <page> --repo-root .
   --runner "bun test {evidence}"`. **A pass only the verifier writes**; stamps live in the page and are
   content-keyed — re-migration resets un-earned state, so re-run the sweep after any `migrate`. Current:
   8/11 feature loops fully verified; `cli-run`/`cli-validate`/`conductor-loop` partial (their remainder
