@@ -44,18 +44,16 @@ The contract that makes the cross-provider audit gate trustworthy.
 The auditor's verdict is recovered verbatim and parsed deterministically, so audit egress can't burn a node that passed its gates.
 
 ## Tests
-- [!] (code) Single fenced tend-audit-result block: JSON parsed and returned correctly. (inferred from test/unit/audit-egress.test.ts) · src/core/audit-egress.ts
-- [!] (code) Multiple blocks: LAST block wins; earlier blocks ignored. (inferred from test/unit/audit-egress.test.ts) · src/core/audit-egress.ts
-- [!] (code) No fenced block → AuditParseError carrying the raw message. (inferred from test/unit/audit-egress.test.ts) · src/core/audit-egress.ts
-- [!] (code) Block present but content not valid JSON → AuditParseError. (inferred from test/unit/audit-egress.test.ts) · src/core/audit-egress.ts
-- [!] (code) buildAuditPrompt contains exact command and instructs auditor to reproduce block verbatim. (inferred from test/unit/audit-egress.test.ts) · src/core/audit-egress.ts
-
-## Needs
+- [x] (code) Single fenced tend-audit-result block: JSON parsed and returned correctly. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @10627ce
+- [x] (code) Multiple blocks: LAST block wins; earlier blocks ignored. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @6950317
+- [x] (code) No fenced block → AuditParseError carrying the raw message. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @99e4250
+- [x] (code) Block present but content not valid JSON → AuditParseError. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @832eb42
+- [x] (code) buildAuditPrompt contains exact command and instructs auditor to reproduce block verbatim. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @0825421
 
 ## For
 #developer #operator
 
 ## Tried
-- 2026-08-17 migrated from v1 (docs/tend/features/audit-egress.tend.html) by `loop migrate`
+- 2026-08-18 migrated from v1 (docs/tend/features/audit-egress.tend.html) by `loop migrate`
 </script>
 <script src="../../slice/loop.js"></script>

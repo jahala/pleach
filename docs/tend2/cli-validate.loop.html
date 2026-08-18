@@ -38,14 +38,14 @@ The pre-flight check for `pleach run`; shares the schema + validatePlan core.
 Invalid plans fail in milliseconds with a precise reason instead of deadlocking or corrupting a run.
 
 ## Tests
-- [!] (code) Valid proof plan → exit 0; {valid:true, order:[...]} where last element is 'wordcount'. (inferred from test/e2e/cli.test.ts:validate on proof plan) · examples/proof/plan.json
+- [ ] (code) Valid proof plan → exit 0; {valid:true, order:[...]} where last element is 'wordcount'. (inferred from test/e2e/cli.test.ts:validate on proof plan) · test/e2e/cli.test.ts
 - [ ] (code) Duplicate node IDs → exit 2; PlanInvalidError reasons mention the dup id. (inferred from test/unit/validate.test.ts)
 - [ ] (code) Unknown needs reference → exit 2; reason names the ghost id. (inferred from test/unit/validate.test.ts)
 - [ ] (code) Dependency cycle detected → exit 2; reason contains 'cycle'. (inferred from test/unit/validate.test.ts)
 - [ ] (code) Audit provider === worker provider → exit 2 with model-diversity rule reason. (inferred from test/unit/validate.test.ts)
-- [ ] (code) Unknown verb → exit 2; no args → help on stdout + exit 2. (inferred from test/e2e/cli.test.ts:unknown verb) · x.json
-- [x] (code) validatePlan returns execution waves: a diamond A->{B,C}->D yields [[A],[B,C],[D]]; order stays a valid linearisation. · test/unit/validate-describe.test.ts @8980fb6
-- [x] (code) nodeSummaries reports each node's work-type (command/prompt/phases) and only the gates it declares (setup/smoke/audit:<provider>). · test/unit/validate-describe.test.ts @8b204e6
+- [ ] (code) Unknown verb → exit 2; no args → help on stdout + exit 2. (inferred from test/e2e/cli.test.ts:unknown verb) · test/e2e/cli.test.ts
+- [ ] (code) validatePlan returns execution waves: a diamond A->{B,C}->D yields [[A],[B,C],[D]]; order stays a valid linearisation. · test/unit/validate-describe.test.ts
+- [ ] (code) nodeSummaries reports each node's work-type (command/prompt/phases) and only the gates it declares (setup/smoke/audit:<provider>). · test/unit/validate-describe.test.ts
 - [ ] (code) pleach validate stdout JSON includes waves and nodes in addition to {valid, order}.
 
 ## Needs
@@ -55,7 +55,7 @@ Invalid plans fail in milliseconds with a precise reason instead of deadlocking 
 #operator #developer
 
 ## Tried
-- 2026-08-17 migrated from v1 (docs/tend/features/cli-validate.tend.html) by `loop migrate`
-- 2026-08-17 v1: enabled by #cli-run (same v1 user-journey edge, recorded on this side too)
+- 2026-08-18 migrated from v1 (docs/tend/features/cli-validate.tend.html) by `loop migrate`
+- 2026-08-18 v1: enabled by #cli-run (same v1 user-journey edge, recorded on this side too)
 </script>
 <script src="../../slice/loop.js"></script>

@@ -13,10 +13,6 @@
 
 Runs `pleach run plan.json` against a tend-generated DAG and walks away, returning to verified `node/<id>` branches or a RunSummary naming exactly which nodes failed and why. Scenario: it's late; they queue a six-node feature plan before bed — claude builds the leaves, codex audits the integration node, tend's honest-middle decides — and they wake to '5 closed, 1 partial,' with nothing unverified leaked into a branch.
 
-## Needs
-
-## For
-
 ## Jobs
 - When I hand a multi-step plan to stochastic agents, because I can't personally review every diff and I won't take an agent's word that it 'finished,' we believe only work that mechanically clears the gates should ever land. We'll know we got it right when every published `node/<id>` branch passed smoke + conflict-marker + cross-provider audit, and no node tend declined to verify is ever reported closed.
 - When one node produces a broken or conflict-marked result, because its dependents would merge from it and inherit the poison silently, we believe the conductor must quarantine that node instead of letting the subtree build on garbage. We'll know we got it right when a node that fails its gates publishes no branch and every dependent is reported `skipped` rather than built on a bad base.
@@ -25,6 +21,6 @@ Runs `pleach run plan.json` against a tend-generated DAG and walks away, returni
 - When the run finishes, because I need to know in one glance whether to trust it or intervene, we believe the outcome is unambiguous and scriptable. We'll know we got it right when exit 0 means every node closed verified, and any partial / failed / blocked / skipped node drops the exit to 1 with a per-bucket breakdown on stdout.
 
 ## Tried
-- 2026-08-17 migrated from v1 (docs/tend/features/operator.tend.html) by `loop migrate`
+- 2026-08-18 migrated from v1 (docs/tend/features/operator.tend.html) by `loop migrate`
 </script>
 <script src="../../slice/loop.js"></script>

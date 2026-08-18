@@ -2614,42 +2614,42 @@ a.masthead-tend__chip:hover { color: var(--accent); border-color: var(--border-s
       {
         "check_id": "c001",
         "verdict": "pass",
-        "evidence_path": "src/seams/tend.ts:81-86 (both export guards); test/integration/tend-seam.test.ts:86-100 (real bad module, no readClosed/emitVerdict) — ran `bun test test/integration/tend-seam.test.ts -t 'rejects a path with a missing export'` → 1 pass; negctrl (remove both export-guard blocks → `// no export validation`) → DISCRIMINATES",
+        "evidence_path": "src/adapters/tend.ts:81-86 (both export guards); test/integration/tend-seam.test.ts:86-100 (real bad module, no readClosed/emitVerdict) — ran `bun test test/integration/tend-seam.test.ts -t 'rejects a path with a missing export'` → 1 pass; negctrl (remove both export-guard blocks → `// no export validation`) → DISCRIMINATES",
         "validates_job_satisfied": true,
         "evidence_sha": "ddf5e3624d0565926f69799ef50abd2041c0733a"
       },
       {
         "check_id": "c002",
         "verdict": "pass",
-        "evidence_path": "src/seams/tend.ts:73-79 (catch block wraps in TendTransportError); test/integration/tend-seam.test.ts:102-106 (non-existent path) — ran `bun test test/integration/tend-seam.test.ts -t 'rejects a non-existent path'` → 1 pass; negctrl (catch rethrows raw Error, not TendTransportError) → DISCRIMINATES",
+        "evidence_path": "src/adapters/tend.ts:73-79 (catch block wraps in TendTransportError); test/integration/tend-seam.test.ts:102-106 (non-existent path) — ran `bun test test/integration/tend-seam.test.ts -t 'rejects a non-existent path'` → 1 pass; negctrl (catch rethrows raw Error, not TendTransportError) → DISCRIMINATES",
         "validates_job_satisfied": true,
         "evidence_sha": "ddf5e3624d0565926f69799ef50abd2041c0733a"
       },
       {
         "check_id": "c003",
         "verdict": "partial",
-        "evidence_path": "src/seams/tend.ts:15-20 (adaptToMap); test/integration/tend-seam.test.ts:108-134 — ran `bun test test/integration/tend-seam.test.ts -t 'empty garden'` → 1 pass; negctrl (skip Set→Map loop `// no conversion`) → DOES NOT DISCRIMINATE. Root cause: empty garden returns empty Set, so broken adaptToMap still produces Map size 0 — test cannot distinguish correct conversion from empty stub on zero-item input. A non-empty-Set baseline test (e.g. seeding a verified feature and asserting Map has that id) would discriminate; c004 covers the non-empty path but uses a different test assertion.",
+        "evidence_path": "src/adapters/tend.ts:15-20 (adaptToMap); test/integration/tend-seam.test.ts:108-134 — ran `bun test test/integration/tend-seam.test.ts -t 'empty garden'` → 1 pass; negctrl (skip Set→Map loop `// no conversion`) → DOES NOT DISCRIMINATE. Root cause: empty garden returns empty Set, so broken adaptToMap still produces Map size 0 — test cannot distinguish correct conversion from empty stub on zero-item input. A non-empty-Set baseline test (e.g. seeding a verified feature and asserting Map has that id) would discriminate; c004 covers the non-empty path but uses a different test assertion.",
         "validates_job_satisfied": false,
         "evidence_sha": "ddf5e3624d0565926f69799ef50abd2041c0733a"
       },
       {
         "check_id": "c004",
         "verdict": "pass",
-        "evidence_path": "src/seams/tend.ts:15-20 (adaptToMap Set→Map loop) + src/seams/tend.ts:54-58 (readClosed wiring); test/integration/tend-seam.test.ts:136-191 (seeds verified + in-progress, asserts has/get/not-has) — ran `bun test test/integration/tend-seam.test.ts -t 'readClosed returns a Map with verified feature present'` → 1 pass; negctrl (skip `for (const id of raw) out.set(id, null)`) → DISCRIMINATES",
+        "evidence_path": "src/adapters/tend.ts:15-20 (adaptToMap Set→Map loop) + src/adapters/tend.ts:54-58 (readClosed wiring); test/integration/tend-seam.test.ts:136-191 (seeds verified + in-progress, asserts has/get/not-has) — ran `bun test test/integration/tend-seam.test.ts -t 'readClosed returns a Map with verified feature present'` → 1 pass; negctrl (skip `for (const id of raw) out.set(id, null)`) → DISCRIMINATES",
         "validates_job_satisfied": true,
         "evidence_sha": "ddf5e3624d0565926f69799ef50abd2041c0733a"
       },
       {
         "check_id": "c005",
         "verdict": "pass",
-        "evidence_path": "src/seams/tend.ts:60-62 (emitVerdict enqueue pass-through); test/integration/tend-seam.test.ts:193-236 (failed verdict, checks {closed:false} + readFeature unchanged) — ran `bun test test/integration/tend-seam.test.ts -t 'emitVerdict with failed Verdict'` → 1 pass; negctrl (replace transport relay with `Promise.resolve({ closed: true })`) → DISCRIMINATES",
+        "evidence_path": "src/adapters/tend.ts:60-62 (emitVerdict enqueue pass-through); test/integration/tend-seam.test.ts:193-236 (failed verdict, checks {closed:false} + readFeature unchanged) — ran `bun test test/integration/tend-seam.test.ts -t 'emitVerdict with failed Verdict'` → 1 pass; negctrl (replace transport relay with `Promise.resolve({ closed: true })`) → DISCRIMINATES",
         "validates_job_satisfied": true,
         "evidence_sha": "ddf5e3624d0565926f69799ef50abd2041c0733a"
       }
     ],
     "drift": [
       {
-        "file": "src/seams/tend.ts",
+        "file": "src/adapters/tend.ts",
         "finding": "toProjectRoot path-translation behavior (strips /docs/tend/features/ suffix) has no dedicated test in the integration suite — exercised only indirectly as test fixtures pass root directly. Not one of the 5 checks but is named in the feature's 'how' slot.",
         "action": "document"
       }
