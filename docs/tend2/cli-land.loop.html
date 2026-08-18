@@ -3,7 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>cli-land · garden</title>
-<link rel="stylesheet" href="../../slice/loop.css">
+<link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
 <script type="text/markdown" id="loop">
@@ -38,4 +38,4 @@ One command takes an operator from 'plan verified' to 'code on my branch'. No ha
 - 2026-08-18 v1 steps collapsed; history in git
 - 2026-08-18 Build the landing merges in a throwaway detached worktree; publish only via a single `merge --ff-only`; all-or-nothing across the plan. — Rejected alternatives: merging directly in the user's checkout (a conflict strands the user mid-merge); per-sink partial landing (lands a mix the plan never verified); rollback via git reset (forbidden — destructive). The disposable worktree gives atomicity without ever rewriting the user's branch, and a refused fast-forward leaves the repo byte-identical.
 </script>
-<script src="../../slice/loop.js"></script>
+<script src="./loop.js"></script>
