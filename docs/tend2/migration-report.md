@@ -1,6 +1,6 @@
 # v1 → v2 migration report
 
-19 file(s) migrated, 0 error(s), 575 dropped field(s) named below, 71 transformation note(s).
+19 file(s) migrated, 0 error(s), 565 dropped field(s) named below, 121 transformation note(s).
 
 ## Per-file detail
 
@@ -59,16 +59,23 @@ Source: `docs/tend/features/audit-egress.tend.html` → `audit-egress.loop.html`
 - `coverage_files`: v2 has no coverage/code-ownership concept — `["src/core/audit-egress.ts"]`
 - `judgments`: v1 slot/coherence judgments have no v2 equivalent — `[{"question_id":"check_discriminates","target":"feature","verdict":"n_a","rationale":"All 5 checks have a discriminating negctrl (exit 0); semantic re-judgment skipped for negctrl-proven checks.","judged_sha":"3d9ed66253caa9774756258db68b65d486fca440"},{"question_id":"impact_measurable","target":"sl…(truncated)`
 - `personas_resolved`: denormalized snapshot; the un-resolved personas[] ids already migrated via ## For — `[{"id":"developer","name":"Developer","jobs":["When I add a capability, because I must not let I/O leak into pure logic or a scheduling decision leak into a seam, we believe the layer boundaries make the wrong place to put code obviously wrong. We'll know we got it right when a change lands in exact…(truncated)`
-- `solves`: opportunity-closing edge has no automatic v2 mapping in this pass; add ## Solved by on the opportunity page by hand if wanted — `["agent-output-as-truth","logic-io-entanglement"]`
 - `audit.result / audit.verified_at_commit / audit.drift`: v2 never stores an audit block — only the verifier's per-check @sha stamp; per-check pass/fail state is honestly reflected in the migrated check boxes (without shas) per the migration's honesty rule — `result=pass, ran_at=2026-06-16T20:10:00Z`
 
 **Transformation notes:**
 
 - c001: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
+- c001: anchored at the runnable test test/unit/audit-egress.test.ts; source module src/core/audit-egress.ts demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c002: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
+- c002: anchored at the runnable test test/unit/audit-egress.test.ts; source module src/core/audit-egress.ts demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c003: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
+- c003: anchored at the runnable test test/unit/audit-egress.test.ts; source module src/core/audit-egress.ts demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c004: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
+- c004: anchored at the runnable test test/unit/audit-egress.test.ts; source module src/core/audit-egress.ts demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c005: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
+- c005: anchored at the runnable test test/unit/audit-egress.test.ts; source module src/core/audit-egress.ts demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
+- emitted: ## For #developer #operator (from v1 personas)
+- emitted: solves inverted into ## Solved by on agent-output-as-truth
+- emitted: solves inverted into ## Solved by on logic-io-entanglement
 - 2 intra-map v1 link(s) rewritten to .loop.html
 
 
@@ -105,7 +112,6 @@ Source: `docs/tend/features/cli-land.tend.html` → `cli-land.loop.html`
 - `coverage_files`: v2 has no coverage/code-ownership concept — `["src/loop/land.ts"]`
 - `smoke`: v2 has no smoke.cmd field; encode a smoke check under ## Tests by hand if still wanted — `{"cmd":"bun test test/e2e/land.test.ts"}`
 - `personas_resolved`: denormalized snapshot; the un-resolved personas[] ids already migrated via ## For — `[{"id":"operator","name":"Operator","jobs":["When I hand a multi-step plan to stochastic agents, because I can't personally review every diff and I won't take an agent's word that it 'finished,' we believe only work that mechanically clears the gates should ever land. We'll know we got it right when…(truncated)`
-- `solves`: opportunity-closing edge has no automatic v2 mapping in this pass; add ## Solved by on the opportunity page by hand if wanted — `["status-artifact-split"]`
 
 **Transformation notes:**
 
@@ -114,6 +120,8 @@ Source: `docs/tend/features/cli-land.tend.html` → `cli-land.loop.html`
 - c003: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
 - c004: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
 - d001: v1 decision had no "at" date — stamped with the migration date instead of a fabricated original date
+- emitted: ## For #operator (from v1 personas)
+- emitted: solves inverted into ## Solved by on status-artifact-split
 
 
 ## cli-run (loop)
@@ -170,15 +178,19 @@ Source: `docs/tend/features/cli-run.tend.html` → `cli-run.loop.html`
 - `subpages`: child-feature decomposition is out of scope for this migration pass; re-model as ## Children by hand if wanted — `["conductor-loop","isolate-seam","lock-journal","umbel-seam","tend-seam"]`
 - `subpages_resolved`: denormalized snapshot of subpages; see subpages — `[{"id":"conductor-loop","title":"Conductor Loop: DAG Scheduler and Per-Node Ladder","status":"in-progress","priority":"high","personas":["operator","developer"],"solves":["agent-output-as-truth","poison-propagation","status-artifact-split"],"journey_phase":"build","is_subpage":true,"what":"Drives a …(truncated)`
 - `personas_resolved`: denormalized snapshot; the un-resolved personas[] ids already migrated via ## For — `[{"id":"operator","name":"Operator","jobs":["When I hand a multi-step plan to stochastic agents, because I can't personally review every diff and I won't take an agent's word that it 'finished,' we believe only work that mechanically clears the gates should ever land. We'll know we got it right when…(truncated)`
-- `solves`: opportunity-closing edge has no automatic v2 mapping in this pass; add ## Solved by on the opportunity page by hand if wanted — `["agent-output-as-truth"]`
 
 **Transformation notes:**
 
+- c001: anchored at the runnable test test/e2e/cli.test.ts; source module examples/proof/plan.json demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c001: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
+- c003: anchored at the runnable test test/e2e/cli.test.ts; source module bad.json demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c003: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
 - c004: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
+- c006: anchored at the runnable test test/e2e/cli.test.ts; source module flaky.sh demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c006: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
 - c007: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
+- emitted: ## For #operator (from v1 personas)
+- emitted: solves inverted into ## Solved by on agent-output-as-truth
 - 7 intra-map v1 link(s) rewritten to .loop.html
 
 
@@ -244,14 +256,18 @@ Source: `docs/tend/features/cli-validate.tend.html` → `cli-validate.loop.html`
 - `coverage_files`: v2 has no coverage/code-ownership concept — `["src/core/validate.ts"]`
 - `judgments`: v1 slot/coherence judgments have no v2 equivalent — `[{"question_id":"check_discriminates","target":"feature","verdict":"n_a","rationale":"negctrl proves discrimination mechanically; semantic re-judgment skipped for negctrl-proven checks.","judged_sha":"9d57c6f7f4bc242fb6c9eccc8030fffe8a73e55b"},{"question_id":"impact_measurable","target":"slots:impac…(truncated)`
 - `personas_resolved`: denormalized snapshot; the un-resolved personas[] ids already migrated via ## For — `[{"id":"operator","name":"Operator","jobs":["When I hand a multi-step plan to stochastic agents, because I can't personally review every diff and I won't take an agent's word that it 'finished,' we believe only work that mechanically clears the gates should ever land. We'll know we got it right when…(truncated)`
-- `solves`: opportunity-closing edge has no automatic v2 mapping in this pass; add ## Solved by on the opportunity page by hand if wanted — `["silent-contract-drift","poison-propagation"]`
 
 **Transformation notes:**
 
+- c001: anchored at the runnable test test/e2e/cli.test.ts; source module examples/proof/plan.json demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c001: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
+- c006: anchored at the runnable test test/e2e/cli.test.ts; source module x.json demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c006: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
 - c007: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
 - c008: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
+- emitted: ## For #operator #developer (from v1 personas)
+- emitted: solves inverted into ## Solved by on silent-contract-drift
+- emitted: solves inverted into ## Solved by on poison-propagation
 - 3 intra-map v1 link(s) rewritten to .loop.html
 
 
@@ -261,7 +277,7 @@ Source: `docs/tend/features/conductor-loop.tend.html` → `conductor-loop.loop.h
 
 **Dropped fields:**
 
-- `media.node_ladder.alt`: no v2 alt-text slot; the svg content + caption carry the description — `Per-node execution ladder: isolate → setup → work → marker gate → scoped stage → smoke → audit, with retry loops back from smoke (retryable+evidence) and audit-fail (same tree), and a dead+resume re-isolate loop from work`
+- `media.node_ladder.alt`: a caption already holds the visible-description slot; the alt text is preserved here — `Per-node execution ladder: isolate → setup → work → marker gate → scoped stage → smoke → audit, with retry loops back from smoke (retryable+evidence) and audit-fail (same tree), and a dead+resume re-isolate loop from work`
 - `dek`: v1's own authored dek is superseded by the derived Goal./Who./Pain. dek (what/why) per the migration mapping; original preserved here — `The conductor loop drives a validated Plan to a RunSummary by enforcing a fixed per-node gate ladder, a commit-before-emit invariant, and a classify-then-route retry protocol — together these make pleach's promise concrete: only gates-cleared work ever publishes a branch.`
 - `checks[c001].validates`: v2 test lines have no slot-anchor field — `what`
 - `checks[c001].integration_level`: v2 has no verification-surface field — `integration`
@@ -374,13 +390,16 @@ Source: `docs/tend/features/conductor-loop.tend.html` → `conductor-loop.loop.h
 - `subpages`: child-feature decomposition is out of scope for this migration pass; re-model as ## Children by hand if wanted — `["audit-egress"]`
 - `subpages_resolved`: denormalized snapshot of subpages; see subpages — `[{"id":"audit-egress","title":"Audit Egress: Fenced Block Protocol","status":"verified","priority":"medium","personas":["developer","operator"],"solves":["agent-output-as-truth","logic-io-entanglement"],"journey_phase":"build","is_subpage":true,"what":"Extracts the LAST ```tend-audit-result fenced b…(truncated)`
 - `personas_resolved`: denormalized snapshot; the un-resolved personas[] ids already migrated via ## For — `[{"id":"operator","name":"Operator","jobs":["When I hand a multi-step plan to stochastic agents, because I can't personally review every diff and I won't take an agent's word that it 'finished,' we believe only work that mechanically clears the gates should ever land. We'll know we got it right when…(truncated)`
-- `solves`: opportunity-closing edge has no automatic v2 mapping in this pass; add ## Solved by on the opportunity page by hand if wanted — `["agent-output-as-truth","poison-propagation","status-artifact-split"]`
 
 **Transformation notes:**
 
 - c018: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
 - c019: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
 - c020: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
+- emitted: ## For #operator #developer (from v1 personas)
+- emitted: solves inverted into ## Solved by on agent-output-as-truth
+- emitted: solves inverted into ## Solved by on poison-propagation
+- emitted: solves inverted into ## Solved by on status-artifact-split
 - 2 intra-map v1 link(s) rewritten to .loop.html
 
 
@@ -399,7 +418,7 @@ Source: `docs/tend/features/isolate-seam.tend.html` → `isolate-seam.loop.html`
 
 **Dropped fields:**
 
-- `media.lifecycle.alt`: no v2 alt-text slot; the svg content + caption carry the description — `isolate() merge flow: worktree add, then per-ref merge with three outcomes — clean continues, conflict commits markers and continues, catastrophic aborts and throws`
+- `media.lifecycle.alt`: a caption already holds the visible-description slot; the alt text is preserved here — `isolate() merge flow: worktree add, then per-ref merge with three outcomes — clean continues, conflict commits markers and continues, catastrophic aborts and throws`
 - `dek`: v1's own authored dek is superseded by the derived Goal./Who./Pain. dek (what/why) per the migration mapping; original preserved here — `Every plan node gets a disposable git worktree off its verified dependencies. Conflict markers are committed in-place for the agent to see—then caught by a fail-closed gate before any verified branch is published. A scoped stage and a 40-char SHA are the seam's only outputs.`
 - `checks[c001].validates`: v2 test lines have no slot-anchor field — `what`
 - `checks[c001].integration_level`: v2 has no verification-surface field — `integration`
@@ -460,7 +479,6 @@ Source: `docs/tend/features/isolate-seam.tend.html` → `isolate-seam.loop.html`
 - `coverage_files`: v2 has no coverage/code-ownership concept — `["src/seams/isolate.ts"]`
 - `judgments`: v1 slot/coherence judgments have no v2 equivalent — `[{"question_id":"check_discriminates","target":"feature","verdict":"n_a","rationale":"negctrl proves discrimination mechanically; semantic re-judgment skipped for negctrl-proven checks.","judged_sha":"75abde34336a48c4e9d2f907c67c10ad8774eddc"}]`
 - `personas_resolved`: denormalized snapshot; the un-resolved personas[] ids already migrated via ## For — `[{"id":"developer","name":"Developer","jobs":["When I add a capability, because I must not let I/O leak into pure logic or a scheduling decision leak into a seam, we believe the layer boundaries make the wrong place to put code obviously wrong. We'll know we got it right when a change lands in exact…(truncated)`
-- `solves`: opportunity-closing edge has no automatic v2 mapping in this pass; add ## Solved by on the opportunity page by hand if wanted — `["poison-propagation","status-artifact-split","logic-io-entanglement"]`
 - `audit.result / audit.verified_at_commit / audit.drift`: v2 never stores an audit block — only the verifier's per-check @sha stamp; per-check pass/fail state is honestly reflected in the migrated check boxes (without shas) per the migration's honesty rule — `result=pass, ran_at=2026-08-16, verified_at_commit=9e28318d41abc0a24c69924ed519d9933c492701`
 
 **Transformation notes:**
@@ -475,6 +493,10 @@ Source: `docs/tend/features/isolate-seam.tend.html` → `isolate-seam.loop.html`
 - c008: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
 - c009: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
 - c010: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
+- emitted: ## For #developer #operator (from v1 personas)
+- emitted: solves inverted into ## Solved by on poison-propagation
+- emitted: solves inverted into ## Solved by on status-artifact-split
+- emitted: solves inverted into ## Solved by on logic-io-entanglement
 - 3 intra-map v1 link(s) rewritten to .loop.html
 
 
@@ -519,16 +541,22 @@ Source: `docs/tend/features/lock-journal.tend.html` → `lock-journal.loop.html`
 - `coverage_files`: v2 has no coverage/code-ownership concept — `["src/seams/lock.ts","src/seams/journal.ts","src/seams/gitdir.ts"]`
 - `judgments`: v1 slot/coherence judgments have no v2 equivalent — `[{"question_id":"check_discriminates","target":"feature","verdict":"n_a","rationale":"negctrl proves discrimination mechanically; semantic re-judgment skipped for negctrl-proven checks.","judged_sha":"6d1421a92a6fcefd8278552f59118251cc16b249"}]`
 - `personas_resolved`: denormalized snapshot; the un-resolved personas[] ids already migrated via ## For — `[{"id":"developer","name":"Developer","jobs":["When I add a capability, because I must not let I/O leak into pure logic or a scheduling decision leak into a seam, we believe the layer boundaries make the wrong place to put code obviously wrong. We'll know we got it right when a change lands in exact…(truncated)`
-- `solves`: opportunity-closing edge has no automatic v2 mapping in this pass; add ## Solved by on the opportunity page by hand if wanted — `["logic-io-entanglement"]`
 - `audit.result / audit.verified_at_commit / audit.drift`: v2 never stores an audit block — only the verifier's per-check @sha stamp; per-check pass/fail state is honestly reflected in the migrated check boxes (without shas) per the migration's honesty rule — `result=pass, ran_at=2026-08-16, verified_at_commit=9e28318d41abc0a24c69924ed519d9933c492701`
 
 **Transformation notes:**
 
 - c001: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
+- c001: anchored at the runnable test test/integration/lock.test.ts; source module src/seams/lock.ts demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c002: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
+- c002: anchored at the runnable test test/integration/lock.test.ts; source module src/seams/lock.ts demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c003: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
+- c003: anchored at the runnable test test/integration/lock.test.ts; source module src/seams/lock.ts demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c004: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
+- c004: anchored at the runnable test test/integration/lock.test.ts; source module src/seams/lock.ts demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c005: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
+- c005: anchored at the runnable test test/loop/run-plan.test.ts; source module src/loop/run-plan.ts demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
+- emitted: ## For #developer (from v1 personas)
+- emitted: solves inverted into ## Solved by on logic-io-entanglement
 - 3 intra-map v1 link(s) rewritten to .loop.html
 
 
@@ -609,12 +637,12 @@ Source: `docs/tend/features/pluggable-adapters.tend.html` → `pluggable-adapter
 - `coverage_files`: v2 has no coverage/code-ownership concept — `["src/adapters/git.ts","src/faces/config.ts","src/core/schema-json.ts","src/index.ts","src/adapters/direct-cli.ts"]`
 - `smoke`: v2 has no smoke.cmd field; encode a smoke check under ## Tests by hand if still wanted — `{"cmd":"bun test test/integration/config-resolve.test.ts test/e2e/direct-cli.test.ts"}`
 - `personas_resolved`: denormalized snapshot; the un-resolved personas[] ids already migrated via ## For — `[{"id":"developer","name":"Developer","jobs":["When I add a capability, because I must not let I/O leak into pure logic or a scheduling decision leak into a seam, we believe the layer boundaries make the wrong place to put code obviously wrong. We'll know we got it right when a change lands in exact…(truncated)`
-- `solves`: opportunity-closing edge has no automatic v2 mapping in this pass; add ## Solved by on the opportunity page by hand if wanted — `["logic-io-entanglement"]`
 
 **Transformation notes:**
 
 - c001: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
 - c002: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
+- c003: anchored at the runnable test test/integration/config-resolve.test.ts; source module /no/such/pleach.config.ts demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c003: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
 - c004: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
 - c005: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
@@ -622,6 +650,8 @@ Source: `docs/tend/features/pluggable-adapters.tend.html` → `pluggable-adapter
 - c007: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
 - c008: evidence field is a best-effort path pulled from verification_recipe, not an audited evidence_path
 - d001: v1 decision had no "at" date — stamped with the migration date instead of a fabricated original date
+- emitted: ## For #developer #operator (from v1 personas)
+- emitted: solves inverted into ## Solved by on logic-io-entanglement
 - 2 intra-map v1 link(s) rewritten to .loop.html
 
 
@@ -714,7 +744,7 @@ Source: `docs/tend/features/tend-seam.tend.html` → `tend-seam.loop.html`
 
 **Dropped fields:**
 
-- `media.ingester_queue.alt`: no v2 alt-text slot; the svg content + caption carry the description — `Three concurrent emitVerdict callers funneling through a FIFO promise-chain queue into a single tend ledger transport`
+- `media.ingester_queue.alt`: a caption already holds the visible-description slot; the alt text is preserved here — `Three concurrent emitVerdict callers funneling through a FIFO promise-chain queue into a single tend ledger transport`
 - `dek`: v1's own authored dek is superseded by the derived Goal./Who./Pain. dek (what/why) per the migration mapping; original preserved here — `The tend ledger adapter is the single serial writer between pleach's execution verdicts and tend's verifiable ledger. It serializes concurrent node completions through a FIFO promise-chain queue, adapts tend's pre-SHA return format, and translates polyglot paths to project roots — so the ledger alwa…(truncated)`
 - `checks[c001].validates`: v2 test lines have no slot-anchor field — `what`
 - `checks[c001].integration_level`: v2 has no verification-surface field — `integration`
@@ -750,16 +780,23 @@ Source: `docs/tend/features/tend-seam.tend.html` → `tend-seam.loop.html`
 - `coverage_files`: v2 has no coverage/code-ownership concept — `["src/adapters/tend.ts"]`
 - `judgments`: v1 slot/coherence judgments have no v2 equivalent — `[{"question_id":"check_discriminates","target":"feature","verdict":"n_a","rationale":"negctrl proves discrimination mechanically for c001, c002, c004, c005; semantic re-judgment skipped for negctrl-proven checks. c003 did not discriminate — recorded as partial with specific gap noted.","judged_sha":…(truncated)`
 - `personas_resolved`: denormalized snapshot; the un-resolved personas[] ids already migrated via ## For — `[{"id":"developer","name":"Developer","jobs":["When I add a capability, because I must not let I/O leak into pure logic or a scheduling decision leak into a seam, we believe the layer boundaries make the wrong place to put code obviously wrong. We'll know we got it right when a change lands in exact…(truncated)`
-- `solves`: opportunity-closing edge has no automatic v2 mapping in this pass; add ## Solved by on the opportunity page by hand if wanted — `["status-artifact-split","logic-io-entanglement"]`
 - `audit.result / audit.verified_at_commit / audit.drift`: v2 never stores an audit block — only the verifier's per-check @sha stamp; per-check pass/fail state is honestly reflected in the migrated check boxes (without shas) per the migration's honesty rule — `result=partial, ran_at=2026-06-16T20:10:00Z, drift=1 entry`
 
 **Transformation notes:**
 
 - c001: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
+- c001: anchored at the runnable test test/integration/tend-seam.test.ts; source module src/adapters/tend.ts demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c002: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
+- c002: anchored at the runnable test test/integration/tend-seam.test.ts; source module src/adapters/tend.ts demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c003: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
+- c003: anchored at the runnable test test/integration/tend-seam.test.ts; source module src/adapters/tend.ts demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c004: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
+- c004: anchored at the runnable test test/integration/tend-seam.test.ts; source module src/adapters/tend.ts demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
 - c005: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
+- c005: anchored at the runnable test test/integration/tend-seam.test.ts; source module src/adapters/tend.ts demoted to a prose note (an unrunnable anchor can never re-earn its stamp)
+- emitted: ## For #developer #operator (from v1 personas)
+- emitted: solves inverted into ## Solved by on status-artifact-split
+- emitted: solves inverted into ## Solved by on logic-io-entanglement
 - 2 intra-map v1 link(s) rewritten to .loop.html
 
 
@@ -769,7 +806,7 @@ Source: `docs/tend/features/umbel-seam.tend.html` → `umbel-seam.loop.html`
 
 **Dropped fields:**
 
-- `media.worker_lifecycle.alt`: no v2 alt-text slot; the svg content + caption carry the description — `Worker lifecycle flow: spawnWorker produces a Worker, send captures sinceMtime and flows into wait which branches on reason — stop leads to read/actions/diff then kill; dead/timeout/aborted lead directly to kill; input/idle surface as blocked. A dashed arrow shows the send→wait loop repeating for multi-turn conversations.`
+- `media.worker_lifecycle.alt`: a caption already holds the visible-description slot; the alt text is preserved here — `Worker lifecycle flow: spawnWorker produces a Worker, send captures sinceMtime and flows into wait which branches on reason — stop leads to read/actions/diff then kill; dead/timeout/aborted lead directly to kill; input/idle surface as blocked. A dashed arrow shows the send→wait loop repeating for multi-turn conversations.`
 - `dek`: v1's own authored dek is superseded by the derived Goal./Who./Pain. dek (what/why) per the migration mapping; original preserved here — `The bundled umbel runner adapter is one channel between pleach's deterministic loop and a stochastic agent: spawn→send→wait→kill over the umbel binary, with sinceMtime threading to make stop detection race-free and typed reasons — stop, dead, timeout, aborted, input, idle — so the loop never holds a…(truncated)`
 - `checks[c001].validates`: v2 test lines have no slot-anchor field — `what`
 - `checks[c001].integration_level`: v2 has no verification-surface field — `integration`
@@ -805,7 +842,6 @@ Source: `docs/tend/features/umbel-seam.tend.html` → `umbel-seam.loop.html`
 - `coverage_files`: v2 has no coverage/code-ownership concept — `["src/adapters/umbel.ts"]`
 - `judgments`: v1 slot/coherence judgments have no v2 equivalent — `[{"question_id":"check_discriminates","target":"feature","verdict":"n_a","rationale":"Verdicts are per-check. c002 failed all 3 negctrl strategies; c001/c003/c004/c005 discriminate.","judged_sha":"a049bbbaf6124a454f537406ee94aa33eee4fd07"}]`
 - `personas_resolved`: denormalized snapshot; the un-resolved personas[] ids already migrated via ## For — `[{"id":"developer","name":"Developer","jobs":["When I add a capability, because I must not let I/O leak into pure logic or a scheduling decision leak into a seam, we believe the layer boundaries make the wrong place to put code obviously wrong. We'll know we got it right when a change lands in exact…(truncated)`
-- `solves`: opportunity-closing edge has no automatic v2 mapping in this pass; add ## Solved by on the opportunity page by hand if wanted — `["agent-output-as-truth","logic-io-entanglement"]`
 - `audit.result / audit.verified_at_commit / audit.drift`: v2 never stores an audit block — only the verifier's per-check @sha stamp; per-check pass/fail state is honestly reflected in the migrated check boxes (without shas) per the migration's honesty rule — `result=partial, ran_at=2026-06-16T20:25:00Z`
 
 **Transformation notes:**
@@ -815,6 +851,9 @@ Source: `docs/tend/features/umbel-seam.tend.html` → `umbel-seam.loop.html`
 - c003: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
 - c004: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
 - c005: audited evidence prose trimmed to its first path token; full audit text remains in the frozen v1 page
+- emitted: ## For #developer #operator (from v1 personas)
+- emitted: solves inverted into ## Solved by on agent-output-as-truth
+- emitted: solves inverted into ## Solved by on logic-io-entanglement
 - 2 intra-map v1 link(s) rewritten to .loop.html
 
 
@@ -824,15 +863,16 @@ Source: `docs/tend/overview.html` → `garden.loop.html`
 
 **Dropped fields:**
 
-- `media.overview_arch.alt`: no v2 alt-text slot; the svg content + caption carry the description — `pleach architecture: tend and umbel as flanking systems, pleach loop in the center with core, seams, and loop layers`
+- `media.overview_arch.alt`: a caption already holds the visible-description slot; the alt text is preserved here — `pleach architecture: tend and umbel as flanking systems, pleach loop in the center with core, seams, and loop layers`
 - `dek`: v1's own authored dek is superseded by the derived Goal./Who./Pain. dek (what/why) per the migration mapping; original preserved here — `Operators can't trust stochastic agents to self-certify, and reviewing every diff defeats the point of delegation. pleach is the deterministic conductor between tend and umbel: it isolates each plan node in its own git worktree, enforces gates mechanically, and publishes a node/<id> branch only for …(truncated)`
 - `status`: v2 derives state from checks; no status field is stored (FORMAT.md §6) — `planned`
 - `progress`: v2 recomputes progress from check state on every read; never stored (FORMAT.md §6) — `{"implementation":0,"verification":0}`
 - `catalog`: denormalized project-wide lookup table; equivalent per-entry data already migrated via each catalog-description page — `{"schema_version":"1","project_id":"pleach","status":"approved","journey_phases":["build","verify"],"personas":[{"id":"operator","name":"Operator","archetype":"A practitioner who has already planned work in a tend garden and wants a swarm of stochastic agents to build and verify it unattended — won'…(truncated)`
-- `features_aggregate`: denormalized rollup of features; equivalent data is available by reading the migrated feature files directly — `[{"id":"operator","title":"Operator","status":"planned"},{"id":"developer","title":"Developer","status":"planned"},{"id":"cli-run","title":"pleach run: Execute a Plan","status":"planned","priority":"high","enables":["cli-validate"],"personas":["operator"],"solves":["agent-output-as-truth"],"journey_…(truncated)`
+- `features_aggregate`: denormalized rollup of features; the hub's ## Children is emitted from the migrated set instead — `[{"id":"operator","title":"Operator","status":"planned"},{"id":"developer","title":"Developer","status":"planned"},{"id":"cli-run","title":"pleach run: Execute a Plan","status":"planned","priority":"high","enables":["cli-validate"],"personas":["operator"],"solves":["agent-output-as-truth"],"journey_…(truncated)`
 - `health_snapshot`: recomputed by the v2 rail at read time, never stored — `{"verdict":"yellow","reason_codes":["stale_evidence","false_done","blocked","unblocked","unbound_persona"],"truth":{"verified":3,"total":18,"stale":10,"mock_only":0,"false_done":2,"auditable":11,"audited":5},"flow":{"ready_now":5,"blocked":3,"bottleneck_feature_id":"conductor-loop"},"value":{"highes…(truncated)`
 
 **Transformation notes:**
 
 - replaced a literal " · " with " - " (would otherwise split a check/Tried line) in: <svg viewBox="0 0 640 280" xmlns="http://www.w3.org/2000/svg" font-family="ui-mo
+- emitted: ## Children (11 loops) from the migrated set
 - 10 intra-map v1 link(s) rewritten to .loop.html

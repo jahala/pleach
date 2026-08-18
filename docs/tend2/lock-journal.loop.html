@@ -42,18 +42,16 @@ The run-safety primitives the loop relies on from start to finish.
 One conductor per (repo, source) is guaranteed, and every run leaves a replayable JSONL trace.
 
 ## Tests
-- [!] (code) B4: second acquire from same process on same (repoRoot, source) → LockHeldError with holder pid === process.pid. (inferred from test/integration/lock.test.ts — real filesystem) · src/seams/lock.ts
-- [!] (code) B4: release → reacquire works (lock is deleted on release). (inferred from test/integration/lock.test.ts — real filesystem) · src/seams/lock.ts
-- [!] (code) B4: stale lock with dead pid (999999) → taken over; new lockfile contains current pid. (inferred from test/integration/lock.test.ts — real filesystem) · src/seams/lock.ts
-- [!] (code) B4: lockfile content is the acquiring process pid (decimal string). (inferred from test/integration/lock.test.ts — real filesystem) · src/seams/lock.ts
-- [!] (code) Journal: run-start and run-end events present in JSONL after runPlan completes. (inferred from test/loop/run-plan.test.ts:lock + journal) · src/loop/run-plan.ts
-
-## Needs
+- [x] (code) B4: second acquire from same process on same (repoRoot, source) → LockHeldError with holder pid === process.pid. (inferred from test/integration/lock.test.ts — real filesystem) · test/integration/lock.test.ts @399aa8e
+- [x] (code) B4: release → reacquire works (lock is deleted on release). (inferred from test/integration/lock.test.ts — real filesystem) · test/integration/lock.test.ts @b557009
+- [x] (code) B4: stale lock with dead pid (999999) → taken over; new lockfile contains current pid. (inferred from test/integration/lock.test.ts — real filesystem) · test/integration/lock.test.ts @4f3108d
+- [x] (code) B4: lockfile content is the acquiring process pid (decimal string). (inferred from test/integration/lock.test.ts — real filesystem) · test/integration/lock.test.ts @bc80098
+- [x] (code) Journal: run-start and run-end events present in JSONL after runPlan completes. (inferred from test/loop/run-plan.test.ts:lock + journal) · test/loop/run-plan.test.ts @b9e077c
 
 ## For
 #developer
 
 ## Tried
-- 2026-08-17 migrated from v1 (docs/tend/features/lock-journal.tend.html) by `loop migrate`
+- 2026-08-18 migrated from v1 (docs/tend/features/lock-journal.tend.html) by `loop migrate`
 </script>
 <script src="../../slice/loop.js"></script>
