@@ -269,6 +269,39 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     return files;
   }
 
+  // ── stagedDiff / stagedNumstat (the hygiene gate's raw material, §E) ────
+
+  async function stagedDiff(cwd: string): Promise<string> {
+    const r = await git(exec, cwd, 'diff', '--cached');
+    if (r.exitCode !== 0) {
+      throw new IsolateCatastrophicError('git diff --cached', `exited ${r.exitCode}: ${r.output}`);
+    }
+    return r.output;
+  }
+
+  async function stagedNumstat(
+    cwd: string,
+  ): Promise<{ file: string; added: number; deleted: number }[]> {
+    const r = await git(exec, cwd, 'diff', '--cached', '--numstat');
+    if (r.exitCode !== 0) {
+      throw new IsolateCatastrophicError(
+        'git diff --cached --numstat',
+        `exited ${r.exitCode}: ${r.output}`,
+      );
+    }
+    const out: { file: string; added: number; deleted: number }[] = [];
+    for (const line of r.output.split('\n')) {
+      const parts = line.split('\t');
+      if (parts.length < 3) continue;
+      const added = Number(parts[0]);
+      const deleted = Number(parts[1]);
+      // Binary files report '-': skip — the text detectors have nothing to read.
+      if (!Number.isFinite(added) || !Number.isFinite(deleted)) continue;
+      out.push({ file: parts.slice(2).join('\t'), added, deleted });
+    }
+    return out;
+  }
+
   // ── commitBranch ─────────────────────────────────────────────────────────
 
   async function commitBranch(
@@ -378,5 +411,15 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     }
   }
 
-  return { isolate, scanMarkers, stage, changedFiles, commitBranch, refSha, landStack };
+  return {
+    isolate,
+    scanMarkers,
+    stage,
+    stagedDiff,
+    stagedNumstat,
+    changedFiles,
+    commitBranch,
+    refSha,
+    landStack,
+  };
 }

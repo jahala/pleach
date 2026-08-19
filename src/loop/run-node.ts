@@ -6,6 +6,7 @@ import {
   IsolateCatastrophicError,
   PlanInvalidError,
 } from '../core/errors.ts';
+import { checkDiffHygiene } from '../core/hygiene.ts';
 import { type AuditResult, AuditResultSchema, type Node, type Verdict } from '../core/plan.ts';
 import { DEFAULT_WORKER_PROVIDER } from '../core/validate.ts';
 import type { ConductorDeps, Isolation, WorkerResult } from './deps.ts';
@@ -221,6 +222,34 @@ export async function runNode(
       const changed = await deps.isolate.changedFiles(cwd);
       const stagedFiles = dedup([...result.filesTouched, ...changed]);
       await deps.isolate.stage(cwd, stagedFiles);
+
+      // ── hygiene (§E) ─────────────────────────────────────────────────────────
+      // Pure scans over the staged diff: empty-diff attribution (agent work
+      // claiming done on nothing), a high-precision secrets battery, and the
+      // bulk-deletion tripwire with its deterministic re-state escape. All
+      // retryable with evidence; terminal failure quarantines like any gate.
+      {
+        const hygiene = checkDiffHygiene({
+          workKind:
+            'command' in node.work ? 'command' : 'phases' in node.work ? 'phases' : 'prompt',
+          stagedFiles,
+          diff: stagedFiles.length > 0 ? await deps.isolate.stagedDiff(cwd) : '',
+          numstat: stagedFiles.length > 0 ? await deps.isolate.stagedNumstat(cwd) : [],
+          finalMessage: result.finalMessage,
+        });
+        if (hygiene !== null) {
+          const settle = settleRetryable(
+            node,
+            attempts,
+            maxAttempts,
+            { gate: { ran: `hygiene:${hygiene.kind}`, exitCode: -1 } },
+            hygiene.evidence,
+          );
+          if (settle) return handBack(settle);
+          evidence = hygiene.evidence;
+          continue; // retryable — SAME tree; the worker can fix its diff
+        }
+      }
 
       // ── smoke ────────────────────────────────────────────────────────────────
       if (node.accept.smoke) {
