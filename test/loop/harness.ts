@@ -136,7 +136,8 @@ export interface HarnessOpts {
   disposeDelay?: (nodeId: string) => Promise<void>;
   // Node ids whose dispose() throws IsolateCatastrophicError (fault injection).
   disposeThrows?: Set<string>;
-  // Make land() throw (fault injection for landPlan's journal paths).
+  // Make the land stack's publish() throw (fault injection for landPlan's
+  // journal paths — conflict/blocked refusal).
   landThrows?: Error;
 }
 
@@ -240,12 +241,25 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     async refSha(_cwd, ref): Promise<string | null> {
       return git.refs.get(ref) ?? null;
     },
-    async land(_repoRoot, refs): Promise<{ branch: string; sha: string }> {
-      log.push('land', undefined, refs.join(','));
-      if (opts.landThrows) throw opts.landThrows;
-      const sha = git.newSha();
-      git.refs.set('main', sha);
-      return { branch: 'main', sha };
+    // Staged landing (W1 of the adoption ladder): the loop gates the merged
+    // stack between build and publish. The stack's cwd encodes the merged
+    // refs so execScript-driven tests can simulate interaction failures.
+    async landStack(_repoRoot, refs) {
+      const cwd = `land:${refs.join('+')}`;
+      log.push('landStack', undefined, cwd);
+      return {
+        cwd,
+        publish: async (): Promise<{ branch: string; sha: string }> => {
+          log.push('land', undefined, refs.join(','));
+          if (opts.landThrows) throw opts.landThrows;
+          const sha = git.newSha();
+          git.refs.set('main', sha);
+          return { branch: 'main', sha };
+        },
+        dispose: async (): Promise<void> => {
+          log.push('landStack-dispose', undefined, cwd);
+        },
+      };
     },
   };
 
