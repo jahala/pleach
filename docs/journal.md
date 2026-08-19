@@ -21,7 +21,7 @@ tolerate unknown events and unknown fields.
 | `node-start` | `node` | a node's attempt ladder began |
 | `gate-fail` | `node`, `gate` (`setup`\|`markers`\|`smoke`\|`red`\|`green`\|`command`\|`audit-parse`\|`commit`\|…) | a gate failed (may retry) |
 | `blocked` | `node`, `reason` (the prompt text) | **needs a human** — worker stopped at a permission prompt; session terminated |
-| `verdict` | `node`, `status`, `attempts`, `telemetry` (worker-reported, e.g. `tokens`), `durationMs` (wall clock), `gate?` (`ran`, `exitCode`, `outputTail?` — the failing gate's actual output, capped 2000 chars), `blockedReason?` | a node reached its terminal verdict |
+| `verdict` | `node`, `status`, `attempts`, `telemetry` (worker-reported, e.g. `tokens`), `durationMs` (wall clock), `provider` (resolved — never absent), `model?`, `gate?` (`ran`, `exitCode`, `outputTail?` — the failing gate's actual output, capped 2000 chars), `blockedReason?` | a node reached its terminal verdict |
 | `closed` | `node`, `sha` | verified close — `node/<id>` published at `sha` |
 | `not-closed` | `node` | ledger declined to verify-close (branch published, not verified) |
 | `quarantined` | `node`, `branch` (`quarantine/<id>`), `sha` | failed work preserved for inspection |

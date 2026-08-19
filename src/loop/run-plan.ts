@@ -1,6 +1,6 @@
 import { GateFailedError, RebuildRequiredError } from '../core/errors.ts';
 import type { Node, Plan, Verdict } from '../core/plan.ts';
-import { validatePlan } from '../core/validate.ts';
+import { DEFAULT_WORKER_PROVIDER, validatePlan } from '../core/validate.ts';
 import type { ConductorDeps, Isolation, RunSummary } from './deps.ts';
 import { type RunNodeResult, runNode } from './run-node.ts';
 
@@ -218,6 +218,10 @@ async function runUnderLock(
       // alone. Journal-only enrichment — the Verdict contract is untouched.
       telemetry: verdict.telemetry,
       durationMs: Date.now() - startedAt,
+      // The casting join (G1): who did this work, resolved — 'counted, never
+      // attributed' was tend2's ledger's first finding; this closes it.
+      provider: node.worker.provider ?? DEFAULT_WORKER_PROVIDER,
+      ...(node.worker.model !== undefined ? { model: node.worker.model } : {}),
       ...(verdict.evidence.gate
         ? {
             gate: {
