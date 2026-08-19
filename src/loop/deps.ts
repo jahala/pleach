@@ -23,6 +23,17 @@ export interface Isolation {
   dispose: () => Promise<void>;
 }
 
+// A built-but-unpublished land stack: every sink merged in a throwaway
+// worktree at the target branch's tip. The loop gates in `cwd`, then either
+// publishes (ff-only) or disposes without a trace. Gate commands MAY write to
+// the worktree (a verifier stamping its own page is by design — never assert
+// a clean tree after a gate).
+export interface LandStack {
+  cwd: string;
+  publish(): Promise<{ branch: string; sha: string }>;
+  dispose(): Promise<void>;
+}
+
 export interface IsolateSeam {
   // Detached worktree at baseRefs[0] with the rest merged in. Normal conflicts
   // are KEPT (markers + conflictFiles); a catastrophic merge (bad ref,
@@ -48,7 +59,10 @@ export interface IsolateSeam {
   // ever touched by a final `merge --ff-only`, so a conflict (LandConflictError),
   // a detached HEAD, or a refused fast-forward (LandBlockedError) leaves the
   // repo exactly as it was.
-  land(repoRoot: string, refs: readonly string[]): Promise<{ branch: string; sha: string }>;
+  // Staged landing: build the sink-merge stack in a throwaway worktree,
+  // hand the loop its cwd for the land gate, publish only on explicit call
+  // (ff-only, the sole touch on the checkout). Adoption ladder §A.
+  landStack(repoRoot: string, refs: readonly string[]): Promise<LandStack>;
 }
 
 export interface WorkerResult {

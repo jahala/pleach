@@ -31,6 +31,11 @@ tolerate unknown events and unknown fields.
 | `dispose-failed` | `node`, `detail` | worktree cleanup failure (diagnostic) |
 | `run-end` | the `RunSummary` fields (`closed`, `failed`, `partial`, `skipped`, `blocked`, `quarantined`, `alreadyVerified`, …) | the run settled |
 | `land-start` | `goal` | landing began |
+| `land-gate` | `commands[]`, `sinks[]` | the composition gate: sinks' deduped smokes run on the stack tip |
+| `land-gate-retry` | `command` | one flaky retry of the failing gate command |
+| `land-bisect` | `testing[]`, `context[]` | bisect probe: testing these sinks atop the known-good context |
+| `land-culprit` | `node`, `command`, `outputTail` | the sink whose inclusion breaks the composition (refuse-all — diagnostic only) |
+| `land-integrity-failed` | `command`, `outputTail` | culprit-free subset also failed — diagnosis untrusted, nothing lands |
 | `land-blocked` | `reason` or `unverified` (ids) | landing refused — nothing touched |
 | `land-conflict` | `ref`, `files` | merge conflict — repository left untouched |
 | `landed` | landing result fields | verified sinks merged onto the checked-out branch |

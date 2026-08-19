@@ -50,6 +50,16 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       );
     case 'land-start':
       return `landing verified work — ${s(e.goal)}`;
+    case 'land-gate':
+      return `land gate: ${len(e.commands)} check(s) on the merged stack`;
+    case 'land-gate-retry':
+      return `land gate red once — retrying ${s(e.command)} (flaky screen)`;
+    case 'land-bisect':
+      return `bisecting the stack to name the culprit…`;
+    case 'land-culprit':
+      return `✗ culprit: ${s(e.node)} — '${s(e.command)}' fails when it lands with the others`;
+    case 'land-integrity-failed':
+      return `✗ land diagnosis incoherent — the culprit-free stack also fails; nothing lands`;
     case 'land-blocked':
       return `✗ land refused: ${s(e.reason ?? e.unverified)}`;
     case 'land-conflict':
