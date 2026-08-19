@@ -28,3 +28,25 @@ describe('journal verdict telemetry (#18 cost feed)', () => {
     expect(verdict?.durationMs as number).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe('journal verdict attribution (G1 — the casting join)', () => {
+  test('verdict events carry the resolved provider and model', async () => {
+    const h = makeHarness();
+    const plan = PlanSchema.parse({
+      goal: 'g',
+      source: 's',
+      nodes: [
+        { id: 'a', work: { prompt: 'build a' } },
+        { id: 'b', work: { prompt: 'build b' }, worker: { provider: 'codex', model: 'gpt-5.5' } },
+      ],
+    });
+
+    await runPlan(plan, h.deps, { repoRoot: '/r' });
+
+    const va = h.journal.find((e) => e.event === 'verdict' && e.node === 'a');
+    const vb = h.journal.find((e) => e.event === 'verdict' && e.node === 'b');
+    expect(va?.provider).toBe('claude'); // the resolved default — never absent
+    expect(vb?.provider).toBe('codex');
+    expect(vb?.model).toBe('gpt-5.5');
+  });
+});
