@@ -294,10 +294,10 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
 
   // ── land ─────────────────────────────────────────────────────────────────
 
-  async function land(
+  async function landStack(
     landRepoRoot: string,
     refs: readonly string[],
-  ): Promise<{ branch: string; sha: string }> {
+  ): Promise<import('../loop/deps.ts').LandStack> {
     // The branch the user has checked out — landing target. Detached → refuse.
     const br = await git(exec, landRepoRoot, 'symbolic-ref', '--short', '-q', 'HEAD');
     if (br.exitCode !== 0) {
@@ -355,19 +355,28 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
           throw new LandConflictError(ref, files);
         }
       }
-      const sha = await gitMust(exec, worktreePath, 'rev-parse', 'HEAD');
-
-      // The ONLY touch on the user's checkout. Refused when the branch moved
-      // mid-land or uncommitted changes overlap — fail closed, explain.
-      const ff = await git(exec, landRepoRoot, 'merge', '--ff-only', sha);
-      if (ff.exitCode !== 0) {
-        throw new LandBlockedError(`fast-forward of '${branch}' refused: ${ff.output.trim()}`);
-      }
-      return { branch, sha };
-    } finally {
+      // The stack is built and unpublished; the loop gates it in `cwd`, then
+      // publishes or disposes. Publish is the ONLY touch on the user's
+      // checkout — refused when the branch moved mid-land or uncommitted
+      // changes overlap; fail closed, explain.
+      return {
+        cwd: worktreePath,
+        publish: async (): Promise<{ branch: string; sha: string }> => {
+          const tip = await gitMust(exec, worktreePath, 'rev-parse', 'HEAD');
+          const ff = await git(exec, landRepoRoot, 'merge', '--ff-only', tip);
+          if (ff.exitCode !== 0) {
+            throw new LandBlockedError(`fast-forward of '${branch}' refused: ${ff.output.trim()}`);
+          }
+          return { branch, sha: tip };
+        },
+        dispose,
+      };
+    } catch (err) {
+      // Building the stack failed — nothing to hand back; clean up here.
       await dispose();
+      throw err;
     }
   }
 
-  return { isolate, scanMarkers, stage, changedFiles, commitBranch, refSha, land };
+  return { isolate, scanMarkers, stage, changedFiles, commitBranch, refSha, landStack };
 }
