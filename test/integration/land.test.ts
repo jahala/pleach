@@ -9,6 +9,22 @@ import { join } from 'node:path';
 import { LandBlockedError, LandConflictError } from '../../src/core/errors.ts';
 import { exec } from '../../src/seams/exec.ts';
 import { createIsolateSeam } from '../../src/seams/isolate.ts';
+
+// The seam went staged (§A land gate): build the stack, publish, dispose —
+// this helper keeps the original one-shot semantics for these mechanics tests.
+async function land(
+  seam: ReturnType<typeof createIsolateSeam>,
+  root: string,
+  refs: readonly string[],
+): Promise<{ branch: string; sha: string }> {
+  const stack = await seam.landStack(root, refs);
+  try {
+    return await stack.publish();
+  } finally {
+    await stack.dispose();
+  }
+}
+
 import { createRepo, execLocal, gitIn } from '../support/git-repo.ts';
 
 describe('isolate seam — land', () => {
@@ -49,7 +65,7 @@ describe('isolate seam — land', () => {
     const sha = await nodeBranch('node/one', 'one.txt', 'one\n');
     const seam = createIsolateSeam(exec, repo);
 
-    const landed = await seam.land(repo, ['node/one']);
+    const landed = await land(seam, repo, ['node/one']);
 
     expect(landed.branch).toBe(branch);
     expect(landed.sha).toBe(sha);
@@ -66,7 +82,7 @@ describe('isolate seam — land', () => {
     await nodeBranch('node/b', 'b.txt', 'b\n');
     const seam = createIsolateSeam(exec, repo);
 
-    const landed = await seam.land(repo, ['node/a', 'node/b']);
+    const landed = await land(seam, repo, ['node/a', 'node/b']);
 
     expect(await gitIn(repo, 'rev-parse', 'HEAD')).toBe(landed.sha);
     expect(await gitIn(repo, 'show', 'HEAD:a.txt')).toBe('a');
@@ -80,7 +96,7 @@ describe('isolate seam — land', () => {
     const before = await gitIn(repo, 'rev-parse', 'HEAD');
     const seam = createIsolateSeam(exec, repo);
 
-    await expect(seam.land(repo, ['node/a', 'node/b'])).rejects.toBeInstanceOf(LandConflictError);
+    await expect(land(seam, repo, ['node/a', 'node/b'])).rejects.toBeInstanceOf(LandConflictError);
 
     // Branch tip unmoved, no merge in progress, no leaked worktree.
     expect(await gitIn(repo, 'rev-parse', 'HEAD')).toBe(before);
@@ -97,7 +113,7 @@ describe('isolate seam — land', () => {
     const seam = createIsolateSeam(exec, repo);
 
     try {
-      await seam.land(repo, ['node/a', 'node/b']);
+      await land(seam, repo, ['node/a', 'node/b']);
       throw new Error('expected LandConflictError');
     } catch (err) {
       if (!(err instanceof LandConflictError)) throw err;
@@ -111,7 +127,7 @@ describe('isolate seam — land', () => {
     await gitIn(repo, 'checkout', '--detach', 'HEAD');
     const seam = createIsolateSeam(exec, repo);
 
-    await expect(seam.land(repo, ['node/one'])).rejects.toBeInstanceOf(LandBlockedError);
+    await expect(land(seam, repo, ['node/one'])).rejects.toBeInstanceOf(LandBlockedError);
   });
 
   test('an uncommitted overlapping change blocks the fast-forward and survives', async () => {
@@ -122,7 +138,7 @@ describe('isolate seam — land', () => {
     const before = await gitIn(repo, 'rev-parse', 'HEAD');
     const seam = createIsolateSeam(exec, repo);
 
-    await expect(seam.land(repo, ['node/one'])).rejects.toBeInstanceOf(LandBlockedError);
+    await expect(land(seam, repo, ['node/one'])).rejects.toBeInstanceOf(LandBlockedError);
 
     expect(await gitIn(repo, 'rev-parse', 'HEAD')).toBe(before);
     const contents = await Bun.file(join(repo, 'init.txt')).text();
@@ -134,8 +150,8 @@ describe('isolate seam — land', () => {
     const sha = await nodeBranch('node/one', 'one.txt', 'one\n');
     const seam = createIsolateSeam(exec, repo);
 
-    await seam.land(repo, ['node/one']);
-    const again = await seam.land(repo, ['node/one']);
+    await land(seam, repo, ['node/one']);
+    const again = await land(seam, repo, ['node/one']);
 
     expect(again.sha).toBe(sha);
     expect(await gitIn(repo, 'rev-parse', 'HEAD')).toBe(sha);
