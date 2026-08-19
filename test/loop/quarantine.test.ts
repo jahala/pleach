@@ -47,6 +47,7 @@ describe('quarantine — failed work is preserved before dispose', () => {
 
   test('a failed node with an unchanged tree quarantines nothing', async () => {
     const h = makeHarness({
+      changedByNode: { x: [] }, // explicit: the worker touched nothing
       execScript: (argv) =>
         argv[0] === 'run-smoke' ? { output: 'boom', exitCode: 1 } : { output: '', exitCode: 0 },
     });

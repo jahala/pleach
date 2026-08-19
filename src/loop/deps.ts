@@ -44,6 +44,10 @@ export interface IsolateSeam {
   scanMarkers(cwd: string): Promise<string[]>;
   // Scoped staging — only the given paths, never `git add -A` (ledger S1).
   stage(cwd: string, files: readonly string[]): Promise<void>;
+  // The staged diff's text and per-file numstat — the hygiene gate's raw
+  // material (§E). Read-only; called after scoped staging.
+  stagedDiff(cwd: string): Promise<string>;
+  stagedNumstat(cwd: string): Promise<{ file: string; added: number; deleted: number }[]>;
   // Paths (relative) with uncommitted changes — tracked modifications plus
   // untracked-unignored files. The loop's staging fallback when the worker
   // manifest is unavailable; combined with never re-staging at commit time it

@@ -85,6 +85,8 @@ export function stop(over: Partial<WorkerResult> = {}): WorkerResult {
 // ── in-memory git ────────────────────────────────────────────────────────────
 
 export class InMemoryGit {
+  stagedDiffs = new Map<string, string>();
+  stagedNumstats = new Map<string, { file: string; added: number; deleted: number }[]>();
   // branch/ref name → sha
   readonly refs = new Map<string, string>();
   // worktree cwd → set of "changed" files the worker left behind
@@ -126,6 +128,10 @@ export interface HarnessOpts {
   conflicts?: Record<string, string[]>;
   // changed files a worker leaves in its cwd, keyed by node id.
   changedByNode?: Record<string, string[]>;
+  // Staged diff text per node id (the hygiene gate's raw material); numstat
+  // defaults to one-added-line per changed file unless given.
+  stagedDiffByNode?: Record<string, string>;
+  stagedNumstatByNode?: Record<string, { file: string; added: number; deleted: number }[]>;
   // Branches whose commitBranch refuses like real git's checked-out-branch
   // guard (exit 128 'used by worktree') — the #12 quarantine-collision seam.
   commitBranchBusy?: (branch: string) => boolean;
@@ -195,8 +201,18 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       }
       const cwd = `/wt/${node.id}/${log.count('isolate', node.id)}`;
       const conflictFiles = opts.conflicts?.[node.id] ?? [];
-      if ((opts.changedByNode?.[node.id] ?? []).length > 0) {
-        git.changed.set(cwd, [...(opts.changedByNode?.[node.id] ?? [])]);
+      // Workers produce something by default (a realistic tree — the hygiene
+      // gate's empty-diff rule is doctrine now); pass an explicit [] to model
+      // an agent that claims done on nothing.
+      const produced = opts.changedByNode?.[node.id] ?? ['work.out'];
+      if (produced.length > 0) {
+        git.changed.set(cwd, [...produced]);
+        git.stagedDiffs.set(cwd, opts.stagedDiffByNode?.[node.id] ?? '+++ b/work.out\n+ok\n');
+        git.stagedNumstats.set(
+          cwd,
+          opts.stagedNumstatByNode?.[node.id] ??
+            (opts.changedByNode?.[node.id] ?? []).map((f) => ({ file: f, added: 1, deleted: 0 })),
+        );
       }
       if ((opts.markersByNode?.[node.id] ?? []).length > 0) {
         git.markers.set(cwd, [...(opts.markersByNode?.[node.id] ?? [])]);
@@ -227,6 +243,12 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     async changedFiles(cwd): Promise<string[]> {
       log.push('changedFiles', undefined, cwd);
       return git.changed.get(cwd) ?? [];
+    },
+    async stagedDiff(cwd): Promise<string> {
+      return git.stagedDiffs.get(cwd) ?? '';
+    },
+    async stagedNumstat(cwd) {
+      return git.stagedNumstats.get(cwd) ?? [];
     },
     async commitBranch(_cwd, branch, _message): Promise<{ sha: string }> {
       if (opts.commitBranchBusy?.(branch)) {
