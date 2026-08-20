@@ -1,5 +1,6 @@
 import { IsolateCatastrophicError } from '../../src/core/errors.ts';
 import type { Node, Verdict } from '../../src/core/plan.ts';
+import type { Receipt } from '../../src/core/receipt.ts';
 import type {
   ConductorDeps,
   ExecFn,
@@ -89,6 +90,8 @@ export class InMemoryGit {
   stagedNumstats = new Map<string, { file: string; added: number; deleted: number }[]>();
   // branch/ref name → sha
   readonly refs = new Map<string, string>();
+  // branch → last commit message (receipt-trailer assertions, §D)
+  readonly commitMessages = new Map<string, string>();
   // worktree cwd → set of "changed" files the worker left behind
   readonly changed = new Map<string, string[]>();
   // worktree cwd → marker files present (conflict markers gate)
@@ -145,6 +148,8 @@ export interface HarnessOpts {
   // Make the land stack's publish() throw (fault injection for landPlan's
   // journal paths — conflict/blocked refusal).
   landThrows?: Error;
+  // Pre-seeded receipts keyed by node id (§D acceptance-evolution tests).
+  receiptsSeed?: Record<string, Receipt>;
 }
 
 export interface Harness {
@@ -153,6 +158,7 @@ export interface Harness {
   git: InMemoryGit;
   emitted: Verdict[];
   journal: Record<string, unknown>[];
+  receipts: Map<string, Receipt>;
   // concurrency instrumentation
   maxConcurrentWorkers: number;
 }
@@ -250,18 +256,28 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     async stagedNumstat(cwd) {
       return git.stagedNumstats.get(cwd) ?? [];
     },
-    async commitBranch(_cwd, branch, _message): Promise<{ sha: string }> {
+    async commitBranch(_cwd, branch, message): Promise<{ sha: string }> {
       if (opts.commitBranchBusy?.(branch)) {
         log.push('commitBranch-busy', branch);
         throw new Error(`cannot force update the branch '${branch}' used by worktree at /w`);
       }
       const sha = git.newSha();
       git.refs.set(branch, sha);
+      git.commitMessages.set(branch, message);
       log.push('commitBranch', branch, sha);
       return { sha };
     },
     async refSha(_cwd, ref): Promise<string | null> {
       return git.refs.get(ref) ?? null;
+    },
+    async commitMessageOf(_cwd, ref): Promise<string | null> {
+      for (const [branch, sha] of git.refs) {
+        if (sha === ref || branch === ref) {
+          const message = git.commitMessages.get(branch);
+          if (message !== undefined) return message;
+        }
+      }
+      return null;
     },
     // Staged landing (W1 of the adoption ladder): the loop gates the merged
     // stack between build and publish. The stack's cwd encodes the merged
@@ -362,7 +378,19 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     },
   };
 
-  const deps: ConductorDeps = { exec, isolate, runner, ledger, lock, journal };
+  // ── receipts ────────────────────────────────────────────────────────────────
+  const receiptsStore = new Map<string, Receipt>(Object.entries(opts.receiptsSeed ?? {}));
+  const receipts = {
+    async write(node: string, receipt: Receipt): Promise<void> {
+      log.push('receipt.write', node, receipt.sha256);
+      receiptsStore.set(node, JSON.parse(JSON.stringify(receipt)) as Receipt);
+    },
+    async read(node: string): Promise<Receipt | null> {
+      return receiptsStore.get(node) ?? null;
+    },
+  };
+
+  const deps: ConductorDeps = { exec, isolate, runner, ledger, lock, journal, receipts };
 
   return {
     deps,
@@ -370,6 +398,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     git,
     emitted,
     journal: journalEvents,
+    receipts: receiptsStore,
     get maxConcurrentWorkers() {
       return state.maxConcurrent;
     },

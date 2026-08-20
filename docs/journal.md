@@ -22,10 +22,14 @@ tolerate unknown events and unknown fields.
 | `gate-fail` | `node`, `gate` (`setup`\|`markers`\|`smoke`\|`red`\|`green`\|`command`\|`audit-parse`\|`commit`\|…) | a gate failed (may retry) |
 | `blocked` | `node`, `reason` (the prompt text) | **needs a human** — worker stopped at a permission prompt; session terminated |
 | `verdict` | `node`, `status`, `attempts`, `telemetry` (worker-reported, e.g. `tokens`), `durationMs` (wall clock), `provider` (resolved — never absent), `model?`, `gate?` (`ran`, `exitCode`, `outputTail?` — the failing gate's actual output, capped 2000 chars), `blockedReason?` | a node reached its terminal verdict |
-| `closed` | `node`, `sha` | verified close — `node/<id>` published at `sha` |
+| `closed` | `node`, `sha`, `degraded?` (string[] — only when non-empty) | verified close — `node/<id>` published at `sha`; `degraded` lists checks the plan never configured (`smoke:unconfigured`, `audit:unconfigured`): no coverage is not coverage, visible at close time |
 | `not-closed` | `node` | ledger declined to verify-close (branch published, not verified) |
 | `quarantined` | `node`, `branch` (`quarantine/<id>`), `sha` | failed work preserved for inspection |
 | `quarantine-failed` | `node`, `detail` | evidence preservation itself failed |
+| `receipt` | `node`, `sha256`, `derived` (`publishable`\|`quarantined`), `degraded` (string[]) | a sealed close receipt was minted at settle (§D) — facts frozen at classify time, hash pinned as a `receipt-sha256:` trailer in the node/quarantine commit, file at `<git-dir>/pleach/receipts/<node>.json`; verify with `pleach receipt <node>` |
+| `receipt-write-failed` | `node`, `detail` | the receipt file could not be written (the trailer is still pinned in git; the close stands) |
+| `acceptance-changed` | `node`, `recorded` (`{smoke?, audit?}`), `current` (same shape) | a ledger-closed node's receipt records a different acceptance than the current plan — the old verification proves nothing about the new gate, so the node re-dispatches instead of skip-trusting |
+| `acceptance-cascade` | `node`, `via` (the invalidated dependency) | a closed dependent of a re-dispatched node rebuilds too — its close embedded the OLD ancestor, and only sinks land, so skip-trusting it would silently keep the re-verified work off the target branch |
 | `rebuild-required` | `node` | a verified branch moved since close — refusing to trust it |
 | `sha-mismatch` | `node`, `recordedSha`, `foundSha` | ledger SHA disagrees with the branch |
 | `dispose-failed` | `node`, `detail` | worktree cleanup failure (diagnostic) |
