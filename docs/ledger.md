@@ -174,6 +174,19 @@ checkpoint but have different lifetimes and trust domains.**
   `land-setup-failed` (environment) and never enters the bisect. Tests: `test/loop/land-gate.test.ts`
   ("provisions its stack" describe — dedupe+ordering, environment refusal, provisioned probes).
 
+- **D10 ✅ [field] Node-gate red with no taxonomy and no evidence.** decker wave 2: convert-engine
+  quarantined on a gate red while the work was green (104/104 in its worktree; landed from quarantine,
+  verifier stamped 4/4) — and the failed verdict carried an EMPTY output tail. Two holes: a transient
+  gate red became worker evidence / quarantine with nothing distinguishing environment from work, and an
+  empty tail left the operator debugging blind. **Fix:** (1) exec gates (setup, smoke) get ONE gate-only
+  retry in the same provisioned worktree before a red becomes evidence — the land gate's flaky-retry
+  doctrine at node level (`gate-retry`/`gate-flaky` journal events); a worker re-prompted for a failure
+  that wasn't its fault "fixes" what isn't broken. (2) A red with no output records an explicit
+  no-output marker — the absence of evidence is itself diagnostic. Deliberately NOT built: the fresh-
+  worktree environment reclassification (commit staged work + re-isolate + replay) — adopt only if
+  field data shows corrupted-tree cases the same-tree retry misses. Tests:
+  `test/loop/gate-retry.test.ts` (flaky-pass, persistent-red evidence, no-output marker, setup parity).
+
 ### Verified-sound (attacks refuted — do not relitigate)
 
 `--detach` fan-out (two detached worktrees at one commit are legal); the closed-add-then-dispose-inside-
