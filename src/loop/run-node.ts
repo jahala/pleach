@@ -8,6 +8,7 @@ import {
 } from '../core/errors.ts';
 import { checkDiffHygiene } from '../core/hygiene.ts';
 import { type AuditResult, AuditResultSchema, type Node, type Verdict } from '../core/plan.ts';
+import type { AuditRecord, GateRecord } from '../core/receipt.ts';
 import { DEFAULT_WORKER_PROVIDER } from '../core/validate.ts';
 import type { ConductorDeps, Isolation, WorkerResult } from './deps.ts';
 import { guardedExec, runWork } from './run-work.ts';
@@ -39,6 +40,12 @@ export interface RunNodeResult {
   // Verdict contract is untouched. The 2026-08-17 canary debug needed a
   // wrapper script to see WHY a command gate failed; never again.
   gateOutputTail?: string;
+  // The final attempt's conductor-ladder gate records in run order, and the
+  // audit's tri-state records — the receipt's raw facts (§D). A 'skip' audit
+  // record means "never adjudicated" (auditor outage, egress exhaustion),
+  // distinct from "checked and failed".
+  gates?: GateRecord[];
+  audit?: AuditRecord[];
 }
 
 const REAUDIT_BUDGET = 2;
@@ -68,10 +75,20 @@ export async function runNode(
   // Terminal failed/dead verdicts hand the live tree back to the caller so
   // run-plan can quarantine the evidence before disposing. Blocked verdicts
   // dispose here — the worker never finished a turn; there is nothing to keep.
+  // Every hand-back carries the final attempt's gate ladder + audit records +
+  // staged set so run-plan can mint the receipt from frozen facts (§D).
   function handBack(result: RunNodeResult): RunNodeResult {
     const live = iso;
     iso = null;
-    return live === null ? result : { ...result, iso: live };
+    const out: RunNodeResult = {
+      ...result,
+      gates,
+      ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
+      ...(result.stagedFiles === undefined && lastStaged !== undefined
+        ? { stagedFiles: lastStaged }
+        : {}),
+    };
+    return live === null ? out : { ...out, iso: live };
   }
 
   // Resolved-provider diversity preflight (binding prose) — before any spawn.
@@ -93,10 +110,18 @@ export async function runNode(
   // first attempt.
   let evidence: string | undefined;
   let attempts = 0;
+  // Receipt facts (§D), reset per attempt: the ladder's gate records in run
+  // order, the audit's records, and the staged set once staging happened.
+  let gates: GateRecord[] = [];
+  let auditRecords: AuditRecord[] | undefined;
+  let lastStaged: string[] | undefined;
 
   try {
     for (;;) {
       attempts += 1;
+      gates = [];
+      auditRecords = undefined;
+      lastStaged = undefined;
 
       // ── isolate (or reuse the tree for a retryable retry) ───────────────────
       if (iso === null) {
@@ -125,6 +150,7 @@ export async function runNode(
       // ── setup ───────────────────────────────────────────────────────────────
       if (node.setup) {
         const { output, exitCode } = await guardedExec(deps.exec, node.setup, { cwd, timeoutMs });
+        gates.push({ gate: 'setup', exitCode });
         if (exitCode !== 0) {
           const settle = settleRetryable(
             node,
@@ -209,6 +235,7 @@ export async function runNode(
 
       // ── marker gate (ledger C1) ─────────────────────────────────────────────
       const markers = await deps.isolate.scanMarkers(cwd);
+      gates.push({ gate: 'marker', exitCode: markers.length > 0 ? -1 : 0 });
       if (markers.length > 0) {
         const settle = settleRetryable(node, attempts, maxAttempts, {
           gate: { ran: 'marker', exitCode: -1 },
@@ -222,6 +249,7 @@ export async function runNode(
       const changed = await deps.isolate.changedFiles(cwd);
       const stagedFiles = dedup([...result.filesTouched, ...changed]);
       await deps.isolate.stage(cwd, stagedFiles);
+      lastStaged = stagedFiles;
 
       // ── hygiene (§E) ─────────────────────────────────────────────────────────
       // Pure scans over the staged diff: empty-diff attribution (agent work
@@ -236,6 +264,10 @@ export async function runNode(
           diff: stagedFiles.length > 0 ? await deps.isolate.stagedDiff(cwd) : '',
           numstat: stagedFiles.length > 0 ? await deps.isolate.stagedNumstat(cwd) : [],
           finalMessage: result.finalMessage,
+        });
+        gates.push({
+          gate: hygiene === null ? 'hygiene' : `hygiene:${hygiene.kind}`,
+          exitCode: hygiene === null ? 0 : -1,
         });
         if (hygiene !== null) {
           const settle = settleRetryable(
@@ -257,6 +289,7 @@ export async function runNode(
           cwd,
           timeoutMs,
         });
+        gates.push({ gate: 'smoke', exitCode });
         if (exitCode !== 0) {
           const settle = settleRetryable(
             node,
@@ -288,6 +321,7 @@ export async function runNode(
           ? []
           : auditGateTampering(node.accept.audit.command, stagedFiles);
         if (tampered.length > 0) {
+          gates.push({ gate: 'audit-tamper', exitCode: -1 });
           const tamperMsg = `${node.accept.audit.command} (gate tampered: ${tampered.join(', ')})`;
           const settle = settleRetryable(
             node,
@@ -311,6 +345,14 @@ export async function runNode(
 
         const auditOutcome = await runAudit(node, cwd, deps, timeoutMs);
         if (auditOutcome.kind === 'parse-exhausted') {
+          // Never adjudicated — the receipt records skip, not fail (§D).
+          auditRecords = [
+            {
+              check: '(audit)',
+              verdict: 'skip',
+              reasons: ['audit egress unparseable after reaudit budget — never adjudicated'],
+            },
+          ];
           return handBack({
             verdict: failedVerdict(node, attempts, {
               // node.accept.audit is defined inside this block.
@@ -321,6 +363,13 @@ export async function runNode(
         if (auditOutcome.kind === 'worker-fault') {
           // The auditor died / timed out / blocked — it never returned a verdict.
           // Distinct from a fail verdict; record the reason for the journal.
+          auditRecords = [
+            {
+              check: '(audit)',
+              verdict: 'skip',
+              reasons: [`auditor ${auditOutcome.reason} — never adjudicated`],
+            },
+          ];
           return handBack({
             verdict: failedVerdict(node, attempts, {
               gate: {
@@ -330,6 +379,11 @@ export async function runNode(
             }),
           });
         }
+        auditRecords = auditOutcome.result.verdicts.map((v) => ({
+          check: v.check,
+          verdict: v.verdict,
+          reasons: v.reasons,
+        }));
         if (auditOutcome.kind === 'fail') {
           const settle = settleRetryable(node, attempts, maxAttempts, {});
           if (settle) return handBack(settle);
@@ -354,7 +408,13 @@ export async function runNode(
       };
       const liveIso = iso;
       iso = null; // hand ownership to the caller — do NOT dispose here.
-      return { verdict, iso: liveIso, stagedFiles };
+      return {
+        verdict,
+        iso: liveIso,
+        stagedFiles,
+        gates,
+        ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
+      };
     }
   } finally {
     // Safety net: any tree still held by a thrown/early path is disposed.
@@ -366,7 +426,8 @@ export async function runNode(
 
 type AuditOutcome =
   | { kind: 'pass'; result: AuditResult }
-  | { kind: 'fail'; evidence: string }
+  // fail carries the parsed result too — the receipt relays verdicts verbatim (§D).
+  | { kind: 'fail'; evidence: string; result: AuditResult }
   | { kind: 'worker-fault'; reason: string; message?: string }
   | { kind: 'parse-exhausted' };
 
@@ -424,7 +485,7 @@ async function runAudit(
 
     const failing = parsed.verdicts.filter((v) => v.verdict === 'fail');
     if (failing.length > 0) {
-      return { kind: 'fail', evidence: auditFailEvidence(failing) };
+      return { kind: 'fail', evidence: auditFailEvidence(failing), result: parsed };
     }
     return { kind: 'pass', result: parsed };
   }

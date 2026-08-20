@@ -1,5 +1,13 @@
 import { GateFailedError, RebuildRequiredError } from '../core/errors.ts';
 import type { Node, Plan, Verdict } from '../core/plan.ts';
+import {
+  computeDegraded,
+  type GateRecord,
+  type MintFacts,
+  mintReceipt,
+  type Receipt,
+  sha256Hex,
+} from '../core/receipt.ts';
 import { DEFAULT_WORKER_PROVIDER, validatePlan } from '../core/validate.ts';
 import type { ConductorDeps, Isolation, RunSummary } from './deps.ts';
 import { type RunNodeResult, runNode } from './run-node.ts';
@@ -25,6 +33,9 @@ export interface RunPlanOpts {
   // that (the loop stays environment-free) and passes it here.
   defaultConcurrency?: number;
   defaultTimeoutMs?: number;
+  // Stamped into receipt facts (§D version fence). The face passes the real
+  // package version; absent (tests, embedders) records an honest dev marker.
+  pleachVersion?: string;
 }
 
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes (binding prose).
@@ -50,6 +61,7 @@ export async function runPlan(
       repoRoot: opts.repoRoot,
       defaultTimeoutMs,
       maxConcurrency,
+      pleachVersion: opts.pleachVersion ?? '0.0.0-dev',
     });
   } finally {
     await lock.release();
@@ -60,6 +72,7 @@ interface ResolvedOpts {
   repoRoot: string;
   defaultTimeoutMs: number;
   maxConcurrency: number;
+  pleachVersion: string;
 }
 
 async function runUnderLock(
@@ -71,6 +84,47 @@ async function runUnderLock(
 
   // Defensive copy (M3) — never mutate what the seam returned.
   const closed = new Map<string, string | null>(await deps.ledger.readClosed(plan.source));
+
+  // §D acceptance-evolution invalidation: a close was verified against the
+  // acceptance recorded in its receipt. If the plan's CURRENT acceptance
+  // differs (generic string compare — no pin semantics parsed), the old
+  // verification proves nothing about the new fitness function: re-dispatch
+  // instead of skip-trusting. No receipt (legacy close, tend-verified lane)
+  // → no comparison; the skip stands.
+  const invalidated = new Set<string>();
+  for (const node of plan.nodes) {
+    if (!closed.has(node.id)) continue;
+    const receipt = await deps.receipts.read(node.id);
+    if (receipt === null || receipt.facts.source !== plan.source) continue;
+    const current = acceptanceOf(node);
+    const recorded = receipt.facts.acceptance;
+    if (recorded.smoke !== current.smoke || recorded.audit !== current.audit) {
+      closed.delete(node.id);
+      invalidated.add(node.id);
+      await deps.journal.append({
+        event: 'acceptance-changed',
+        node: node.id,
+        recorded,
+        current,
+      });
+    }
+  }
+  // Cascade: a closed dependent's verification embedded the OLD ancestor —
+  // skip-trusting it would land stale work (only sinks land, so the
+  // re-verified ancestor would silently never reach the target branch).
+  for (let changed = invalidated.size > 0; changed; ) {
+    changed = false;
+    for (const node of plan.nodes) {
+      if (!closed.has(node.id)) continue;
+      const via = node.needs.find((d) => invalidated.has(d));
+      if (via === undefined) continue;
+      closed.delete(node.id);
+      invalidated.add(node.id);
+      changed = true;
+      await deps.journal.append({ event: 'acceptance-cascade', node: node.id, via });
+    }
+  }
+
   // Nodes the ledger already had verified — skipped this run, surfaced so the
   // caller knows a resume happened. Captured BEFORE seedClosure adds ancestors,
   // so it names only what the ledger directly reported (not implied ancestors).
@@ -151,7 +205,34 @@ async function runUnderLock(
   // can inspect what the agent actually wrote instead of debugging from a
   // 2000-char output tail. Best-effort: a quarantine failure journals and
   // never masks the real verdict. An unchanged tree quarantines nothing.
-  async function quarantineOrJournal(node: Node, iso: Isolation): Promise<void> {
+  // A receipt-file write failure must never fail a settled node — the trailer
+  // is already pinned in git; journal the miss and continue. An overwrite (a
+  // retried node) points back at the receipt it replaces.
+  async function writeReceiptOrJournal(nodeId: string, incoming: Receipt): Promise<void> {
+    try {
+      const prior = await deps.receipts.read(nodeId);
+      const receipt: Receipt =
+        prior !== null && prior.sha256 !== incoming.sha256
+          ? { ...incoming, refs: { ...incoming.refs, previousReceiptSha256: prior.sha256 } }
+          : incoming;
+      await deps.receipts.write(nodeId, receipt);
+      await deps.journal.append({
+        event: 'receipt',
+        node: nodeId,
+        sha256: receipt.sha256,
+        derived: receipt.derived,
+        degraded: receipt.facts.degraded,
+      });
+    } catch (err) {
+      await deps.journal.append({
+        event: 'receipt-write-failed',
+        node: nodeId,
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  async function quarantineOrJournal(node: Node, iso: Isolation, receipt: Receipt): Promise<void> {
     try {
       const changed = await deps.isolate.changedFiles(iso.cwd);
       if (changed.length === 0) return;
@@ -161,7 +242,7 @@ async function runUnderLock(
       // back to a suffixed ref — evidence must never evaporate over ref
       // hygiene. Other errors go to the honest quarantine-failed path.
       const base = `quarantine/${node.id}`;
-      const message = `pleach: ${node.id} quarantined\n\nsource: ${plan.source}\ngoal: ${plan.goal}`;
+      const message = `pleach: ${node.id} quarantined\n\nsource: ${plan.source}\ngoal: ${plan.goal}\n\nreceipt-sha256: ${receipt.sha256}`;
       let landedBranch: string | null = null;
       let sha = '';
       for (const branch of [base, `${base}.2`, `${base}.3`, `${base}.4`]) {
@@ -177,6 +258,10 @@ async function runUnderLock(
       if (landedBranch === null) throw new Error(`all quarantine refs for ${base} are busy`);
       quarantined.add(node.id);
       await deps.journal.append({ event: 'quarantined', node: node.id, branch: landedBranch, sha });
+      await writeReceiptOrJournal(node.id, {
+        ...receipt,
+        refs: { quarantineBranch: landedBranch, quarantineSha: sha },
+      });
     } catch (err) {
       await deps.journal.append({
         event: 'quarantine-failed',
@@ -206,6 +291,7 @@ async function runUnderLock(
   // dependent's isolate (the scheduler only schedules dependents after closed).
   async function settle(node: Node, outcome: RunNodeResult, startedAt: number): Promise<void> {
     const { verdict, iso } = outcome;
+    const durationMs = Date.now() - startedAt;
     // Record the full diagnostic shape — a failed run must be explainable from
     // the journal alone (the worktrees and sessions are gone by then).
     await deps.journal.append({
@@ -217,7 +303,7 @@ async function runUnderLock(
       // casting ledger can compute cost-per-verified-claim from the journal
       // alone. Journal-only enrichment — the Verdict contract is untouched.
       telemetry: verdict.telemetry,
-      durationMs: Date.now() - startedAt,
+      durationMs,
       // The casting join (G1): who did this work, resolved — 'counted, never
       // attributed' was tend2's ledger's first finding; this closes it.
       provider: node.worker.provider ?? DEFAULT_WORKER_PROVIDER,
@@ -255,7 +341,12 @@ async function runUnderLock(
       failed.add(node.id);
       await deps.ledger.emitVerdict(verdict, plan.source);
       if (iso) {
-        await quarantineOrJournal(node, iso);
+        // Mint from the facts as classified — the quarantine commit pins the
+        // hash in its trailer; refs attach at write, outside the envelope.
+        const receipt = mintReceipt(
+          buildFacts(plan, node, outcome, durationMs, opts.pleachVersion),
+        );
+        await quarantineOrJournal(node, iso, receipt);
         await disposeOrJournal(iso, node.id);
       }
       return;
@@ -268,6 +359,7 @@ async function runUnderLock(
     // while its worktree still exists (ordering invariant under concurrency).
     let sha: string | undefined;
     let decision: { closed: boolean } | undefined;
+    let receipt: Receipt | undefined;
     let failure: unknown;
     try {
       // Pre-commit marker safety — the auditor shares the cwd and may have
@@ -277,10 +369,14 @@ async function runUnderLock(
         throw new GateFailedError('marker', lateMarkers.join('\n'), -1); // N/A: marker scan has no exit code
       }
 
+      // Freeze point (§D): facts seal BEFORE the commit exists, so the commit
+      // SHA never lives inside the hashed envelope — the trailer rides in the
+      // commit whose SHA is the diffRef, and git binds them.
+      receipt = mintReceipt(buildFacts(plan, node, outcome, durationMs, opts.pleachVersion));
       const { sha: committed } = await deps.isolate.commitBranch(
         iso.cwd,
         `node/${node.id}`,
-        commitMessage(plan, node, verdict),
+        `${commitMessage(plan, node, verdict)}\n\nreceipt-sha256: ${receipt.sha256}`,
       );
       sha = committed;
       const closingVerdict: Verdict = {
@@ -317,11 +413,27 @@ async function runUnderLock(
       return;
     }
 
+    // The receipt file is written whenever the mint's trailer reached a
+    // published commit — even when tend declines the close (partial), the
+    // pinned hash must stay resolvable to its facts.
+    if (receipt !== undefined) {
+      await writeReceiptOrJournal(node.id, { ...receipt, refs: { diffRef: sha } });
+    }
+
     const shouldClose = node.accept.audit ? decision.closed : true;
     if (shouldClose) {
       closed.set(node.id, sha);
       baseRefForClosed.set(node.id, sha); // pin to the immutable commit SHA, not the movable branch
-      await deps.journal.append({ event: 'closed', node: node.id, sha });
+      // degraded[] rides the close event — trust decisions happen at close
+      // time, not at receipt-inspection time (§D amendment).
+      await deps.journal.append({
+        event: 'closed',
+        node: node.id,
+        sha,
+        ...(receipt !== undefined && receipt.facts.degraded.length > 0
+          ? { degraded: receipt.facts.degraded }
+          : {}),
+      });
     } else {
       // tend declined to verify-close this audit node: the branch IS published
       // (node/<id> committed, every conductor gate green) but tend won't flip the
@@ -429,4 +541,51 @@ function baseRefsFor(node: Node, baseRefForClosed: Map<string, string>): string[
 
 function commitMessage(plan: Plan, node: Node, verdict: Verdict): string {
   return `pleach: ${node.id} verified (${verdict.status})\n\nsource: ${plan.source}\ngoal: ${plan.goal}`;
+}
+
+// The journal keeps the failing gate's verbatim output tail; the sealed
+// receipt keeps a hash pointer to it, attached to the last red gate record.
+function gatesWithTailSha(outcome: RunNodeResult): GateRecord[] {
+  const gates = outcome.gates ?? [];
+  const tail = outcome.gateOutputTail;
+  if (tail === undefined) return gates;
+  const lastRed = [...gates].reverse().find((g) => g.exitCode !== 0);
+  if (lastRed === undefined) return gates;
+  return gates.map((g) => (g === lastRed ? { ...g, outputTailSha: sha256Hex(tail) } : g));
+}
+
+// The node's acceptance as command strings — the receipt's evolution-
+// invalidation record (§D). Generic strings, no pin semantics parsed.
+function acceptanceOf(node: Node): { smoke?: string; audit?: string } {
+  return {
+    ...(node.accept.smoke !== undefined ? { smoke: node.accept.smoke } : {}),
+    ...(node.accept.audit !== undefined ? { audit: node.accept.audit.command } : {}),
+  };
+}
+
+// Receipt facts from what settle already holds — frozen at classify time.
+function buildFacts(
+  plan: Plan,
+  node: Node,
+  outcome: RunNodeResult,
+  durationMs: number,
+  pleachVersion: string,
+): MintFacts {
+  const { verdict } = outcome;
+  return {
+    node: node.id,
+    source: plan.source,
+    status: verdict.status,
+    attempts: verdict.attempts,
+    provider: node.worker.provider ?? DEFAULT_WORKER_PROVIDER,
+    ...(node.worker.model !== undefined ? { model: node.worker.model } : {}),
+    gates: gatesWithTailSha(outcome),
+    ...(outcome.audit !== undefined ? { audit: outcome.audit } : {}),
+    acceptance: acceptanceOf(node),
+    degraded: computeDegraded(node),
+    stagedFiles: outcome.stagedFiles?.length ?? 0,
+    telemetry: verdict.telemetry,
+    durationMs,
+    pleachVersion,
+  };
 }
