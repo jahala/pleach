@@ -149,7 +149,10 @@ export async function runNode(
 
       // ── setup ───────────────────────────────────────────────────────────────
       if (node.setup) {
-        const { output, exitCode } = await guardedExec(deps.exec, node.setup, { cwd, timeoutMs });
+        const { output, exitCode } = await execGateWithRetry(deps, node.id, 'setup', node.setup, {
+          cwd,
+          timeoutMs,
+        });
         gates.push({ gate: 'setup', exitCode });
         if (exitCode !== 0) {
           const settle = settleRetryable(
@@ -285,10 +288,13 @@ export async function runNode(
 
       // ── smoke ────────────────────────────────────────────────────────────────
       if (node.accept.smoke) {
-        const { output, exitCode } = await guardedExec(deps.exec, node.accept.smoke, {
-          cwd,
-          timeoutMs,
-        });
+        const { output, exitCode } = await execGateWithRetry(
+          deps,
+          node.id,
+          'smoke',
+          node.accept.smoke,
+          { cwd, timeoutMs },
+        );
         gates.push({ gate: 'smoke', exitCode });
         if (exitCode !== 0) {
           const settle = settleRetryable(
@@ -494,6 +500,29 @@ async function runAudit(
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
+// The exec gates (setup, smoke) get ONE gate-only retry in the same
+// provisioned worktree before a red becomes worker evidence — the land gate's
+// flaky-retry doctrine at node level (D10, decker wave 2): a worker prompted
+// to fix a failure that wasn't its fault "fixes" something that isn't broken,
+// and good work ages in quarantine. Deterministic scans (marker, hygiene)
+// never flake and get no retry; the audit has its own reaudit budget.
+async function execGateWithRetry(
+  deps: ConductorDeps,
+  nodeId: string,
+  gate: 'setup' | 'smoke',
+  command: string,
+  opts: { cwd: string; timeoutMs: number },
+): Promise<{ output: string; exitCode: number }> {
+  const first = await guardedExec(deps.exec, command, opts);
+  if (first.exitCode === 0) return first;
+  await deps.journal.append({ event: 'gate-retry', node: nodeId, gate });
+  const retry = await guardedExec(deps.exec, command, opts);
+  if (retry.exitCode === 0) {
+    await deps.journal.append({ event: 'gate-flaky', node: nodeId, gate });
+  }
+  return retry; // green: proceed; red: the RETRY run is the evidence.
+}
+
 function asError(err: unknown): Error {
   return err instanceof Error ? err : new AuditParseError(String(err));
 }
@@ -545,16 +574,26 @@ function settleRetryable(
   if (attempts < maxAttempts) return undefined;
   return {
     verdict: failedVerdict(node, attempts, extra),
-    ...(outputTail !== undefined && outputTail.length > 0
-      ? { gateOutputTail: outputTail.slice(-2000) }
+    // A red with NO output records an explicit marker (D10) — the absence of
+    // evidence is itself diagnostic (died before printing, killed, ENOENT),
+    // never a silent hole the operator debugs blind.
+    ...(outputTail !== undefined
+      ? { gateOutputTail: outputTail.length > 0 ? outputTail.slice(-2000) : NO_OUTPUT_MARKER }
       : {}),
   };
 }
 
 const EVIDENCE_TAIL = 2000;
+const NO_OUTPUT_MARKER =
+  '(gate produced no output — the command died before printing, was killed, or never spawned)';
 
 function gateEvidence(gate: string, exitCode: number, output: string): string {
-  const tail = output.length > EVIDENCE_TAIL ? output.slice(-EVIDENCE_TAIL) : output;
+  const tail =
+    output.length === 0
+      ? NO_OUTPUT_MARKER
+      : output.length > EVIDENCE_TAIL
+        ? output.slice(-EVIDENCE_TAIL)
+        : output;
   return `Gate '${gate}' failed (exit ${exitCode}). Output tail:\n${tail}`;
 }
 
