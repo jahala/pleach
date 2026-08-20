@@ -144,3 +144,85 @@ describe('the land gate (§A)', () => {
     ).toBe(true);
   });
 });
+
+// ── §A field gap (decker wave 1, ledger D9): the stack needs provisioning ────
+// Work worktrees get node.setup post-isolate; the land-gate stack got NOTHING,
+// so dep-needing smokes read red on a green composition and the bisect named
+// innocent sinks. The gate now runs the SINKS' OWN setup union (deduped, exact
+// string) in the stack before their smokes; a setup failure refuses the land
+// as an ENVIRONMENT failure — it never enters the bisect as a culprit.
+describe('the land gate provisions its stack (D9)', () => {
+  function provisionedPlan(setups: { a: string; b: string }) {
+    return PlanSchema.parse({
+      goal: 'g',
+      source: 's',
+      nodes: [
+        { id: 'a', work: { command: 'build-a' }, setup: setups.a, accept: { smoke: 'test-a' } },
+        { id: 'b', work: { command: 'build-b' }, setup: setups.b, accept: { smoke: 'test-b' } },
+      ],
+    });
+  }
+
+  test("sinks' setups run in the stack, deduped, BEFORE any smoke", async () => {
+    const stackCalls: string[] = [];
+    const h = closedHarness(['a', 'b'], (argv, cwd) => {
+      if (cwd.startsWith('land:')) stackCalls.push(argv.join(' '));
+      return { output: '', exitCode: 0 };
+    });
+    const plan = provisionedPlan({ a: 'install-deps', b: 'install-deps' });
+
+    const summary = await landPlan(plan, h.deps, OPTS);
+
+    expect(summary.landed.sort()).toEqual(['a', 'b']);
+    expect(stackCalls.filter((c) => c === 'install-deps').length).toBe(1); // deduped
+    const firstSmoke = stackCalls.findIndex((c) => /^test-/.test(c));
+    expect(stackCalls.indexOf('install-deps')).toBeLessThan(firstSmoke);
+    const setupEvent = h.journal.find((e) => e.event === 'land-setup');
+    expect(setupEvent?.commands).toEqual(['install-deps']);
+  });
+
+  test('a setup failure refuses as ENVIRONMENT — no bisect, no culprit named', async () => {
+    const h = closedHarness(['a', 'b'], (argv, cwd) => {
+      if (cwd.startsWith('land:') && argv[0] === 'install-deps') {
+        return { output: 'npm ERR! registry down', exitCode: 1 };
+      }
+      return { output: '', exitCode: 0 };
+    });
+    const plan = provisionedPlan({ a: 'install-deps', b: 'install-deps' });
+
+    await expect(landPlan(plan, h.deps, OPTS)).rejects.toThrow(LandBlockedError);
+    const fail = h.journal.find((e) => e.event === 'land-setup-failed');
+    expect(fail?.command).toBe('install-deps');
+    expect(String(fail?.outputTail)).toContain('registry down');
+    expect(h.journal.some((e) => e.event === 'land-culprit')).toBe(false);
+    expect(h.journal.some((e) => e.event === 'land-bisect')).toBe(false);
+    expect(h.git.refs.get('main')).toBeUndefined(); // nothing landed
+  });
+
+  test('bisect probes provision their own stacks too', async () => {
+    // Interaction failure: test-a red only when both a and b are in the stack
+    // AND deps are installed — every probe worktree must run the setup or the
+    // diagnosis would be environment noise.
+    const installedCwds = new Set<string>();
+    const h = closedHarness(['a', 'b'], (argv, cwd) => {
+      if (!cwd.startsWith('land:')) return { output: '', exitCode: 0 };
+      if (argv[0] === 'install-deps') {
+        installedCwds.add(cwd);
+        return { output: '', exitCode: 0 };
+      }
+      if (!installedCwds.has(cwd)) return { output: 'missing deps', exitCode: 1 };
+      if (argv[0] === 'test-a' && cwd.includes('node/a') && cwd.includes('node/b')) {
+        return { output: 'interaction red', exitCode: 1 };
+      }
+      return { output: '', exitCode: 0 };
+    });
+    const plan = provisionedPlan({ a: 'install-deps', b: 'install-deps' });
+
+    await expect(landPlan(plan, h.deps, OPTS)).rejects.toThrow(LandBlockedError);
+    // Diagnosis stayed coherent: a culprit was named (not integrity-failed),
+    // which is only possible if every probe stack was provisioned.
+    expect(h.journal.some((e) => e.event === 'land-culprit')).toBe(true);
+    expect(h.journal.some((e) => e.event === 'land-integrity-failed')).toBe(false);
+    expect(installedCwds.size).toBeGreaterThan(1); // full stack + probe stacks
+  });
+});

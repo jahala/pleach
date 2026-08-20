@@ -60,6 +60,10 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       );
     case 'land-start':
       return `landing verified work — ${s(e.goal)}`;
+    case 'land-setup':
+      return `provisioning the stack: ${len(e.commands)} setup command(s)`;
+    case 'land-setup-failed':
+      return `✗ land refused: '${s(e.command)}' failed provisioning the stack — environment, not composition; no culprit`;
     case 'land-gate':
       return `land gate: ${len(e.commands)} check(s) on the merged stack`;
     case 'land-gate-retry':
