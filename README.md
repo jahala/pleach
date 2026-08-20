@@ -104,7 +104,15 @@ via a final fast-forward — a conflict aborts with the repo untouched.
 **Don't want to write plan.json by hand?** The repo ships a Claude Code skill,
 [`pleach-plan`](.claude/skills/pleach-plan/SKILL.md): give it a goal and a repo and it
 decomposes the work into a gated DAG, then proves the result with `pleach validate`
-before handing it over.
+before handing it over. Working in this repo, Claude Code picks it up automatically;
+from an npm install, copy it where your sessions can see it:
+
+```sh
+cp -r node_modules/pleach/.claude/skills/pleach-plan ~/.claude/skills/
+```
+
+Agents without the skill still have the full machine-readable surface: `pleach schema`
+(the plan contract as JSON Schema) and `pleach --help` (verbs, flags, exit codes).
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full runtime substrate and flag reference.
 
