@@ -89,6 +89,17 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
       );
     }
 
+    // umbel spawn can exit 0 while no tmux session materializes (no bootable
+    // tmux server, e.g. under nohup). Probe existence now so that failure
+    // surfaces here as a spawn failure, not hours later as a wait-timeout.
+    const probe = await exec([bin, 'status', name], { cwd: spec.cwd, env: mergeEnv() });
+    if (probe.exitCode !== 0) {
+      throw new WorkerSpawnError(
+        `umbel spawn reported success but session ${name} does not exist — ` +
+          `is a tmux server running for this user? (${probe.output.trim()})`,
+      );
+    }
+
     return createWorker(name, spec.cwd);
   }
 
