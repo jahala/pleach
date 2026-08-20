@@ -311,6 +311,15 @@ the failing `reasons[]` as evidence — up to `maxAttempts`. A `verdict: 'partia
 pleach's honest-middle: the audit passed but the ledger (e.g. tend) declined to
 verify-close. The node's branch is still published; its dependents are skipped.
 
+**For audit-command authors: verdicts carry reasons, and reasons should name the
+falsifying evidence.** The `reasons[]` you emit are the exact text the build worker sees
+on its retry — "check failed" teaches it nothing; "expected `parseDate('2026-02-30')` to
+return an error, got a Date" names the case to fix. Design each check so its failing case
+is constructible (run it against the pre-work tree once: if it passes there, it proves
+nothing), and on failure, put that discriminating case in the reason. Verdicts also land
+verbatim in the node's close receipt, so a reason is permanent evidence, not transient
+chat.
+
 ---
 
 ## Bundled adapters
