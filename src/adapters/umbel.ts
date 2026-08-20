@@ -89,9 +89,13 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
       );
     }
 
-    // umbel spawn can exit 0 while no tmux session materializes (no bootable
-    // tmux server, e.g. under nohup). Probe existence now so that failure
-    // surfaces here as a spawn failure, not hours later as a wait-timeout.
+    // Post-spawn existence probe (decker finding). umbel ≥ its #55 fix
+    // verifies the session itself before exiting 0 — but that guarantee is
+    // point-in-time and version-dependent: an older umbel on PATH never
+    // checks (`tmux new-session -d` exits 0 once the server ACCEPTS the
+    // command — nothing lied, nobody checked), and a worker can die between
+    // spawn's return and our first send. The probe covers both: fail here as
+    // a spawn error, not hours later as a wait-timeout.
     const probe = await exec([bin, 'status', name], { cwd: spec.cwd, env: mergeEnv() });
     if (probe.exitCode !== 0) {
       throw new WorkerSpawnError(
