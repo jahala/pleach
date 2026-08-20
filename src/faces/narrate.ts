@@ -24,6 +24,8 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       return `▶ ${s(e.node)}: building`;
     case 'gate-fail':
       return `✗ ${s(e.node)}: ${s(e.gate)} gate failed`;
+    case 'gate-flaky':
+      return `${s(e.node)}: ${s(e.gate)} gate red once, green on retry — transient, proceeding`;
     case 'blocked':
       return `⚠ ${s(e.node)} NEEDS YOU — worker blocked: ${s(e.reason)}`;
     case 'verdict': {

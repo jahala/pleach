@@ -21,6 +21,8 @@ tolerate unknown events and unknown fields.
 | `node-start` | `node` | a node's attempt ladder began |
 | `gate-fail` | `node`, `gate` (`setup`\|`markers`\|`smoke`\|`red`\|`green`\|`command`\|`audit-parse`\|`commit`\|…) | a gate failed (may retry) |
 | `blocked` | `node`, `reason` (the prompt text) | **needs a human** — worker stopped at a permission prompt; session terminated |
+| `gate-retry` | `node`, `gate` (`setup`\|`smoke`) | an exec gate went red — one gate-only re-run in the same worktree before the red becomes worker evidence (D10) |
+| `gate-flaky` | `node`, `gate` | the retry passed — the red was transient; the node proceeds, no worker re-prompt |
 | `verdict` | `node`, `status`, `attempts`, `telemetry` (worker-reported, e.g. `tokens`), `durationMs` (wall clock), `provider` (resolved — never absent), `model?`, `gate?` (`ran`, `exitCode`, `outputTail?` — the failing gate's actual output, capped 2000 chars), `blockedReason?` | a node reached its terminal verdict |
 | `closed` | `node`, `sha`, `degraded?` (string[] — only when non-empty) | verified close — `node/<id>` published at `sha`; `degraded` lists checks the plan never configured (`smoke:unconfigured`, `audit:unconfigured`): no coverage is not coverage, visible at close time |
 | `not-closed` | `node` | ledger declined to verify-close (branch published, not verified) |

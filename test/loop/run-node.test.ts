@@ -212,7 +212,9 @@ describe('runNode — gates', () => {
     expect(r.verdict.evidence.gate).toEqual({ ran: 'bad setup', exitCode: 1 });
     // setup-fail is retryable → SAME tree reused (setup idempotent by contract)
     expect(h.log.count('isolate', 'n')).toBe(1);
-    expect(h.log.count('exec', undefined)).toBe(2); // setup re-execed each attempt
+    // Each attempt execs setup twice: the run + the D10 gate-only retry
+    // (a red must survive one re-run before it becomes worker evidence).
+    expect(h.log.count('exec', undefined)).toBe(4);
   });
 
   // ledger: C3 — setup runs before the RED gate on a {test,phases} node.
