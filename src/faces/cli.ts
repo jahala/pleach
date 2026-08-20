@@ -55,9 +55,11 @@ Flags (run):
   --tend-module PATH      use the tend ledger via this ingester module ($PLEACH_TEND_MODULE);
                           omit it (with no config) to run standalone on the git ledger (node/<id> branches)
   --allowed-tools LIST    Tool allowlist for claude workers (cannot cover MCP tools)
-  --permission-mode MODE  Permission/approval mode for workers (default: bypassPermissions —
-                          unattended workers can't answer prompts; safety is external). Rides
-                          claude (any mode) and codex (bypassPermissions only).
+  --permission-mode MODE  Override the unattended default with an explicit permission mode.
+                          Workers spawn unattended (umbel --unattended maps per-provider
+                          no-prompt flags; safety is external: disposable worktree + gates +
+                          cross-provider audit). Rides claude (any mode) and codex
+                          (bypassPermissions only); umbel gives an explicit mode precedence.
   --land                  After a fully-verified close, land the plan (see below); the run
                           summary gains a "land" object. A red run never lands.
   --quiet                 Suppress the per-event narration on stderr (one plain line per
@@ -101,7 +103,7 @@ interface Flags {
   umbelBin: string;
   tendModule?: string;
   allowedTools?: string;
-  permissionMode: string;
+  permissionMode?: string;
   config?: string;
   land: boolean;
   quiet: boolean;
@@ -117,10 +119,6 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
   const flags: Flags = {
     repoRoot: process.cwd(),
     umbelBin: process.env.PLEACH_UMBEL_BIN ?? 'umbel',
-    // Workers run unattended — default to bypassing in-worker permission prompts
-    // (a curated allowlist can't cover MCP tools). Safety is external: disposable
-    // worktree + cross-provider audit + gates. Override with --permission-mode.
-    permissionMode: 'bypassPermissions',
     land: false,
     quiet: false,
   };
@@ -254,7 +252,7 @@ async function depsFromFlags(flags: Flags) {
   const { runner, ledger } = await resolveSeams({
     repoRoot: flags.repoRoot,
     umbelBin: flags.umbelBin,
-    permissionMode: flags.permissionMode,
+    ...(flags.permissionMode !== undefined ? { permissionMode: flags.permissionMode } : {}),
     ...(flags.config !== undefined ? { config: flags.config } : {}),
     ...(flags.allowedTools !== undefined ? { allowedTools: flags.allowedTools } : {}),
     ...(flags.tendModule !== undefined ? { tendModule: flags.tendModule } : {}),

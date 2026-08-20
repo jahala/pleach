@@ -124,3 +124,38 @@ describe('createUmbelSeam.spawnWorker — post-spawn existence probe', () => {
     expect(calls[statusIdx]?.[2]).toBe(worker.__name);
   });
 });
+
+// ── unattended by default (owner ruling, decker run 4) ──────────────────────
+// A fleet worker must never be interactively prompted — the needs-a-human lane
+// is for refusals and human checks, not consent clicks. umbel#57 maps
+// --unattended to per-provider no-prompt flags and fails fast at spawn for a
+// provider that cannot comply; pleach's posture: every spawn is unattended,
+// an EXPLICIT permissionMode still rides (umbel gives it precedence).
+describe('createUmbelSeam.spawnWorker — unattended posture', () => {
+  test('every spawn rides --unattended, whatever the provider', async () => {
+    for (const provider of [undefined, 'claude', 'codex', 'gemini', 'opencode']) {
+      const { exec, calls } = makeRecordingExec();
+      const seam = createUmbelSeam(exec, { bin: 'umbel' });
+      await seam.spawnWorker({ ...(provider ? { provider } : {}), cwd: '/tmp' });
+      expect(spawnArgv(calls)).toContain('--unattended');
+    }
+  });
+
+  test('an explicit permissionMode still rides for claude/codex — umbel gives it precedence', async () => {
+    const { exec, calls } = makeRecordingExec();
+    const seam = createUmbelSeam(exec, { bin: 'umbel', permissionMode: 'acceptEdits' });
+    await seam.spawnWorker({ provider: 'claude', cwd: '/tmp' });
+    const argv = spawnArgv(calls);
+    expect(argv).toContain('--unattended');
+    expect(flagValue(argv, '--permission-mode')).toBe('acceptEdits');
+  });
+
+  test('gemini keeps permission-mode suppressed (umbel rejects it) but is unattended', async () => {
+    const { exec, calls } = makeRecordingExec();
+    const seam = createUmbelSeam(exec, { bin: 'umbel', permissionMode: 'bypassPermissions' });
+    await seam.spawnWorker({ provider: 'gemini', cwd: '/tmp' });
+    const argv = spawnArgv(calls);
+    expect(argv).toContain('--unattended');
+    expect(argv).not.toContain('--permission-mode');
+  });
+});
