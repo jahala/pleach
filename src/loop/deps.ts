@@ -1,4 +1,5 @@
 import type { Node, Verdict } from '../core/plan.ts';
+import type { Receipt } from '../core/receipt.ts';
 
 // The loop's complete view of the world. Constructed in faces/, injected into
 // loop/ — the loop never imports a seam module directly (ENGINEERING.md).
@@ -58,6 +59,9 @@ export interface IsolateSeam {
   // Resolve a ref to a commit SHA in the repo containing `cwd`; null if the
   // ref does not exist (ledger B1 — the baseRef fallback chain).
   refSha(cwd: string, ref: string): Promise<string | null>;
+  // Full commit message (subject + body) of `ref`; null when it doesn't
+  // resolve. The receipt verb reads the receipt-sha256 trailer from it (§D).
+  commitMessageOf(cwd: string, ref: string): Promise<string | null>;
   // Land verified refs onto the branch checked out in repoRoot (ledger B3).
   // Builds the merges in a throwaway detached worktree; the checkout is only
   // ever touched by a final `merge --ff-only`, so a conflict (LandConflictError),
@@ -114,6 +118,15 @@ export interface JournalSeam {
   append(event: Record<string, unknown>): Promise<void>;
 }
 
+// The receipt store (§D): one JSON file per node under
+// <git-dir>/pleach/receipts/. read() returns null for missing OR unreadable —
+// the callers' honest degradations (no invalidation without a record; the
+// receipt verb reports UNDERIVABLE).
+export interface ReceiptStore {
+  write(node: string, receipt: Receipt): Promise<void>;
+  read(node: string): Promise<Receipt | null>;
+}
+
 export interface ConductorDeps {
   exec: ExecFn;
   isolate: IsolateSeam;
@@ -121,6 +134,7 @@ export interface ConductorDeps {
   ledger: LedgerSeam;
   lock: LockSeam;
   journal: JournalSeam;
+  receipts: ReceiptStore;
 }
 
 export interface RunSummary {

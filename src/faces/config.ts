@@ -11,6 +11,7 @@ import { resolveGitDir } from '../seams/gitdir.ts';
 import { createIsolateSeam } from '../seams/isolate.ts';
 import { createJournal } from '../seams/journal.ts';
 import { createLockSeam } from '../seams/lock.ts';
+import { createReceiptStore } from '../seams/receipts.ts';
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -144,8 +145,18 @@ export interface BuildDepsOpts {
 // (exec/isolate/lock/journal) plus the two adapters you bring. The library
 // counterpart to the CLI's wiring: supply a runner + ledger (from resolveSeams,
 // or any RunnerSeam/LedgerSeam) and hand the result to runPlan.
+// The receipt verb's slim composition — no runner or ledger needed to verify
+// a settled node's receipt against the local repo.
+export function receiptDeps(repoRoot: string): Pick<ConductorDeps, 'receipts' | 'isolate'> {
+  return {
+    isolate: createIsolateSeam(exec, repoRoot),
+    receipts: createReceiptStore(join(resolveGitDir(repoRoot), 'pleach', 'receipts')),
+  };
+}
+
 export function buildDeps(opts: BuildDepsOpts): ConductorDeps {
-  const journalPath = opts.journal ?? join(resolveGitDir(opts.repoRoot), 'pleach', 'journal.jsonl');
+  const pleachDir = join(resolveGitDir(opts.repoRoot), 'pleach');
+  const journalPath = opts.journal ?? join(pleachDir, 'journal.jsonl');
   return {
     exec,
     isolate: createIsolateSeam(exec, opts.repoRoot),
@@ -153,5 +164,6 @@ export function buildDeps(opts: BuildDepsOpts): ConductorDeps {
     journal: createJournal(journalPath, opts.narrate),
     runner: opts.runner,
     ledger: opts.ledger,
+    receipts: createReceiptStore(join(pleachDir, 'receipts')),
   };
 }
