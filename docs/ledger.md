@@ -163,6 +163,16 @@ checkpoint but have different lifetimes and trust domains.**
   user tries first was refused. Found 2026-08-20 verifying the receipt verb on the global bin.
   **Fix:** the help check rides ahead of flag parsing (`runCli`); a bare invocation still prints usage
   and exits 2 (not a request for help). Tests: `test/e2e/help.test.ts` (real process, all three shapes).
+- **D9 ✅ [field] Land gate red on a green composition — the stack had no environment.** Work worktrees
+  get `node.setup` post-isolate; the land gate's throwaway stack got NOTHING, so dep-needing smokes
+  (`npx vitest` with no node_modules) read red and the bisect named innocent sinks. Found on §A's first
+  field use (decker wave 1, 2026-08-20: 6/6 closed, 83/83 green with deps, land refused). Companion
+  trap, documented in the skill: encoding the install into `accept.smoke` changes acceptance identity
+  and re-dispatches every verified node via the acceptance-evolution cascade — provisioning belongs in
+  gate ENVIRONMENT, never in acceptance text. **Fix:** the gate runs the sinks' own deduped setup union
+  in the stack (and in every bisect probe + the coherence recheck); a red setup refuses as
+  `land-setup-failed` (environment) and never enters the bisect. Tests: `test/loop/land-gate.test.ts`
+  ("provisions its stack" describe — dedupe+ordering, environment refusal, provisioned probes).
 
 ### Verified-sound (attacks refuted — do not relitigate)
 

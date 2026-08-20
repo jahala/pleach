@@ -61,8 +61,12 @@ plan wastes agent runs; a good one parallelizes cleanly and verifies honestly.
 
 5. **Declare the gates:**
    - `setup`: the dependency install (e.g. `bun install`) — runs once per
-     isolate, before work and gates. Without it, fresh worktrees fail tests
-     for the wrong reason.
+     isolate, before work and gates, and the LAND gate re-runs the sinks'
+     setups in its own stack worktree before their smokes. Keep provisioning
+     in `setup`, NEVER inside `accept.smoke`: smoke strings are acceptance
+     identity, and editing one re-dispatches every already-verified node
+     (the acceptance-evolution rule). Without setup, fresh worktrees fail
+     tests for the wrong reason.
    - `accept.smoke`: the project's real test command. Every node gets one.
    - `accept.audit` on the integration node: `command` is a deterministic
      check script/command; `provider` MUST differ from the builder's
