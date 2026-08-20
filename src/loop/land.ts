@@ -123,6 +123,60 @@ function collectLandGate(plan: Plan, sinks: readonly string[]): GateCommand[] {
   return [...byCommand.values()];
 }
 
+// The stack's provisioning (D9): the sinks' own setup commands, deduped by
+// exact string — a sink's smoke assumed its setup had run, and work worktrees
+// get that post-isolate while the gate's throwaway stack got nothing (decker
+// wave 1: `npx vitest` red on a green composition; the bisect named innocent
+// sinks). Provisioning lives HERE, never in acceptance text — encoding an
+// install into accept.smoke changes acceptance identity and re-dispatches
+// every verified node via the acceptance-evolution cascade.
+function collectSetupFor(plan: Plan, ids: readonly string[]): GateCommand[] {
+  const byCommand = new Map<string, GateCommand>();
+  for (const id of ids) {
+    const node = plan.nodes.find((n) => n.id === id);
+    if (node === undefined || node.setup === undefined) continue;
+    const existing = byCommand.get(node.setup);
+    if (existing) {
+      existing.owners.push(id);
+    } else {
+      byCommand.set(node.setup, {
+        command: node.setup,
+        owners: [id],
+        timeoutMs: node.policy.timeoutMs ?? LAND_GATE_TIMEOUT_MS,
+      });
+    }
+  }
+  return [...byCommand.values()];
+}
+
+// A red setup is an ENVIRONMENT failure, not a composition failure — journal
+// it and refuse without ever entering the bisect (no innocent culprits).
+async function provisionOrRefuse(
+  deps: ConductorDeps,
+  cwd: string,
+  setups: readonly GateCommand[],
+  context: string,
+): Promise<void> {
+  for (const s of setups) {
+    const { output, exitCode } = await guardedExec(deps.exec, s.command, {
+      cwd,
+      timeoutMs: s.timeoutMs,
+    });
+    if (exitCode !== 0) {
+      await deps.journal.append({
+        event: 'land-setup-failed',
+        command: s.command,
+        exitCode,
+        outputTail: output.slice(-2000),
+      });
+      throw new LandBlockedError(
+        `land ${context} setup failed ('${s.command}' exited ${exitCode}) — an environment ` +
+          `failure, not a composition failure; no culprit named, nothing lands`,
+      );
+    }
+  }
+}
+
 interface GateFailure {
   command: string;
   outputTail: string;
@@ -144,16 +198,19 @@ async function runGate(
   return null;
 }
 
-// Build a stack for a subset of refs, gate it, dispose — one bisect probe.
+// Build a stack for a subset of refs, provision it, gate it, dispose — one
+// bisect probe. A probe whose SETUP fails throws (diagnosis untrusted).
 async function probe(
   deps: ConductorDeps,
   repoRoot: string,
   refs: readonly string[],
   gate: readonly GateCommand[],
+  setups: readonly GateCommand[],
 ): Promise<GateFailure | null> {
   if (refs.length === 0) return null;
   const stack = await deps.isolate.landStack(repoRoot, refs);
   try {
+    await provisionOrRefuse(deps, stack.cwd, setups, 'bisect-probe');
     return await runGate(deps, stack.cwd, gate);
   } finally {
     await stack.dispose();
@@ -168,9 +225,17 @@ async function gateAndPublish(
   refs: readonly string[],
 ): Promise<{ branch: string; sha: string }> {
   const gate = collectLandGate(plan, sinks);
+  const setups = collectSetupFor(plan, sinks);
   const stack: LandStack = await deps.isolate.landStack(repoRoot, refs);
   try {
     if (gate.length > 0) {
+      if (setups.length > 0) {
+        await deps.journal.append({
+          event: 'land-setup',
+          commands: setups.map((s) => s.command),
+        });
+        await provisionOrRefuse(deps, stack.cwd, setups, 'gate');
+      }
       await deps.journal.append({
         event: 'land-gate',
         commands: gate.map((g) => g.command),
@@ -192,7 +257,7 @@ async function gateAndPublish(
             : { command: g.command, outputTail: retry.output.slice(-2000) };
       }
       if (red !== null) {
-        await refuseWithDiagnosis(deps, repoRoot, sinks, refs, gate, red);
+        await refuseWithDiagnosis(plan, deps, repoRoot, sinks, refs, gate, red);
       }
     }
     return await stack.publish();
@@ -206,6 +271,7 @@ async function gateAndPublish(
 // dependent interactions are caught), verify the diagnosis is coherent, and
 // REFUSE with the story. Always throws LandBlockedError.
 async function refuseWithDiagnosis(
+  plan: Plan,
   deps: ConductorDeps,
   repoRoot: string,
   sinks: readonly string[],
@@ -214,6 +280,13 @@ async function refuseWithDiagnosis(
   fullRed: GateFailure,
 ): Promise<never> {
   const sinkByRef = new Map(refs.map((r, i) => [r, sinks[i] as string]));
+  // Every probe stack is a fresh worktree — it needs the same provisioning
+  // the full stack got, scoped to the sinks actually in the probe.
+  const setupsFor = (subset: readonly string[]): GateCommand[] =>
+    collectSetupFor(
+      plan,
+      subset.map((r) => sinkByRef.get(r) as string),
+    );
   const culprits: string[] = [];
   let culpritEvidence = fullRed;
 
@@ -236,7 +309,8 @@ async function refuseWithDiagnosis(
         testing: left.map((r) => sinkByRef.get(r)),
         context: knownGood.map((r) => sinkByRef.get(r)),
       });
-      const leftRed = await probe(deps, repoRoot, [...knownGood, ...left], gate);
+      const leftProbe = [...knownGood, ...left];
+      const leftRed = await probe(deps, repoRoot, leftProbe, gate, setupsFor(leftProbe));
       if (leftRed === null) {
         knownGood.push(...left);
         await bisect(right);
@@ -246,7 +320,8 @@ async function refuseWithDiagnosis(
       await bisect(left);
       // The right half gets its own combined test in known-good context — a
       // left culprit does not exonerate the right half.
-      const rightRed = await probe(deps, repoRoot, [...knownGood, ...right], gate);
+      const rightProbe = [...knownGood, ...right];
+      const rightRed = await probe(deps, repoRoot, rightProbe, gate, setupsFor(rightProbe));
       if (rightRed !== null) {
         culpritEvidence = rightRed;
         await bisect(right);
@@ -259,7 +334,7 @@ async function refuseWithDiagnosis(
     // Terminal coherence check: the good subset alone must pass, or the
     // diagnosis cannot be trusted — say so instead of naming names.
     const goodRefs = refs.filter((r) => !culprits.includes(sinkByRef.get(r) as string));
-    const recheck = await probe(deps, repoRoot, goodRefs, gate);
+    const recheck = await probe(deps, repoRoot, goodRefs, gate, setupsFor(goodRefs));
     if (recheck !== null) {
       await deps.journal.append({
         event: 'land-integrity-failed',

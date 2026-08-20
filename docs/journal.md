@@ -35,6 +35,8 @@ tolerate unknown events and unknown fields.
 | `dispose-failed` | `node`, `detail` | worktree cleanup failure (diagnostic) |
 | `run-end` | the `RunSummary` fields (`closed`, `failed`, `partial`, `skipped`, `blocked`, `quarantined`, `alreadyVerified`, …) | the run settled |
 | `land-start` | `goal` | landing began |
+| `land-setup` | `commands[]` | stack provisioning: the sinks' deduped setup commands run in the gate worktree before their smokes (D9 — a fresh stack has no environment) |
+| `land-setup-failed` | `command`, `exitCode`, `outputTail` | provisioning failed — an ENVIRONMENT refusal, never a composition culprit; the bisect does not run |
 | `land-gate` | `commands[]`, `sinks[]` | the composition gate: sinks' deduped smokes run on the stack tip |
 | `land-gate-retry` | `command` | one flaky retry of the failing gate command |
 | `land-bisect` | `testing[]`, `context[]` | bisect probe: testing these sinks atop the known-good context |
