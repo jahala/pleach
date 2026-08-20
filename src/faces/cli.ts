@@ -344,12 +344,19 @@ async function verbLand(planPath: string, flags: Flags): Promise<number> {
 
 export async function runCli(argv: readonly string[]): Promise<number> {
   try {
+    // Help rides ahead of flag parsing — parseFlags rejects unknown flags, and
+    // the one flag every user tries first must never be "unknown" (ledger D-help).
+    if (argv.includes('--help') || argv.includes('-h')) {
+      process.stdout.write(HELP);
+      return 0;
+    }
+
     const { positionals, flags } = parseFlags(argv);
     const [verb, planPath] = positionals;
 
-    if (verb === undefined || argv.includes('--help') || argv.includes('-h')) {
+    if (verb === undefined) {
       process.stdout.write(HELP);
-      return verb === undefined && !argv.includes('--help') && !argv.includes('-h') ? 2 : 0;
+      return 2;
     }
     if (verb === 'schema') return verbSchema();
 

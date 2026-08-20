@@ -158,6 +158,11 @@ checkpoint but have different lifetimes and trust domains.**
 - **D6 ◦ [adv] Dead config fields** — `policy.budget` unenforced, `reauditWhen` dormant (telemetry empty
   v1), `closes` unread by the loop. Mark `[ROADMAP]`-inert at the schema site or warn on use.
 - **D7 ◦ [adv] `closed` Set mutated in place** — defensive-copy what `readClosed` returns.
+- **D8 ✅ [me] `pleach --help` exited 2 with "unknown flag".** The HELP text advertises `--help`, but
+  `parseFlags` (which rejects unknown flags) ran BEFORE `runCli`'s help check, so the one flag every
+  user tries first was refused. Found 2026-08-20 verifying the receipt verb on the global bin.
+  **Fix:** the help check rides ahead of flag parsing (`runCli`); a bare invocation still prints usage
+  and exits 2 (not a request for help). Tests: `test/e2e/help.test.ts` (real process, all three shapes).
 
 ### Verified-sound (attacks refuted — do not relitigate)
 
