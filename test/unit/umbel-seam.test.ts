@@ -87,3 +87,40 @@ describe('createUmbelSeam.spawnWorker — permissionMode / allowedTools passthro
     expect(argv).not.toContain('--allowed-tools');
   });
 });
+
+// ── the spawn-void (decker finding, 2026-08-20) ──────────────────────────────
+// umbel spawn can exit 0 and echo the name while no tmux session materializes
+// (e.g. launched under nohup with no tmux server bootable). Untreated, that
+// surfaces hours later as a misleading wait-timeout with zero worker output.
+// The seam must probe session existence right after spawn and fail FAST.
+describe('createUmbelSeam.spawnWorker — post-spawn existence probe', () => {
+  test('spawn that reports success but leaves no session fails fast as a spawn failure', async () => {
+    const calls: string[][] = [];
+    const exec: ExecFn = async (argv) => {
+      const a = [...argv];
+      calls.push(a);
+      if (a.includes('spawn')) {
+        const name = a[a.indexOf('--name') + 1] ?? '';
+        return { exitCode: 0, output: `spawned: ${name}\n` };
+      }
+      // the status probe: session never materialized
+      return { exitCode: 1, output: 'umbel: Session not found\n' };
+    };
+    const seam = createUmbelSeam(exec, { bin: 'umbel' });
+
+    expect(seam.spawnWorker({ cwd: '/tmp' })).rejects.toThrow(
+      /spawn reported success but session .* does not exist.*tmux/,
+    );
+  });
+
+  test('the probe rides every spawn: umbel status <name> follows umbel spawn', async () => {
+    const { exec, calls } = makeRecordingExec();
+    const seam = createUmbelSeam(exec, { bin: 'umbel' });
+    const worker = await seam.spawnWorker({ cwd: '/tmp' });
+
+    const spawnIdx = calls.findIndex((a) => a.includes('spawn'));
+    const statusIdx = calls.findIndex((a) => a[1] === 'status');
+    expect(statusIdx).toBeGreaterThan(spawnIdx);
+    expect(calls[statusIdx]?.[2]).toBe(worker.__name);
+  });
+});
