@@ -71,6 +71,14 @@ plan wastes agent runs; a good one parallelizes cleanly and verifies honestly.
      not model judgment.
    - `policy.timeoutMs`: set it (e.g. 600000). `policy.maxAttempts`: 2 —
      retries carry the failure evidence into the re-prompt.
+   - **The falsification rule** — for every check you declare, state (to
+     yourself) what failing looks like. A smoke that cannot fail when the work
+     is missing is a tautology, not a gate; if you cannot construct the
+     failing case, the check is too vague — drop it or split it. Two escape
+     hatches, used honestly: an oversized node whose acceptance you can't
+     falsify wants SPLITTING, and a genuinely unverifiable claim ("reads
+     better") wants a human check outside the plan — never a fake command
+     that always exits 0.
 
 6. **Prove the plan before handing it over — non-negotiable:**
    ```
@@ -86,7 +94,15 @@ plan wastes agent runs; a good one parallelizes cleanly and verifies honestly.
      on PATH; `{phases}` nodes need umbel instead)
    - strict: `pleach run plan.json` (umbel + tmux)
    - and the last mile: `pleach run plan.json --land` or `pleach land
-     plan.json` after a verified close.
+     plan.json` after a verified close. Landing is itself gated: pleach
+     builds the merged stack in a throwaway worktree and runs the union of
+     the sinks' smoke commands on it before publishing — so write sink
+     smokes that pass at the composition tip, not only in the sink's own
+     tree. A red land gate refuses everything and bisects to name the
+     culprit.
+   - every close and quarantine mints a sealed receipt; `pleach receipt
+     <node>` later verifies what was actually checked (and what wasn't —
+     unconfigured gates are recorded as `degraded`).
 
 ## Prompt-writing checklist (per agent node)
 
@@ -96,6 +112,17 @@ plan wastes agent runs; a good one parallelizes cleanly and verifies honestly.
 - Explicit constraints: "do NOT modify X", "ADD, do not replace".
 - For the integration node: name the expected merge ("this worktree merges
   branches A and B into <file>; resolve conflicts keeping ALL functions").
+- **The hygiene gate is always on** — write prompts that survive it:
+  - An agent node that changes nothing FAILS ("done on nothing"). If a node
+    might legitimately be a no-op, make it a `{command}` node (exempt) or
+    have its prompt run a gate whose stamp lands in the diff.
+  - A file losing >100 lines AND >50% of its diff fails unless the worker
+    re-states the deletion in its final message. If a node's job IS a big
+    rewrite, say so in the prompt: "you are deleting most of <file> — state
+    that explicitly in your final message, naming the file."
+  - Credentials in added lines never publish (AWS/GitHub/Anthropic/… key
+    patterns). Prompts touching config should say "reference secrets via
+    env vars, never literal values."
 
 ## Failure modes to avoid
 
@@ -106,3 +133,8 @@ plan wastes agent runs; a good one parallelizes cleanly and verifies honestly.
   repo doesn't have.
 - An audit provider equal to the resolved builder provider — validate rejects
   it (model diversity is the point).
+- Sink smokes that only pass in the sink's own tree — the land gate re-runs
+  them on the MERGED stack; a smoke keyed to "my files exactly" goes red at
+  composition and blocks the landing for everyone.
+- An agent node planned as "verify X and change nothing" — the hygiene gate
+  fails empty diffs on agent work; that job is a `{command}` node.
