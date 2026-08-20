@@ -24,7 +24,7 @@ export interface ResolveSeamsOpts {
   config?: string;
   repoRoot: string;
   umbelBin: string;
-  permissionMode: string;
+  permissionMode?: string;
   allowedTools?: string;
   tendModule?: string;
   // Which bundled runner the default wiring uses (--runner). A config file
@@ -114,7 +114,7 @@ export async function resolveSeams(
       ? directCliRunner()
       : umbelRunner({
           bin: opts.umbelBin,
-          permissionMode: opts.permissionMode,
+          ...(opts.permissionMode !== undefined ? { permissionMode: opts.permissionMode } : {}),
           ...(opts.allowedTools !== undefined ? { allowedTools: opts.allowedTools } : {}),
         });
 
