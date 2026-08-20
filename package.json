@@ -37,6 +37,13 @@
   "bin": {
     "pleach": "./src/main.ts"
   },
+  "files": [
+    "src",
+    "docs/contract",
+    "docs/adapters.md",
+    "docs/journal.md",
+    ".claude/skills/pleach-plan"
+  ],
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
