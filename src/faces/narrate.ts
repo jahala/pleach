@@ -30,8 +30,18 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       if (e.status === 'done') return null; // 'closed' narrates the publish
       return `✗ ${s(e.node)}: ${s(e.status)} after ${n(e.attempts)} attempt(s)`;
     }
-    case 'closed':
-      return `✓ ${s(e.node)}: published node/${s(e.node)} @ ${s(e.sha).slice(0, 7)}`;
+    case 'closed': {
+      // degraded[] rides the close line — "no coverage is not coverage" must
+      // be visible when the trust decision happens, not on later inspection.
+      const line = `✓ ${s(e.node)}: published node/${s(e.node)} @ ${s(e.sha).slice(0, 7)}`;
+      return len(e.degraded) > 0
+        ? `${line} — degraded: ${(e.degraded as unknown[]).map(s).join(', ')}`
+        : line;
+    }
+    case 'acceptance-changed':
+      return `↻ ${s(e.node)}: acceptance changed since its close — re-dispatching (was verified against a different gate)`;
+    case 'acceptance-cascade':
+      return `↻ ${s(e.node)}: rebuilding — its base ${s(e.via)} was re-dispatched, so this close embeds stale work`;
     case 'not-closed':
       return `${s(e.node)}: ledger declined to close — branch published, not verified`;
     case 'quarantined':

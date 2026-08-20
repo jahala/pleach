@@ -14,9 +14,22 @@ import { planJsonSchema } from '../core/schema-json.ts';
 import { nodeSummaries, validatePlan } from '../core/validate.ts';
 import type { RunSummary } from '../loop/deps.ts';
 import { landPlan } from '../loop/land.ts';
+import { verifyReceipt } from '../loop/receipt-verify.ts';
 import { runPlan } from '../loop/run-plan.ts';
-import { buildDeps, resolveSeams } from './config.ts';
+import { buildDeps, receiptDeps, resolveSeams } from './config.ts';
 import { narrateEvent } from './narrate.ts';
+
+// The receipt version fence needs the real package version; read it from the
+// package.json shipped beside this source. Unreadable → an honest dev marker.
+async function pleachVersion(): Promise<string> {
+  try {
+    const raw = await readFile(new URL('../../package.json', import.meta.url), 'utf8');
+    const v = (JSON.parse(raw) as { version?: unknown }).version;
+    return typeof v === 'string' ? v : '0.0.0-dev';
+  } catch {
+    return '0.0.0-dev';
+  }
+}
 
 const HELP = `pleach — deterministic conductor for DAGs of verified agent work
 
@@ -25,6 +38,7 @@ Usage:
   pleach land <plan.json> [flags]    Merge a verified plan's sinks onto the checked-out branch
   pleach validate <plan.json>        Parse + validate a plan; print the topo order
   pleach schema                      Emit the plan contract as JSON Schema (for planners / codegen)
+  pleach receipt <node> [flags]      Verify a settled node's close receipt (--repo-root applies)
   pleach --help
 
 Flags (run):
@@ -70,6 +84,13 @@ Exit codes:
   1  one or more nodes failed / partial / blocked / skipped (summary on stdout says which)
   2  usage error, unreadable or invalid plan
   3  another conductor holds the lock for this (repo, source)
+
+Receipts: every close and quarantine mints a sealed receipt (facts frozen at
+classify time, sha256 pinned as a receipt-sha256 trailer in the node's commit,
+file under <git-dir>/pleach/receipts/). \`pleach receipt <node>\` re-hashes the
+file, re-derives the status from its facts, and checks the trailer:
+PASS (exit 0) · TAMPERED (exit 1) · UNDERIVABLE (exit 2 — nothing proved
+either way: no receipt, foreign contract version, or unresolvable ref).
 `;
 
 interface Flags {
@@ -263,6 +284,7 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
 
   const summary = await runPlan(plan, deps, {
     repoRoot: flags.repoRoot,
+    pleachVersion: await pleachVersion(),
     // The contract's conductor default when neither flag nor plan caps it:
     // cores−2, floored at 1 (the loop stays environment-free).
     defaultConcurrency: Math.max(1, cpus().length - 2),
@@ -280,6 +302,35 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
   }
   process.stdout.write(`${JSON.stringify(summary)}\n`);
   return code;
+}
+
+async function verbReceipt(nodeId: string, flags: Flags): Promise<number> {
+  const check = await verifyReceipt(nodeId, receiptDeps(flags.repoRoot), flags.repoRoot);
+  const receipt = 'receipt' in check ? check.receipt : undefined;
+  const degraded = receipt?.facts.degraded ?? [];
+
+  if (check.outcome === 'pass' && receipt !== undefined) {
+    process.stderr.write(
+      `pleach: receipt PASS — ${nodeId} ${receipt.derived} (receipt-sha256 ${receipt.sha256.slice(0, 12)}…)\n`,
+    );
+    for (const d of degraded) process.stderr.write(`pleach:   degraded: ${d}\n`);
+  } else if (check.outcome !== 'pass') {
+    process.stderr.write(
+      `pleach: receipt ${check.outcome.toUpperCase()} — ${nodeId}: ${check.detail}\n`,
+    );
+  }
+
+  process.stdout.write(
+    `${JSON.stringify({
+      node: nodeId,
+      outcome: check.outcome,
+      ...(receipt !== undefined
+        ? { derived: receipt.derived, sha256: receipt.sha256, degraded }
+        : {}),
+      ...(check.outcome !== 'pass' ? { detail: check.detail } : {}),
+    })}\n`,
+  );
+  return check.outcome === 'pass' ? 0 : check.outcome === 'tampered' ? 1 : 2;
 }
 
 async function verbLand(planPath: string, flags: Flags): Promise<number> {
@@ -301,6 +352,11 @@ export async function runCli(argv: readonly string[]): Promise<number> {
       return verb === undefined && !argv.includes('--help') && !argv.includes('-h') ? 2 : 0;
     }
     if (verb === 'schema') return verbSchema();
+
+    if (verb === 'receipt') {
+      if (planPath === undefined) throw new UsageError('receipt: <node> is required');
+      return await verbReceipt(planPath, flags);
+    }
 
     if (planPath === undefined) throw new UsageError(`${verb}: <plan.json> is required`);
 

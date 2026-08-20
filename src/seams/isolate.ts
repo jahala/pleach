@@ -325,6 +325,12 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     return r.output.trim() || null;
   }
 
+  async function commitMessageOf(cwd: string, ref: string): Promise<string | null> {
+    const r = await git(exec, cwd, 'show', '-s', '--format=%B', `${ref}^{commit}`);
+    if (r.exitCode !== 0) return null;
+    return r.output;
+  }
+
   // ── land ─────────────────────────────────────────────────────────────────
 
   async function landStack(
@@ -420,6 +426,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     changedFiles,
     commitBranch,
     refSha,
+    commitMessageOf,
     landStack,
   };
 }
