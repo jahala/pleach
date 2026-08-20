@@ -57,7 +57,13 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
   }): Promise<Worker & { __name: string }> {
     const name = `pl-${randomHex(8)}`;
 
-    const argv: string[] = [bin, 'spawn', '--name', name, '--cwd', spec.cwd];
+    // Unattended is the default posture (owner ruling, decker run 4): a fleet
+    // worker must never be interactively prompted — the needs-a-human lane is
+    // for refusals and human checks, not consent clicks. umbel maps the flag
+    // to per-provider no-prompt equivalents and FAILS FAST at spawn for a
+    // provider that cannot comply (its #57). An umbel too old to know the
+    // flag refuses the spawn loudly — the substrate floor is documented.
+    const argv: string[] = [bin, 'spawn', '--name', name, '--cwd', spec.cwd, '--unattended'];
     if (spec.provider !== undefined) argv.push('--provider', spec.provider);
     if (spec.model !== undefined) argv.push('--model', spec.model);
     const provider = spec.provider ?? 'claude';
