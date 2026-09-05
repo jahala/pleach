@@ -136,7 +136,10 @@ export function directCliRunner(opts: DirectCliOpts = {}): RunnerSeam {
           pendingPrompt = text;
         },
 
-        wait: async (waitOpts?: { timeoutMs?: number }): Promise<WorkerResult> => {
+        wait: async (waitOpts?: {
+          timeoutMs?: number;
+          signal?: AbortSignal;
+        }): Promise<WorkerResult> => {
           const prompt = pendingPrompt ?? '';
           turnUsed = true;
           const argv = buildArgv(spec.provider, prompt, spec.model);
@@ -154,9 +157,16 @@ export function directCliRunner(opts: DirectCliOpts = {}): RunnerSeam {
               handle.kill();
             }, waitOpts.timeoutMs);
           }
+          // Teardown abort (D12): same interrupt path as timeout — the CLI
+          // process IS the turn here, so killing it is the whole teardown.
+          const onAbort = () => handle.kill();
+          const signal = waitOpts?.signal;
+          if (signal?.aborted) onAbort();
+          signal?.addEventListener('abort', onAbort, { once: true });
 
           const [finalMessage, exitCode] = await Promise.all([handle.stdout, handle.exited]);
           if (timer !== undefined) clearTimeout(timer);
+          signal?.removeEventListener('abort', onAbort);
           inFlight = null;
 
           const filesTouched = await getChangedFiles(spec.cwd);

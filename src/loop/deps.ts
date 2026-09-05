@@ -13,7 +13,7 @@ export interface ExecResult {
 // process and resolves with the output gathered so far + a non-zero exitCode.
 export type ExecFn = (
   argv: readonly string[],
-  opts: { cwd: string; timeoutMs?: number; env?: Record<string, string> },
+  opts: { cwd: string; timeoutMs?: number; env?: Record<string, string>; signal?: AbortSignal },
 ) => Promise<ExecResult>;
 
 export interface Isolation {
@@ -95,7 +95,9 @@ export interface WorkerResult {
 
 export interface Worker {
   send(text: string): Promise<void>;
-  wait(opts?: { timeoutMs?: number }): Promise<WorkerResult>;
+  // signal (D12): the conductor is tearing down — end the wait promptly (the
+  // session is killed by the caller as usual; only the WAIT is interrupted).
+  wait(opts?: { timeoutMs?: number; signal?: AbortSignal }): Promise<WorkerResult>;
   kill(): Promise<void>;
 }
 

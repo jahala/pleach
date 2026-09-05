@@ -41,6 +41,9 @@ export interface RunWorkOpts {
   // Evidence section appended to the worker prompt on a retry attempt (A3).
   // Absent on the first attempt; present and non-empty on every retry.
   evidence?: string;
+  // Teardown signal (D12): interrupts the WAIT — the run's long pole. Work
+  // commands and gates run to completion, bounded by their own timeouts.
+  signal?: AbortSignal;
 }
 
 // The base worker prompt for a node, plus an optional clearly-delimited
@@ -97,7 +100,7 @@ export async function runWork(
           ? withEvidence(phase.prompt, opts.evidence)
           : phase.prompt;
       await w.send(text);
-      last = await w.wait({ timeoutMs: opts.timeoutMs });
+      last = await w.wait({ timeoutMs: opts.timeoutMs, signal: opts.signal });
       if (last.reason !== 'stop') return last;
 
       if (phase.phase === 'red') {
@@ -122,5 +125,5 @@ export async function runWork(
 
   // {prompt}: single send/wait.
   await w.send(promptFor(node, opts.evidence));
-  return w.wait({ timeoutMs: opts.timeoutMs });
+  return w.wait({ timeoutMs: opts.timeoutMs, signal: opts.signal });
 }

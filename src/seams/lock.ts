@@ -39,7 +39,7 @@ async function tryAcquireExcl(path: string): Promise<boolean> {
   }
 }
 
-async function readPid(path: string): Promise<number | null> {
+export async function readPid(path: string): Promise<number | null> {
   try {
     const text = await readFile(path, 'utf8');
     const pid = Number(text.trim());
@@ -49,7 +49,7 @@ async function readPid(path: string): Promise<number | null> {
   }
 }
 
-function isAlive(pid: number): boolean {
+export function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     // No throw → process exists (we may not have permission, but it's live)

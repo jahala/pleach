@@ -326,8 +326,22 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
         async send(text) {
           log.push('send', nodeId, `${role}:${text}`);
         },
-        async wait() {
-          const res = await waitScript(ctx, waitIndex);
+        async wait(waitOpts?: { timeoutMs?: number; signal?: AbortSignal }) {
+          // A real runner's wait ends promptly on abort (D12) — the harness
+          // mirrors that contract so teardown is testable.
+          const scripted = Promise.resolve(waitScript(ctx, waitIndex));
+          const signal = waitOpts?.signal;
+          const res =
+            signal === undefined
+              ? await scripted
+              : await Promise.race([
+                  scripted,
+                  new Promise<WorkerResult>((resolve) => {
+                    const aborted = () => resolve(stop({ reason: 'aborted' }));
+                    if (signal.aborted) aborted();
+                    else signal.addEventListener('abort', aborted, { once: true });
+                  }),
+                ]);
           waitIndex += 1;
           log.push('wait', nodeId, `${role}:${res.reason}`);
           return res;
