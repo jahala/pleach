@@ -61,3 +61,29 @@ describe('narrateEvent (W1 narration floor)', () => {
     expect(narrateEvent({ event: 'unknown-future-event' })).toBeNull();
   });
 });
+
+// P6c (bandung): the narration printed the plan's whole goal paragraph on
+// every run and land — the first sentence carries the identity; the rest is
+// noise repeated twice per cycle.
+describe('narrate clamps the goal to its first sentence', () => {
+  const PARAGRAPH =
+    'Build the tilth core. Then extract the slicer, wire the assembler, and verify the ' +
+    'whole pipeline against the corpus with every edge case the map names.';
+
+  test('run-start keeps only the first sentence', () => {
+    const line = narrateEvent({ event: 'run-start', goal: PARAGRAPH, nodes: 3 });
+    expect(line).toContain('Build the tilth core.');
+    expect(line).not.toContain('extract the slicer');
+  });
+
+  test('land-start keeps only the first sentence', () => {
+    const line = narrateEvent({ event: 'land-start', goal: PARAGRAPH });
+    expect(line).toContain('Build the tilth core.');
+    expect(line).not.toContain('extract the slicer');
+  });
+
+  test('a one-sentence goal passes through whole', () => {
+    const line = narrateEvent({ event: 'run-start', goal: 'ship it', nodes: 1 });
+    expect(line).toContain('ship it');
+  });
+});
