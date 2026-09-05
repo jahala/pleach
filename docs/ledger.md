@@ -187,6 +187,18 @@ checkpoint but have different lifetimes and trust domains.**
   field data shows corrupted-tree cases the same-tree retry misses. Tests:
   `test/loop/gate-retry.test.ts` (flaky-pass, persistent-red evidence, no-output marker, setup parity).
 
+- **D11 ✅ [field] Terminal verdicts could leave zero evidence.** bandung's dogfood (2026-09-05,
+  P1+P2): a worker dead in 8s with a clean tree left NO receipt, NO quarantine, and a bare
+  `status:'dead'` line (the receipt write hid behind the quarantine commit; the dead verdict was
+  built without even a gate record) — diagnosis took a manual spawn. And a blocked node's tree was
+  DISPOSED on the theory that an unfinished turn holds nothing — workers edit files mid-turn; 9m40s
+  of work was discarded and rebuilt from zero. **Fix — no terminal verdict without an artifact:**
+  the receipt always writes at terminal settle (refs attach only when a quarantine commit landed);
+  blocked hands its tree back and quarantines exactly like failed (unfinished is not wrong); dead
+  verdicts carry `gate.ran: 'wait:dead'` plus optional runner detail (`paneTail`/`processExit` on
+  `WorkerResult`, journaled when the runner supplies them — the pleach half of umbel's
+  pane-capture-at-death, never fabricated). Tests: `test/loop/terminal-evidence.test.ts`.
+
 ### Verified-sound (attacks refuted — do not relitigate)
 
 `--detach` fan-out (two detached worktrees at one commit are legal); the closed-add-then-dispose-inside-

@@ -84,6 +84,12 @@ export interface WorkerResult {
   // The blocking prompt text when reason is input/idle — the loop carries it
   // into Verdict.evidence.blockedReason (contract v1.1.1).
   message?: string;
+  // What the runner saw when the session ended abnormally (D11): the last pane
+  // capture and the process exit code, when the runner can supply them. Filled
+  // by adapters whose backend persists them (umbel's pane-capture-at-death);
+  // absent otherwise — never fabricated. Journal-only diagnostics.
+  paneTail?: string;
+  processExit?: number;
   telemetry: { tokens?: number; contextPct?: number; compacted?: boolean };
 }
 
@@ -152,8 +158,9 @@ export interface RunSummary {
   // 'blocked'). The session is terminated and the prompt text recorded as
   // blockedReason — fix the permission mode / allowlist and re-run.
   blocked: string[];
-  // Failed nodes whose worktree still held changes: the evidence is committed
-  // to quarantine/<id> before dispose (never node/<id> — nothing verified).
+  // Failed or blocked nodes whose worktree still held changes: the evidence is
+  // committed to quarantine/<id> before dispose (never node/<id> — nothing
+  // verified). Blocked work is unfinished, not wrong — but worth keeping (D11).
   quarantined: string[];
   // Nodes already verified in the ledger before this run — skipped, not re-run.
   // Re-running a plan resumes: only unbuilt or previously-failed nodes execute.
