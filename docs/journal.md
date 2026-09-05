@@ -23,10 +23,10 @@ tolerate unknown events and unknown fields.
 | `blocked` | `node`, `reason` (the prompt text) | **needs a human** — worker stopped at a permission prompt; session terminated |
 | `gate-retry` | `node`, `gate` (`setup`\|`smoke`) | an exec gate went red — one gate-only re-run in the same worktree before the red becomes worker evidence (D10) |
 | `gate-flaky` | `node`, `gate` | the retry passed — the red was transient; the node proceeds, no worker re-prompt |
-| `verdict` | `node`, `status`, `attempts`, `telemetry` (worker-reported, e.g. `tokens`), `durationMs` (wall clock), `provider` (resolved — never absent), `model?`, `gate?` (`ran`, `exitCode`, `outputTail?` — the failing gate's actual output, capped 2000 chars), `blockedReason?` | a node reached its terminal verdict |
+| `verdict` | `node`, `status`, `attempts`, `telemetry` (worker-reported, e.g. `tokens`), `durationMs` (wall clock), `provider` (resolved — never absent), `model?`, `gate?` (`ran`, `exitCode`, `outputTail?` — the failing gate's actual output, capped 2000 chars), `blockedReason?`, `paneTail?`/`processExit?` (what the runner saw at an abnormal end, when it could see anything — D11) | a node reached its terminal verdict |
 | `closed` | `node`, `sha`, `degraded?` (string[] — only when non-empty) | verified close — `node/<id>` published at `sha`; `degraded` lists checks the plan never configured (`smoke:unconfigured`, `audit:unconfigured`): no coverage is not coverage, visible at close time |
 | `not-closed` | `node` | ledger declined to verify-close (branch published, not verified) |
-| `quarantined` | `node`, `branch` (`quarantine/<id>`), `sha` | failed work preserved for inspection |
+| `quarantined` | `node`, `branch` (`quarantine/<id>`), `sha` | failed OR blocked work preserved for inspection (D11 — unfinished is not wrong) |
 | `quarantine-failed` | `node`, `detail` | evidence preservation itself failed |
 | `receipt` | `node`, `sha256`, `derived` (`publishable`\|`quarantined`), `degraded` (string[]) | a sealed close receipt was minted at settle (§D) — facts frozen at classify time, hash pinned as a `receipt-sha256:` trailer in the node/quarantine commit, file at `<git-dir>/pleach/receipts/<node>.json`; verify with `pleach receipt <node>` |
 | `receipt-write-failed` | `node`, `detail` | the receipt file could not be written (the trailer is still pinned in git; the close stands) |

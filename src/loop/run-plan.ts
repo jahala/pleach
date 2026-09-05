@@ -232,10 +232,16 @@ async function runUnderLock(
     }
   }
 
-  async function quarantineOrJournal(node: Node, iso: Isolation, receipt: Receipt): Promise<void> {
+  // Returns the quarantine refs when a commit landed, undefined otherwise —
+  // the caller writes the receipt either way (D11).
+  async function quarantineOrJournal(
+    node: Node,
+    iso: Isolation,
+    receipt: Receipt,
+  ): Promise<Receipt['refs']> {
     try {
       const changed = await deps.isolate.changedFiles(iso.cwd);
-      if (changed.length === 0) return;
+      if (changed.length === 0) return undefined;
       await deps.isolate.stage(iso.cwd, changed);
       // #12: the quarantine branch may be checked out in a human's worktree
       // (the owner inspecting the last failure). A busy-branch refusal falls
@@ -258,16 +264,14 @@ async function runUnderLock(
       if (landedBranch === null) throw new Error(`all quarantine refs for ${base} are busy`);
       quarantined.add(node.id);
       await deps.journal.append({ event: 'quarantined', node: node.id, branch: landedBranch, sha });
-      await writeReceiptOrJournal(node.id, {
-        ...receipt,
-        refs: { quarantineBranch: landedBranch, quarantineSha: sha },
-      });
+      return { quarantineBranch: landedBranch, quarantineSha: sha };
     } catch (err) {
       await deps.journal.append({
         event: 'quarantine-failed',
         node: node.id,
         detail: err instanceof Error ? err.message : String(err),
       });
+      return undefined;
     }
   }
 
@@ -321,34 +325,38 @@ async function runUnderLock(
           }
         : {}),
       ...(verdict.evidence.blockedReason ? { blockedReason: verdict.evidence.blockedReason } : {}),
+      // What the runner saw at an abnormal end (D11) — capped, never fabricated.
+      ...(outcome.runnerDetail?.paneTail !== undefined
+        ? { paneTail: outcome.runnerDetail.paneTail.slice(-2000) }
+        : {}),
+      ...(outcome.runnerDetail?.processExit !== undefined
+        ? { processExit: outcome.runnerDetail.processExit }
+        : {}),
     });
 
-    if (verdict.status === 'blocked') {
-      // run-node already disposed the tree for non-done verdicts.
-      blocked.add(node.id);
-      await deps.journal.append({
-        event: 'blocked',
-        node: node.id,
-        reason: verdict.evidence.blockedReason,
-      });
-      await deps.ledger.emitVerdict(verdict, plan.source);
-      return;
-    }
-
     if (verdict.status !== 'done' || iso === undefined) {
-      // failed / dead / timeout — emit for the record; no node/<id> publish.
-      // The evidence is quarantined first (the tree is gone after dispose).
-      failed.add(node.id);
+      // blocked / failed / dead / timeout — emit for the record; no node/<id>
+      // publish. No terminal verdict without an artifact (D11): the receipt
+      // ALWAYS writes; quarantine refs attach only when a commit landed.
+      // Blocked quarantines like failed — unfinished is not wrong.
+      if (verdict.status === 'blocked') {
+        blocked.add(node.id);
+        await deps.journal.append({
+          event: 'blocked',
+          node: node.id,
+          reason: verdict.evidence.blockedReason,
+        });
+      } else {
+        failed.add(node.id);
+      }
       await deps.ledger.emitVerdict(verdict, plan.source);
+      const receipt = mintReceipt(buildFacts(plan, node, outcome, durationMs, opts.pleachVersion));
+      let refs: Receipt['refs'];
       if (iso) {
-        // Mint from the facts as classified — the quarantine commit pins the
-        // hash in its trailer; refs attach at write, outside the envelope.
-        const receipt = mintReceipt(
-          buildFacts(plan, node, outcome, durationMs, opts.pleachVersion),
-        );
-        await quarantineOrJournal(node, iso, receipt);
+        refs = await quarantineOrJournal(node, iso, receipt);
         await disposeOrJournal(iso, node.id);
       }
+      await writeReceiptOrJournal(node.id, refs !== undefined ? { ...receipt, refs } : receipt);
       return;
     }
 

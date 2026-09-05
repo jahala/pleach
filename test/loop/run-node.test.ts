@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { PlanInvalidError } from '../../src/core/errors.ts';
-import type { AuditResult } from '../../src/core/plan.ts';
+import { type AuditResult, PlanSchema } from '../../src/core/plan.ts';
 import { runNode } from '../../src/loop/run-node.ts';
+import { runPlan } from '../../src/loop/run-plan.ts';
 import { makeHarness, makeNode, type SpawnCtx, stop, type WaitScript } from './harness.ts';
 
 // spec: §6 + ledger — the per-node ladder. In-memory seams (deterministic
@@ -517,11 +518,12 @@ describe('runNode — timeout default threading', () => {
 // ledger: #44.1 — disposeQuiet must journal+swallow IsolateCatastrophicError on
 // non-done verdicts (blocked/dead/timeout) instead of propagating, which would
 // overwrite the real verdict with a thrown exception.
-describe('runNode — disposeQuiet swallows IsolateCatastrophicError (ledger #44.1)', () => {
-  test('blocked verdict preserved when dispose throws; dispose-failed event journaled', async () => {
-    // Worker returns 'input' reason → blocked verdict. disposeThrows makes dispose()
-    // throw IsolateCatastrophicError for this node. Before the fix, that throw
-    // propagates out of runNode entirely — the blocked verdict is lost.
+describe('a dispose throw never eats a blocked verdict (ledger #44.1, dispose now at settle — D11)', () => {
+  test('runNode hands the blocked tree back live; a throwing dispose at settle still journals blocked', async () => {
+    // Worker returns 'input' → blocked. Since D11 the tree is handed BACK
+    // (quarantine-worthy work lives in it), so runNode must not dispose —
+    // and the settle layer's disposeOrJournal must swallow a dispose throw
+    // without losing the verdict (the #44.1 invariant, relocated).
     const script: WaitScript = (ctx) =>
       ctx.role === 'build' ? stop({ reason: 'input', message: 'allow Bash?' }) : stop();
     const h = makeHarness({
@@ -532,13 +534,23 @@ describe('runNode — disposeQuiet swallows IsolateCatastrophicError (ledger #44
       id: 'n',
       policy: { maxAttempts: 1, onDead: 'fail', reauditWhen: ['compacted'] },
     });
-    // Must RESOLVE (not throw) with the blocked verdict.
     const r = await runNode(node, ['base'], h.deps, { defaultTimeoutMs: DEF });
     expect(r.verdict.status).toBe('blocked');
     expect(r.verdict.evidence.blockedReason).toBe('allow Bash?');
-    // dispose-failed must be recorded in the journal.
-    const disposeFailed = h.journal.find((e) => e.event === 'dispose-failed');
-    expect(disposeFailed).toBeDefined();
+    expect(r.iso).toBeDefined(); // the tree survives to settle (D11)
+    expect(h.journal.find((e) => e.event === 'dispose-failed')).toBeUndefined();
+
+    // The full path: runPlan settles the blocked node through the throwing
+    // dispose — verdict preserved, dispose-failed journaled, summary honest.
+    const h2 = makeHarness({ waitScript: script, disposeThrows: new Set(['n']) });
+    const plan = PlanSchema.parse({
+      goal: 'g',
+      source: 's',
+      nodes: [{ id: 'n', work: { prompt: 'build n' }, policy: { maxAttempts: 1 } }],
+    });
+    const summary = await runPlan(plan, h2.deps, { repoRoot: '/r' });
+    expect(summary.blocked).toEqual(['n']);
+    const disposeFailed = h2.journal.find((e) => e.event === 'dispose-failed');
     expect(disposeFailed?.node).toBe('n');
   });
 });
