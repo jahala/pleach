@@ -12,7 +12,7 @@ import { expect, test } from 'bun:test';
 import { readFile, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ExecFn } from '../../src/loop/deps.ts';
-import { sweepOrphanWorktrees, sweepStaleLocks } from '../../src/seams/clean.ts';
+import { ownsWorktree, sweepOrphanWorktrees, sweepStaleLocks } from '../../src/seams/clean.ts';
 import { exec as execLocalSeam } from '../../src/seams/exec.ts';
 import { resolveGitDir } from '../../src/seams/gitdir.ts';
 import { createIsolateSeam } from '../../src/seams/isolate.ts';
@@ -98,4 +98,17 @@ test('the exec seam honors an abort signal — resolves promptly, non-zero, neve
   const r = await execLocalSeam(['sleep', '10'], { cwd: '/tmp', signal: controller.signal });
   expect(Date.now() - started).toBeLessThan(5_000);
   expect(r.exitCode).not.toBe(0);
+});
+
+test('ownsWorktree — the predicate between the sweep and a human checkout', () => {
+  const ownBase = '/repo/.git/pleach/worktrees';
+  const tmp = '/private/var/folders/xx/T';
+  // pleach's own homes:
+  expect(ownsWorktree(`${ownBase}/wt-abc/wt`, ownBase, tmp)).toBe(true);
+  expect(ownsWorktree(`${tmp}/pleach-abc123/wt`, ownBase, tmp)).toBe(true);
+  expect(ownsWorktree(`${tmp}/pleach-land-abc/wt`, ownBase, tmp)).toBe(true);
+  // a human's checkout that merely LOOKS pleach-ish:
+  expect(ownsWorktree('/home/user/code/pleach-v1/wt', ownBase, tmp)).toBe(false); // outside tmp
+  expect(ownsWorktree(`${tmp}/pleach-abc123/checkout`, ownBase, tmp)).toBe(false); // wrong suffix
+  expect(ownsWorktree(`${tmp}/other-abc/wt`, ownBase, tmp)).toBe(false); // wrong prefix
 });
