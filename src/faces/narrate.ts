@@ -16,10 +16,18 @@ function len(v: unknown): number {
   return Array.isArray(v) ? v.length : 0;
 }
 
+// The goal's first sentence is its identity; the rest is a paragraph the
+// operator would otherwise re-read on every run AND every land (P6c).
+function firstSentence(v: unknown): string {
+  const text = s(v);
+  const end = text.search(/\.(?:\s|$)|\n/);
+  return end === -1 ? text : text.slice(0, end + 1);
+}
+
 export function narrateEvent(e: Record<string, unknown>): string | null {
   switch (e.event) {
     case 'run-start':
-      return `pleach: running ${n(e.nodes)} node(s) — ${s(e.goal)}`;
+      return `pleach: running ${n(e.nodes)} node(s) — ${firstSentence(e.goal)}`;
     case 'node-start':
       return `▶ ${s(e.node)}: building`;
     case 'gate-fail':
@@ -61,7 +69,7 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
         `${len(e.alreadyVerified)} already verified`
       );
     case 'land-start':
-      return `landing verified work — ${s(e.goal)}`;
+      return `landing verified work — ${firstSentence(e.goal)}`;
     case 'land-setup':
       return `provisioning the stack: ${len(e.commands)} setup command(s)`;
     case 'land-setup-failed':

@@ -102,6 +102,18 @@ Landing is deterministic and fail-closed: it refuses unless **every** plan node 
 verified, builds the merges in a throwaway worktree, and touches your checkout only
 via a final fast-forward — a conflict aborts with the repo untouched.
 
+Two operational facts worth knowing before your first run:
+
+- **Claude Code workers need the repo trusted.** Trust follows the *main checkout*
+  (`~/.claude.json`), not the worktree — pleach's temporary worktrees inherit it.
+  An untrusted repo makes every worker hit the trust dialog.
+- **Hand-landing a quarantine is outside the ledger — by design.** If you review
+  `quarantine/<id>`, merge it yourself, and verify it out-of-band, no `node/<id>`
+  branch exists: the map is the ledger, and the expected follow-up is re-emission
+  (an emitter that drops fully-stamped work, like tend2's, makes this a no-op). A
+  gates-rerunning `land --from-quarantine` verb is deliberately unbuilt until field
+  use shows the manual path failing.
+
 **Don't want to write plan.json by hand?** The repo ships a Claude Code skill,
 [`pleach-plan`](.claude/skills/pleach-plan/SKILL.md): give it a goal and a repo and it
 decomposes the work into a gated DAG, then proves the result with `pleach validate`
