@@ -349,6 +349,13 @@ export async function runCli(argv: readonly string[]): Promise<number> {
       return 0;
     }
 
+    // Same rule as help (P6a): a bed's garden.lock needs a version for every
+    // judge, and the flag every tool tries must never be "unknown".
+    if (argv.includes('--version')) {
+      process.stdout.write(`${await pleachVersion()}\n`);
+      return 0;
+    }
+
     const { positionals, flags } = parseFlags(argv);
     const [verb, planPath] = positionals;
 
