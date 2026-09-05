@@ -16,6 +16,8 @@ import type { RunSummary } from '../loop/deps.ts';
 import { landPlan } from '../loop/land.ts';
 import { verifyReceipt } from '../loop/receipt-verify.ts';
 import { runPlan } from '../loop/run-plan.ts';
+import { sweepOrphanWorktrees, sweepStaleLocks } from '../seams/clean.ts';
+import { exec } from '../seams/exec.ts';
 import { buildDeps, receiptDeps, resolveSeams } from './config.ts';
 import { narrateEvent } from './narrate.ts';
 
@@ -39,7 +41,12 @@ Usage:
   pleach validate <plan.json>        Parse + validate a plan; print the topo order
   pleach schema                      Emit the plan contract as JSON Schema (for planners / codegen)
   pleach receipt <node> [flags]      Verify a settled node's close receipt (--repo-root applies)
+  pleach clean [flags]               Sweep a killed run's leavings: stale locks + orphaned pleach
+                                     worktrees (--repo-root applies). Refuses the worktree sweep
+                                     while a LIVE lock exists — a run may be in flight. Worker
+                                     sessions are umbel's; list them with \`umbel ls\`.
   pleach --help
+  pleach --version
 
 Flags (run):
   --repo-root PATH        Git repo the worktrees and node/<id> branches live in (default: cwd)
@@ -280,9 +287,21 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
   const plan = await readPlan(planPath);
   const deps = await depsFromFlags(flags);
 
+  // D12: SIGINT/SIGTERM tear the run down instead of orphaning it — workers
+  // killed, trees quarantined/disposed, lock released, journal says why. A
+  // second signal falls through to the default handler (immediate death).
+  const teardown = new AbortController();
+  const onSignal = (sig: string) => {
+    process.stderr.write(`pleach: ${sig} — aborting run, tearing down\n`);
+    teardown.abort();
+  };
+  process.once('SIGINT', () => onSignal('SIGINT'));
+  process.once('SIGTERM', () => onSignal('SIGTERM'));
+
   const summary = await runPlan(plan, deps, {
     repoRoot: flags.repoRoot,
     pleachVersion: await pleachVersion(),
+    signal: teardown.signal,
     // The contract's conductor default when neither flag nor plan caps it:
     // cores−2, floored at 1 (the loop stays environment-free).
     defaultConcurrency: Math.max(1, cpus().length - 2),
@@ -340,6 +359,25 @@ async function verbLand(planPath: string, flags: Flags): Promise<number> {
   return 0;
 }
 
+// D12 (bandung P5): sweep a killed run's leavings. Stale locks always clear;
+// the worktree sweep refuses while any LIVE lock exists — a run may be in
+// flight, and cleaning under it would be the tmux-kill-server lesson replayed.
+async function verbClean(flags: Flags): Promise<number> {
+  const { removed, live } = await sweepStaleLocks(flags.repoRoot);
+  for (const path of removed) process.stdout.write(`removed stale lock ${path}\n`);
+  if (live.length > 0) {
+    for (const path of live) process.stdout.write(`live lock ${path} — a run may be in flight\n`);
+    process.stdout.write('worktree sweep refused while a live lock exists\n');
+    return 3;
+  }
+  const worktrees = await sweepOrphanWorktrees(exec, flags.repoRoot);
+  for (const path of worktrees) process.stdout.write(`removed orphaned worktree ${path}\n`);
+  if (removed.length === 0 && worktrees.length === 0) {
+    process.stdout.write('nothing to clean\n');
+  }
+  return 0;
+}
+
 export async function runCli(argv: readonly string[]): Promise<number> {
   try {
     // Help rides ahead of flag parsing — parseFlags rejects unknown flags, and
@@ -364,6 +402,7 @@ export async function runCli(argv: readonly string[]): Promise<number> {
       return 2;
     }
     if (verb === 'schema') return verbSchema();
+    if (verb === 'clean') return await verbClean(flags);
 
     if (verb === 'receipt') {
       if (planPath === undefined) throw new UsageError('receipt: <node> is required');

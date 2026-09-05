@@ -36,6 +36,9 @@ export interface RunPlanOpts {
   // Stamped into receipt facts (§D version fence). The face passes the real
   // package version; absent (tests, embedders) records an honest dev marker.
   pleachVersion?: string;
+  // Teardown signal (D12): stop launching, interrupt in-flight waits, settle
+  // what's live (workers killed, trees quarantined/disposed), journal why.
+  signal?: AbortSignal;
 }
 
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes (binding prose).
@@ -62,6 +65,7 @@ export async function runPlan(
       defaultTimeoutMs,
       maxConcurrency,
       pleachVersion: opts.pleachVersion ?? '0.0.0-dev',
+      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     });
   } finally {
     await lock.release();
@@ -73,6 +77,7 @@ interface ResolvedOpts {
   defaultTimeoutMs: number;
   maxConcurrency: number;
   pleachVersion: string;
+  signal?: AbortSignal;
 }
 
 async function runUnderLock(
@@ -184,7 +189,10 @@ async function runUnderLock(
 
     let outcome: RunNodeResult;
     try {
-      outcome = await runNode(node, baseRefs, deps, { defaultTimeoutMs: opts.defaultTimeoutMs });
+      outcome = await runNode(node, baseRefs, deps, {
+        defaultTimeoutMs: opts.defaultTimeoutMs,
+        signal: opts.signal,
+      });
     } catch (err) {
       // A node promise must never reject — map a surprise to a failed verdict.
       await deps.journal.append({
@@ -455,7 +463,9 @@ async function runUnderLock(
 
   // ── scheduler loop ──────────────────────────────────────────────────────────
   for (;;) {
-    while (inflight.size < opts.maxConcurrency) {
+    // An abort stops NEW launches; in-flight nodes settle (their waits are
+    // interrupted by the same signal) so evidence and teardown still happen.
+    while (inflight.size < opts.maxConcurrency && opts.signal?.aborted !== true) {
       const next = ready().find((n) => !inflight.has(n.id));
       if (!next) break;
       const promise = runOne(next).finally(() => inflight.delete(next.id));
@@ -463,6 +473,9 @@ async function runUnderLock(
     }
     if (inflight.size === 0) break;
     await Promise.race(inflight.values());
+  }
+  if (opts.signal?.aborted === true) {
+    await deps.journal.append({ event: 'run-aborted' });
   }
 
   const skipped = plan.nodes
