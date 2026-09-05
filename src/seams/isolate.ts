@@ -1,9 +1,9 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { IsolateCatastrophicError, LandBlockedError, LandConflictError } from '../core/errors.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, IsolateSeam, Isolation } from '../loop/deps.ts';
+import { resolveGitDir } from './gitdir.ts';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -29,6 +29,12 @@ async function gitMust(exec: ExecFn, cwd: string, ...args: string[]): Promise<st
 // ── createIsolateSeam ────────────────────────────────────────────────────────
 
 export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
+  async function worktreeBase(root: string): Promise<string> {
+    const base = join(resolveGitDir(root), 'pleach', 'worktrees');
+    await mkdir(base, { recursive: true });
+    return base;
+  }
+
   // ── isolate ─────────────────────────────────────────────────────────────
 
   async function isolate(_node: Node, baseRefs: readonly string[]): Promise<Isolation> {
@@ -36,9 +42,10 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
       throw new IsolateCatastrophicError('', 'baseRefs must not be empty');
     }
 
-    // Create a tmp dir under os tmpdir — git worktree add needs a non-existent
-    // (or empty) path, so we generate the prefix and let git create the final dir.
-    const tmpBase = await mkdtemp(join(tmpdir(), 'pleach-'));
+    // Worktrees live under the git dir (D12) — findable by `pleach clean`,
+    // and never in the OS temp reaper's shadow. mkdtemp gives the unique base;
+    // git worktree add needs a non-existent sub-path.
+    const tmpBase = await mkdtemp(join(await worktreeBase(repoRoot), 'wt-'));
 
     // git worktree add --detach uses the path we give it; mkdtemp already
     // created the dir, so we need a sub-path that doesn't exist yet.
@@ -347,7 +354,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     // Build the merges in a throwaway detached worktree at the branch tip
     // (same isolation model as node builds); the checkout is untouched until
     // the final fast-forward.
-    const tmpBase = await mkdtemp(join(tmpdir(), 'pleach-land-'));
+    const tmpBase = await mkdtemp(join(await worktreeBase(landRepoRoot), 'land-'));
     const worktreePath = join(tmpBase, 'wt');
     const add = await git(exec, landRepoRoot, 'worktree', 'add', '--detach', worktreePath, branch);
     if (add.exitCode !== 0) {

@@ -32,6 +32,8 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       return `▶ ${s(e.node)}: building`;
     case 'gate-fail':
       return `✗ ${s(e.node)}: ${s(e.gate)} gate failed`;
+    case 'run-aborted':
+      return 'run aborted by signal — no new launches; in-flight nodes settling';
     case 'gate-flaky':
       return `${s(e.node)}: ${s(e.gate)} gate red once, green on retry — transient, proceeding`;
     case 'blocked':
@@ -55,7 +57,7 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
     case 'not-closed':
       return `${s(e.node)}: ledger declined to close — branch published, not verified`;
     case 'quarantined':
-      return `${s(e.node)}: failed work kept on ${s(e.branch)} for inspection`;
+      return `${s(e.node)}: unfinished or failed work kept on ${s(e.branch)} for inspection`;
     case 'quarantine-failed':
       return `${s(e.node)}: could not preserve failed work (${s(e.detail)})`;
     case 'rebuild-required':

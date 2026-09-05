@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createRepo, execLocal } from '../support/git-repo.ts';
 
 const PLEACH_MAIN = join(import.meta.dir, '../../src/main.ts');
 const PROOF_PROJECT = join(import.meta.dir, '../../examples/proof/project');
@@ -213,4 +214,55 @@ describe.skipIf(!fullStack)('pleach run — full stack e2e', () => {
     const sentinelCommitted = await git(repo, 'show', 'node/e2', '--stat');
     expect(sentinelCommitted).toContain('.sentinel');
   }, 180_000);
+});
+
+// D12 (bandung P5): a killed run leaves a registered worktree and a lock —
+// `pleach clean` sweeps what pleach provably owns, and refuses the worktree
+// sweep while any live lock suggests a run in flight.
+describe('pleach clean — e2e', () => {
+  test('sweeps a stale lock and an orphaned worktree; reports both; exits 0', async () => {
+    const { path: repo, cleanup } = await createRepo();
+    try {
+      const gitDir = join(repo, '.git');
+      await writeFile(join(gitDir, 'pleach-aaaaaaaaaaaa.lock'), '999999', 'utf8');
+      const orphanBase = join(gitDir, 'pleach', 'worktrees', 'wt-orphan');
+      await mkdir(orphanBase, { recursive: true });
+      await execLocal(
+        ['git', '-C', repo, 'worktree', 'add', '--detach', join(orphanBase, 'wt'), 'HEAD'],
+        repo,
+      );
+
+      const r = await pleach(['clean', '--repo-root', repo]);
+
+      expect(r.code).toBe(0);
+      expect(r.stdout).toContain('lock');
+      expect(r.stdout).toContain('worktree');
+      const list = (await execLocal(['git', '-C', repo, 'worktree', 'list'], repo)).output;
+      expect(list).not.toContain('wt-orphan');
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test('refuses the worktree sweep while a live lock exists — exits 3', async () => {
+    const { path: repo, cleanup } = await createRepo();
+    try {
+      const gitDir = join(repo, '.git');
+      await writeFile(join(gitDir, 'pleach-bbbbbbbbbbbb.lock'), String(process.pid), 'utf8');
+      const orphanBase = join(gitDir, 'pleach', 'worktrees', 'wt-live');
+      await mkdir(orphanBase, { recursive: true });
+      await execLocal(
+        ['git', '-C', repo, 'worktree', 'add', '--detach', join(orphanBase, 'wt'), 'HEAD'],
+        repo,
+      );
+
+      const r = await pleach(['clean', '--repo-root', repo]);
+
+      expect(r.code).toBe(3);
+      const list = (await execLocal(['git', '-C', repo, 'worktree', 'list'], repo)).output;
+      expect(list).toContain('wt-live'); // untouched — a run may be in flight
+    } finally {
+      await cleanup();
+    }
+  });
 });
