@@ -151,7 +151,10 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
 
     // ── wait ──────────────────────────────────────────────────────────────────
 
-    async function wait(waitOpts?: { timeoutMs?: number }): Promise<WorkerResult> {
+    async function wait(waitOpts?: {
+      timeoutMs?: number;
+      signal?: AbortSignal;
+    }): Promise<WorkerResult> {
       const argv: string[] = [bin, 'wait', '--json'];
 
       if (sinceMtime !== undefined) {
@@ -168,7 +171,14 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
       const execTimeout =
         waitOpts?.timeoutMs !== undefined ? waitOpts.timeoutMs + 10_000 : undefined;
 
-      const result = await exec(argv, { cwd, env: mergeEnv(), timeoutMs: execTimeout });
+      const result = await exec(argv, {
+        cwd,
+        env: mergeEnv(),
+        timeoutMs: execTimeout,
+        // Abort interrupts the WAIT only (D12) — teardown commands (kill,
+        // dispose) must never ride the signal that triggered them.
+        ...(waitOpts?.signal !== undefined ? { signal: waitOpts.signal } : {}),
+      });
 
       if (result.exitCode !== 0) {
         throw new WorkerSeamError(`wait exited ${result.exitCode}: ${result.output.trim()}`);

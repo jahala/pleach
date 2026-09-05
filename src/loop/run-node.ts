@@ -26,6 +26,8 @@ import { guardedExec, runWork } from './run-work.ts';
 
 export interface RunNodeOpts {
   defaultTimeoutMs: number;
+  // Teardown signal (D12) — interrupts worker waits; everything else settles.
+  signal?: AbortSignal;
 }
 
 export interface RunNodeResult {
@@ -189,6 +191,7 @@ export async function runNode(
         result = await runWork(node, worker, deps.exec, cwd, {
           timeoutMs,
           evidence: promptEvidence,
+          signal: opts.signal,
         });
       } catch (err) {
         await worker?.kill();
@@ -371,7 +374,7 @@ export async function runNode(
           continue; // retryable — SAME tree; the builder can restore the gate
         }
 
-        const auditOutcome = await runAudit(node, cwd, deps, timeoutMs);
+        const auditOutcome = await runAudit(node, cwd, deps, timeoutMs, opts.signal);
         if (auditOutcome.kind === 'parse-exhausted') {
           // Never adjudicated — the receipt records skip, not fail (§D).
           auditRecords = [
@@ -464,6 +467,7 @@ async function runAudit(
   cwd: string,
   deps: ConductorDeps,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<AuditOutcome> {
   // node.accept.audit is defined by the caller's guard.
   const audit = node.accept.audit as NonNullable<Node['accept']['audit']>;
@@ -477,7 +481,7 @@ async function runAudit(
     let res: WorkerResult;
     try {
       await worker.send(buildAuditPrompt(audit.command));
-      res = await worker.wait({ timeoutMs });
+      res = await worker.wait({ timeoutMs, signal });
     } finally {
       await worker.kill();
     }
