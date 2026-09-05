@@ -31,11 +31,15 @@ export interface RunNodeOpts {
 export interface RunNodeResult {
   verdict: Verdict;
   // The live isolation, handed to run-plan for the commit-then-dispose
-  // (done) or quarantine-then-dispose (terminal failed/dead) sequence.
-  // Absent for blocked verdicts (disposed here — the worker never finished a
-  // turn, there is nothing worth keeping) and for never-isolated failures.
+  // (done) or quarantine-then-dispose (terminal failed/dead/blocked) sequence.
+  // Blocked hands its tree back too (D11) — workers edit files mid-turn, so
+  // an unfinished turn is unfinished work, not nothing. Absent only for
+  // never-isolated failures.
   iso?: Isolation;
   stagedFiles?: string[];
+  // What the runner saw at an abnormal end (D11) — passed through to the
+  // journal verdict, never fabricated.
+  runnerDetail?: { paneTail?: string; processExit?: number };
   // Last failing gate's output tail (capped) — journal-only diagnostics; the
   // Verdict contract is untouched. The 2026-08-17 canary debug needed a
   // wrapper script to see WHY a command gate failed; never again.
@@ -72,9 +76,9 @@ export async function runNode(
     }
   }
 
-  // Terminal failed/dead verdicts hand the live tree back to the caller so
-  // run-plan can quarantine the evidence before disposing. Blocked verdicts
-  // dispose here — the worker never finished a turn; there is nothing to keep.
+  // Every terminal verdict (failed/dead/blocked) hands the live tree back so
+  // run-plan can quarantine the evidence before disposing — blocked included
+  // since D11: workers edit files mid-turn, so an unfinished turn holds work.
   // Every hand-back carries the final attempt's gate ladder + audit records +
   // staged set so run-plan can mint the receipt from frozen facts (§D).
   function handBack(result: RunNodeResult): RunNodeResult {
@@ -201,19 +205,26 @@ export async function runNode(
       // ── non-stop reasons ──────────────────────────────────────────────────
       if (result.reason !== 'stop') {
         const klass = classify({ kind: 'worker', reason: result.reason ?? 'aborted' });
+        // What the runner saw at the abnormal end, when it could see anything
+        // (D11) — rides every terminal hand-back below, never fabricated.
+        const runnerDetail = {
+          ...(result.paneTail !== undefined ? { paneTail: result.paneTail } : {}),
+          ...(result.processExit !== undefined ? { processExit: result.processExit } : {}),
+        };
+        const detail = Object.keys(runnerDetail).length > 0 ? { runnerDetail } : {};
         if (klass === 'blocked') {
-          await disposeQuiet(iso);
-          return {
+          // Hand the tree back (D11): workers edit files mid-turn — 9m40s of
+          // work once died with the "nothing worth keeping" theory here.
+          const base = baseVerdict(node, attempts);
+          return handBack({
             verdict: {
-              ...baseVerdict(node, attempts),
+              ...base,
               status: 'blocked',
-              evidence: {
-                ...baseVerdict(node, attempts).evidence,
-                blockedReason: result.message,
-              },
+              evidence: { ...base.evidence, blockedReason: result.message },
               telemetry: result.telemetry,
             },
-          };
+            ...detail,
+          });
         }
         if (klass === 'dead') {
           if (node.policy.onDead === 'resume' && attempts < maxAttempts) {
@@ -222,7 +233,17 @@ export async function runNode(
             evidence = undefined;
             continue;
           }
-          return handBack({ verdict: { ...baseVerdict(node, attempts), status: 'dead' } });
+          const base = baseVerdict(node, attempts);
+          return handBack({
+            verdict: {
+              ...base,
+              status: 'dead',
+              // Name the end (D11) — a bare 'dead' cost bandung a manual
+              // reproduction to diagnose.
+              evidence: { ...base.evidence, gate: { ran: 'wait:dead', exitCode: -1 } },
+            },
+            ...detail,
+          });
         }
         // timeout → retryable (reuse tree); anything else terminal.
         if (klass === 'retryable' && attempts < maxAttempts) {
@@ -233,6 +254,7 @@ export async function runNode(
           verdict: failedVerdict(node, attempts, {
             gate: { ran: `wait:${result.reason}`, exitCode: -1 },
           }),
+          ...detail,
         });
       }
 
