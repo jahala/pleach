@@ -4,6 +4,7 @@
 // touching ONLY what pleach provably owns. Worker sessions are umbel's
 // jurisdiction and are deliberately not touched here.
 import { readdir, realpath, rm, unlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { ExecFn } from '../loop/deps.ts';
 import { resolveGitDir } from './gitdir.ts';
@@ -17,7 +18,9 @@ export async function sweepStaleLocks(
   const gitDir = resolveGitDir(repoRoot);
   const removed: string[] = [];
   const live: string[] = [];
-  for (const name of await readdir(gitDir)) {
+  // Total: a non-repo (no git dir) simply has nothing to sweep.
+  const entries = await readdir(gitDir).catch(() => [] as string[]);
+  for (const name of entries) {
     if (!/^pleach-[0-9a-f]{12}\.lock$/.test(name)) continue;
     const path = join(gitDir, name);
     const pid = await readPid(path);
@@ -32,15 +35,27 @@ export async function sweepStaleLocks(
 }
 
 // Worktrees pleach owns: under <git-dir>/pleach/worktrees/ (the current home)
-// or matching the legacy tmpdir shape …/pleach-*/wt. Removal goes through git
-// (never a bare rm of a checkout); the mkdtemp base dir — provably
-// pleach-created by the same match — is cleared after. Ends with a prune so
-// entries whose directories vanished (the OS temp reaper) clear too.
+// or the legacy mkdtemp shape <os-tmpdir>/pleach-*/wt — ANCHORED to the OS
+// temp dir, because a bare /pleach-*/wt suffix would also match a human's
+// checkout that happens to live in a directory named pleach-something.
+// Removal goes through git (never a bare rm of a checkout); the mkdtemp base
+// dir — provably pleach-created by the same match — is cleared after. Ends
+// with a prune so entries whose directories vanished (the temp reaper) clear too.
+// The ownership decision, pure: current-home prefix, or the legacy mkdtemp
+// shape ANCHORED under the OS temp dir. Exported for its unit tests — this
+// predicate is the only thing standing between the sweep and a human's
+// checkout that happens to live in a directory named pleach-something.
+export function ownsWorktree(path: string, ownBase: string, tmpBase: string): boolean {
+  if (path.startsWith(ownBase)) return true;
+  return path.startsWith(tmpBase) && /\/pleach-[^/]+\/wt$/.test(path);
+}
+
 export async function sweepOrphanWorktrees(exec: ExecFn, repoRoot: string): Promise<string[]> {
   // git lists canonical paths (macOS: /private/var/…); canonicalize our side
   // too or the ownership prefix never matches under /var → /private/var.
   const rootReal = await realpath(repoRoot).catch(() => repoRoot);
   const ownBase = join(resolveGitDir(rootReal), 'pleach', 'worktrees');
+  const tmpReal = await realpath(tmpdir()).catch(() => tmpdir());
   const list = await exec(['git', '-C', repoRoot, 'worktree', 'list', '--porcelain'], {
     cwd: repoRoot,
   });
@@ -51,8 +66,7 @@ export async function sweepOrphanWorktrees(exec: ExecFn, repoRoot: string): Prom
 
   const removed: string[] = [];
   for (const p of paths) {
-    const owned = p.startsWith(ownBase) || /\/pleach-[^/]+\/wt$/.test(p);
-    if (!owned) continue;
+    if (!ownsWorktree(p, ownBase, tmpReal)) continue;
     const r = await exec(['git', '-C', repoRoot, 'worktree', 'remove', '--force', p], {
       cwd: repoRoot,
     });
