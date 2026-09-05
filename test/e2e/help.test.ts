@@ -43,3 +43,13 @@ describe('pleach --help — e2e', () => {
     expect(r.stdout).toContain('Usage:');
   });
 });
+
+// P6a (bandung): `--version` was "unknown flag" — a bed's garden.lock needs a
+// version for every judge. Same rule as help: rides ahead of flag parsing.
+describe('pleach --version — e2e', () => {
+  test('--version prints the package version and exits 0', async () => {
+    const r = await pleach(['--version']);
+    expect(r.code).toBe(0);
+    expect(r.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+  });
+});
