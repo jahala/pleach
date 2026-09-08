@@ -90,7 +90,8 @@ export class InMemoryGit {
   stagedNumstats = new Map<string, { file: string; added: number; deleted: number }[]>();
   // branch/ref name → sha
   readonly refs = new Map<string, string>();
-  // branch → last commit message (receipt-trailer assertions, §D)
+  // branch → last commit message (receipt-trailer assertions, §D), and every
+  // commit under its own sha too — a detached phase seal (D13) has no branch.
   readonly commitMessages = new Map<string, string>();
   // worktree cwd → set of "changed" files the worker left behind
   readonly changed = new Map<string, string[]>();
@@ -98,9 +99,12 @@ export class InMemoryGit {
   readonly markers = new Map<string, string[]>();
   private shaCounter = 0;
 
+  // A distinct 40-hex-char sha per commit — the padding used to swallow the
+  // counter, so every commit in a run shared one sha and no test could tell two
+  // commits apart (the red seal and the close, D13).
   newSha(): string {
     this.shaCounter += 1;
-    return `sha${String(this.shaCounter).padStart(40, '0')}`.slice(0, 40);
+    return String(this.shaCounter).padStart(40, '0');
   }
 }
 
@@ -256,6 +260,14 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     async stagedNumstat(cwd) {
       return git.stagedNumstats.get(cwd) ?? [];
     },
+    // The phase seal (D13): a commit on the detached HEAD — no branch moves,
+    // so it is observable only through its sha, its message and the log order.
+    async commit(cwd, message): Promise<{ sha: string }> {
+      const sha = git.newSha();
+      git.commitMessages.set(sha, message);
+      log.push('commit', undefined, `${cwd}:${sha}`);
+      return { sha };
+    },
     async commitBranch(_cwd, branch, message): Promise<{ sha: string }> {
       if (opts.commitBranchBusy?.(branch)) {
         log.push('commitBranch-busy', branch);
@@ -264,6 +276,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       const sha = git.newSha();
       git.refs.set(branch, sha);
       git.commitMessages.set(branch, message);
+      git.commitMessages.set(sha, message);
       log.push('commitBranch', branch, sha);
       return { sha };
     },
