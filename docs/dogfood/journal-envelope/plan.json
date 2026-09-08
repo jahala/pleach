@@ -27,6 +27,7 @@
         ]
       },
       "needs": [],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
@@ -69,6 +70,7 @@
       "needs": [
         "je.envelope"
       ],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
@@ -111,6 +113,7 @@
       "needs": [
         "je.fixture"
       ],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
@@ -153,6 +156,7 @@
       "needs": [
         "je.runner"
       ],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
@@ -195,6 +199,7 @@
       "needs": [
         "je.seam"
       ],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
@@ -237,6 +242,7 @@
       "needs": [
         "je.pin"
       ],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
