@@ -27,6 +27,7 @@
         ]
       },
       "needs": [],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
@@ -69,6 +70,7 @@
       "needs": [
         "tpc.seal"
       ],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
@@ -111,6 +113,7 @@
       "needs": [
         "tpc.empty"
       ],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
@@ -153,6 +156,7 @@
       "needs": [
         "tpc.hygiene"
       ],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
@@ -195,6 +199,7 @@
       "needs": [
         "tpc.retry"
       ],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
@@ -235,6 +240,7 @@
         ]
       },
       "needs": [],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
@@ -278,6 +284,7 @@
         "tpc.e2e",
         "tpc.validate"
       ],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {

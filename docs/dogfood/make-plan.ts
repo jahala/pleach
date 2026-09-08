@@ -89,6 +89,9 @@ const plan = {
       ],
     },
     needs: c.needs,
+    // A fresh worktree has no environment (ledger D9): dependencies are provisioned in setup, never
+    // in acceptance text (that would change acceptance identity and re-dispatch verified nodes).
+    setup: 'bun install --frozen-lockfile',
     accept: {
       smoke: `${WEEDER} check --strict`,
       audit: {
