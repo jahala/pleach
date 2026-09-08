@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!**/dist", "!**/node_modules", "!test/canary/fixture"]
+    "includes": ["**", "!**/dist", "!**/node_modules", "!test/canary/fixture", "!docs/tend", "!docs/tend2"]
   },
   "formatter": {
     "enabled": true,
