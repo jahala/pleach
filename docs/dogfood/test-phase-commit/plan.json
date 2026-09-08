@@ -32,7 +32,8 @@
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
           "command": "/opt/homebrew/bin/tend2 verify docs/tend2/test-phase-commit.tend2.html --repo-root . --check 1 --force --runner 'bun test {evidence}' --audit-egress --expect-payload 5ae23d02010d",
-          "provider": "codex",
+          "provider": "opencode",
+          "model": "deepseek/deepseek-v4-pro",
           "selfIntegrity": true
         }
       },
@@ -75,7 +76,8 @@
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
           "command": "/opt/homebrew/bin/tend2 verify docs/tend2/test-phase-commit.tend2.html --repo-root . --check 3 --force --runner 'bun test {evidence}' --audit-egress --expect-payload 5ae23d02010d",
-          "provider": "codex",
+          "provider": "opencode",
+          "model": "deepseek/deepseek-v4-pro",
           "selfIntegrity": true
         }
       },
@@ -118,7 +120,8 @@
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
           "command": "/opt/homebrew/bin/tend2 verify docs/tend2/test-phase-commit.tend2.html --repo-root . --check 5 --force --runner 'bun test {evidence}' --audit-egress --expect-payload 5ae23d02010d",
-          "provider": "codex",
+          "provider": "opencode",
+          "model": "deepseek/deepseek-v4-pro",
           "selfIntegrity": true
         }
       },
@@ -161,7 +164,8 @@
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
           "command": "/opt/homebrew/bin/tend2 verify docs/tend2/test-phase-commit.tend2.html --repo-root . --check 4 --force --runner 'bun test {evidence}' --audit-egress --expect-payload 5ae23d02010d",
-          "provider": "codex",
+          "provider": "opencode",
+          "model": "deepseek/deepseek-v4-pro",
           "selfIntegrity": true
         }
       },
@@ -204,7 +208,8 @@
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
           "command": "/opt/homebrew/bin/tend2 verify docs/tend2/test-phase-commit.tend2.html --repo-root . --check 2 --force --runner 'bun test {evidence}' --audit-egress --expect-payload 5ae23d02010d",
-          "provider": "codex",
+          "provider": "opencode",
+          "model": "deepseek/deepseek-v4-pro",
           "selfIntegrity": true
         }
       },
@@ -245,7 +250,8 @@
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
           "command": "/opt/homebrew/bin/tend2 verify docs/tend2/test-phase-commit.tend2.html --repo-root . --check 6 --force --runner 'bun test {evidence}' --audit-egress --expect-payload 5ae23d02010d",
-          "provider": "codex",
+          "provider": "opencode",
+          "model": "deepseek/deepseek-v4-pro",
           "selfIntegrity": true
         }
       },
@@ -289,7 +295,8 @@
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
           "command": "/opt/homebrew/bin/tend2 verify docs/tend2/test-phase-commit.tend2.html --repo-root . --force --runner 'bun test {evidence}' --audit-egress --expect-payload 5ae23d02010d",
-          "provider": "codex",
+          "provider": "opencode",
+          "model": "deepseek/deepseek-v4-pro",
           "selfIntegrity": true
         }
       },
