@@ -192,6 +192,7 @@ export async function runNode(
           timeoutMs,
           evidence: promptEvidence,
           signal: opts.signal,
+          sealRed: (red) => sealRedPhase(node, cwd, deps, red),
         });
       } catch (err) {
         await worker?.kill();
@@ -547,6 +548,34 @@ async function execGateWithRetry(
     await deps.journal.append({ event: 'gate-flaky', node: nodeId, gate });
   }
   return retry; // green: proceed; red: the RETRY run is the evidence.
+}
+
+// ── the red-phase seal (D13) ─────────────────────────────────────────────────
+//
+// What the close does, in miniature: the red phase's files (what the worker
+// reported touching ∪ what the tree shows changed) are scoped-staged and
+// committed on the detached HEAD. No branch moves — node/<id> is published at
+// settle only — so the close's commit stacks on this one and the history reads
+// base → red → verified. The close's own scoped staging then picks up only what
+// changed after the seal, HEAD having moved.
+async function sealRedPhase(
+  node: Node,
+  cwd: string,
+  deps: ConductorDeps,
+  result: WorkerResult,
+): Promise<void> {
+  const changed = await deps.isolate.changedFiles(cwd);
+  const files = dedup([...result.filesTouched, ...changed]);
+  await deps.isolate.stage(cwd, files);
+  const { sha } = await deps.isolate.commit(cwd, redPhaseMessage(node));
+  await deps.journal.append({ event: 'phase-commit', node: node.id, phase: 'red', sha, files });
+}
+
+// Subject names the node and the phase; the body names the command that went
+// red; the trailer is what `weeder bite` reads to find the state to check out.
+function redPhaseMessage(node: Node): string {
+  const test = 'test' in node.work ? node.work.test : '';
+  return `pleach: ${node.id} red phase\n\ntest: ${test}\n\npleach-phase: red`;
 }
 
 function asError(err: unknown): Error {

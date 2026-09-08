@@ -365,6 +365,61 @@ test('ledger: B2 — commitBranch returns sha; allow-empty succeeds; refSha reso
   }
 });
 
+// ledger: D13 — commit seals a phase on the detached HEAD: it moves no branch,
+// refuses an empty seal, and the close's commit stacks on it (base → red → verified)
+test('ledger: D13 — commit seals on the detached HEAD; no branch moves; the close stacks', async () => {
+  const repo = await createRepo();
+  try {
+    await makeBranch(repo.path, 'node/seal-base', { 'seed.txt': 'seed\n' });
+
+    const seam = createIsolateSeam(execLocal, repo.path);
+    const node = { id: 'seal-node', needs: [], work: { prompt: 'x' } } as never;
+
+    const iso = await seam.isolate(node, ['node/seal-base']);
+    const refsBefore = await gitIn(repo.path, 'for-each-ref', '--format=%(refname) %(objectname)');
+
+    // The red phase: a failing test, scoped-staged and sealed.
+    await writeFile(join(iso.cwd, 'red.test.txt'), 'failing test\n');
+    await seam.stage(iso.cwd, ['red.test.txt']);
+    const { sha } = await seam.commit(
+      iso.cwd,
+      'pleach: seal-node red phase\n\ntest: runtests\n\npleach-phase: red',
+    );
+
+    expect(sha).toMatch(/^[0-9a-f]{40}$/);
+    expect(await gitIn(iso.cwd, 'rev-parse', 'HEAD')).toBe(sha);
+    expect(await gitIn(iso.cwd, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('HEAD'); // still detached
+    expect(await seam.commitMessageOf(iso.cwd, sha)).toContain('pleach-phase: red');
+    // Nothing was published: every ref in the repo is exactly where it was.
+    expect(await gitIn(repo.path, 'for-each-ref', '--format=%(refname) %(objectname)')).toBe(
+      refsBefore,
+    );
+
+    // An empty seal is refused — no --allow-empty; there is no red state to seal.
+    await expect(seam.commit(iso.cwd, 'pleach: seal-node red phase')).rejects.toBeInstanceOf(
+      IsolateCatastrophicError,
+    );
+
+    // The close stacks on the seal: node/<id>'s commit has the red one as parent.
+    await writeFile(join(iso.cwd, 'impl.txt'), 'impl\n');
+    await seam.stage(iso.cwd, ['impl.txt']);
+    const { sha: verified } = await seam.commitBranch(
+      iso.cwd,
+      'node/seal-result',
+      'pleach: seal-node verified (done)',
+    );
+    expect(await gitIn(iso.cwd, 'rev-parse', `${verified}^`)).toBe(sha);
+    // The sealed commit holds the test and NOT the implementation that followed.
+    const sealed = await gitIn(iso.cwd, 'show', '--stat', '--format=', sha);
+    expect(sealed).toContain('red.test.txt');
+    expect(sealed).not.toContain('impl.txt');
+
+    await iso.dispose();
+  } finally {
+    await repo.cleanup();
+  }
+});
+
 // ledger: dispose — worktree gone after dispose; second dispose does not throw
 test('ledger: dispose — worktree removed; second dispose is a no-op', async () => {
   const repo = await createRepo();

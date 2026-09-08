@@ -44,6 +44,11 @@ export interface RunWorkOpts {
   // Teardown signal (D12): interrupts the WAIT — the run's long pole. Work
   // commands and gates run to completion, bounded by their own timeouts.
   signal?: AbortSignal;
+  // The red-phase seal (D13): called with the red phase's worker result the
+  // moment the RED gate passes and before the next phase's prompt is sent, so
+  // the failing-test state is history. run-node supplies it — it owns the
+  // isolate seam and the journal; runWork only decides the moment.
+  sealRed?: (result: WorkerResult) => Promise<void>;
 }
 
 // The base worker prompt for a node, plus an optional clearly-delimited
@@ -111,6 +116,10 @@ export async function runWork(
         // RED must FAIL: a test that already passes means no failing test was
         // written (or a harness error) — the TDD guarantee is void.
         if (exitCode === 0) throw new GateFailedError('red', output, exitCode);
+        // The red state is sealed as its own commit before the next prompt goes
+        // out (D13) — after that the tree carries impl work and nothing can
+        // prove the test ever failed.
+        if (opts.sealRed) await opts.sealRed(last);
       } else if (phase.phase === 'green') {
         const { output, exitCode } = await guardedExec(exec, work.test, {
           cwd,

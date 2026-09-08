@@ -309,6 +309,18 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     return out;
   }
 
+  // ── commit ───────────────────────────────────────────────────────────────
+
+  // The phase seal (D13): a commit on the worktree's detached HEAD. No branch
+  // move — `node/<id>` is published at settle only, so the close commits on top
+  // of this one and the history reads base → red → verified. No --allow-empty
+  // either: an empty seal would claim a red state that changed nothing.
+  async function commit(cwd: string, message: string): Promise<{ sha: string }> {
+    await gitMust(exec, cwd, 'commit', '-m', message);
+    const sha = await gitMust(exec, cwd, 'rev-parse', 'HEAD');
+    return { sha };
+  }
+
   // ── commitBranch ─────────────────────────────────────────────────────────
 
   async function commitBranch(
@@ -431,6 +443,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     stagedDiff,
     stagedNumstat,
     changedFiles,
+    commit,
     commitBranch,
     refSha,
     commitMessageOf,
