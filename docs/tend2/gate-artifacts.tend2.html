@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gate-artifacts · garden</title>
+<link rel="stylesheet" href="./loop.css">
+<body>
+<noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
+<script type="text/markdown" id="loop">
+# The smoke gate's SARIF and the worktree's friction journal survive settle
+
+**Goal.** At settle, before the worktree is disposed, pleach keeps two things beside the receipt: the smoke gate's stdout when it parses as SARIF 2.1.0 (`<git-dir>/pleach/receipts/<node>.sarif`) and the worktree's friction journal when one exists (`<git-dir>/pleach/receipts/<node>.friction.jsonl`). Inside the sealed envelope, additively, `gates[].artifactSha` is the sha256 of the kept stdout bytes — one hash, the same the umbrella's receipt predicate (`predicate.weeder.sarif.sha256`) will cite.
+
+Ledger D14; jahala/pleach#59. Today the receipt proves the smoke gate ran and how it ended (exit code, sha256 of a 2000-character tail) and nothing else survives the tree. When the smoke is `weeder check --strict`, its stdout is a SARIF log whose `suppressions` are the only record of what an agent waved through in that node; the umbrella's calibration folds need those per-rule counts, and most garden work runs under pleach in worktrees nobody keeps.
+
+## How
+
+The exec seam (src/seams/exec.ts) already drains stdout and stderr separately and interleaves them into `output`; it additionally reports `stdout` alone (additive on `ExecResult`), because a SARIF log is stdout and only stdout. A pure, total `parseSarif` in core recognises a SARIF 2.1.0 log (`version: "2.1.0"`, a `runs` array) and nothing else. In the smoke gate (src/loop/run-node.ts) a stdout that parses is hashed — `artifactSha: sha256(stdout)` on the gate record, sealed at mint like `outputTailSha` — and the bytes ride the hand-back to settle (src/loop/run-plan.ts), where the receipt store writes them beside the receipt, the receipt file names them outside the envelope (`artifacts.sarif`), and the journal records one `gate-artifact` {node, gate, path, sha256}. A stdout that is not SARIF keeps nothing and leaves the record byte-identical to today.
+
+The friction journal is a worktree file the profile names (`.plotplot/friction/<yyyy-mm>.jsonl`, docs/plans/friction-ledger.md §5). When present it is read through the isolate seam and kept as `<node>.friction.jsonl` (months concatenated in name order) with its own `gate-artifact` event. It is never delivery: the staging set excludes `.plotplot/friction/` and `.loop-scratch/` by rule, the `.loop-scratch/` lesson closed in pleach rather than by every repo's `.gitignore`.
+
+A failed artifact write is journaled as `receipt-write-failed` and never blocks the close, exactly as the receipt file's own write today.
+
+## Impact
+
+A gate's finding log outlives the worktree, bound to the sealed facts by one hash; the calibration ledger can count waved-through rules per node without re-running anything, and a friction journal written inside a conducted worktree is no longer lost with the tree.
+
+## Tests
+- [ ] (code) The exec seam reports the child's stdout separately from the interleaved stream (`ExecResult.stdout`, additive), proven against a real process writing to both: `stdout` holds only stdout, `output` still holds both in arrival order, and every existing caller is untouched · test/integration/exec-stdout.test.ts
+- [ ] (code) `parseSarif` is pure and total: a SARIF 2.1.0 log (version `2.1.0`, `runs[]`) is accepted with its runs, any other JSON, non-JSON, and other SARIF versions are refused, and nothing throws · test/unit/sarif.test.ts
+- [ ] (code) When the smoke gate's stdout parses as SARIF the gate record carries `artifactSha` = sha256 of the stdout bytes, `mintReceipt` seals it and `pleach receipt` re-derives it; when it does not, the gate record and the receipt are byte-identical to today · test/loop/gate-artifact-receipt.test.ts
+- [ ] (code) At settle, before dispose, the kept SARIF is written beside the receipt as `<git-dir>/pleach/receipts/<node>.sarif` with sha256 equal to `gates[].artifactSha`, the receipt file names it outside the envelope (`artifacts.sarif`), the journal carries one `gate-artifact` {node, gate, path, sha256}, docs/journal.md documents the event, docs/contract/CHANGES.md notes the additive receipt field; a write failure journals `receipt-write-failed` and the close stands · test/loop/gate-artifact-settle.test.ts
+- [ ] (code) A worktree friction journal (`.plotplot/friction/*.jsonl`) is kept as `<node>.friction.jsonl` (months concatenated in name order) with its own `gate-artifact` event, and neither `.plotplot/friction/` nor `.loop-scratch/` is ever staged as delivery · test/loop/gate-artifact-friction.test.ts
+- [ ] (code) Through the real CLI with real git and a smoke that prints SARIF to stdout: after a verified close `<git-dir>/pleach/receipts/<node>.sarif` exists, its sha256 equals the sealed `artifactSha`, `pleach receipt <node>` verifies, and a smoke that prints plain text keeps no file · test/e2e/gate-artifact.test.ts
+
+## Needs
+#test-phase-commit #conductor-loop #lock-journal
+
+## For
+#operator
+
+## Tried
+- 2026-09-08 shaped from jahala/pleach#59 (amended: gates[].artifactSha and the umbrella predicate's SARIF digest are ONE sha256 of the kept stdout bytes). Design: separate `stdout` on the exec seam rather than parsing the interleaved stream (stderr noise would break the SARIF parse); the hash is computed in the gate (a pure fact, sealed at mint) and the bytes travel to settle where the seams write them (side effects at the edge). Rejected: keeping the audit node's `tend-audit-result` the same way (already relayed verbatim into AuditRecord — the issue's own answer); keeping non-SARIF stdout (the receipt is unchanged when the gate is not a findings log). Stacked on #test-phase-commit (branch feat/gate-artifacts from feat/test-phase-commit) because its journal-doc pin test guards the new event.
+</script>
+<script src="./loop.js"></script>
