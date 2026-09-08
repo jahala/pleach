@@ -192,7 +192,7 @@ export async function runNode(
           timeoutMs,
           evidence: promptEvidence,
           signal: opts.signal,
-          sealRed: (red) => sealRedPhase(node, cwd, deps, red),
+          sealRed: (red, exitCode) => sealRedPhase(node, cwd, deps, red, exitCode),
         });
       } catch (err) {
         await worker?.kill();
@@ -558,18 +558,35 @@ async function execGateWithRetry(
 // settle only — so the close's commit stacks on this one and the history reads
 // base → red → verified. The close's own scoped staging then picks up only what
 // changed after the seal, HEAD having moved.
+//
+// An EMPTY file set is refused, not sealed: a commit of nothing would claim a
+// failing test exists when none was written — the exact lie D13 exists to
+// prevent — and `weeder bite` would check it out and find the state unchanged.
+// The refusal is a `red` gate failure carrying the gate's own exit code, so the
+// handleGate → settleRetryable ladder retries it in the same tree, restarting
+// at the red phase with the evidence attached to its prompt.
 async function sealRedPhase(
   node: Node,
   cwd: string,
   deps: ConductorDeps,
   result: WorkerResult,
+  exitCode: number,
 ): Promise<void> {
   const changed = await deps.isolate.changedFiles(cwd);
   const files = dedup([...result.filesTouched, ...changed]);
+  if (files.length === 0) throw new GateFailedError('red', EMPTY_RED_EVIDENCE, exitCode);
   await deps.isolate.stage(cwd, files);
   const { sha } = await deps.isolate.commit(cwd, redPhaseMessage(node));
   await deps.journal.append({ event: 'phase-commit', node: node.id, phase: 'red', sha, files });
 }
+
+// The command failing over a tree nothing wrote to is a harness fault — a
+// missing runner, a wrong path, an ENOENT — and reads identically to a real red
+// from the exit code alone. Name that for the worker; the retry restarts at red.
+const EMPTY_RED_EVIDENCE =
+  'The red phase changed no file: the test command failed over a tree nothing was written to. ' +
+  'A failing command with no test written is a harness error (missing runner, wrong path, ' +
+  'command not found), not a red — write the failing test, then let the gate run it.';
 
 // Subject names the node and the phase; the body names the command that went
 // red; the trailer is what `weeder bite` reads to find the state to check out.
