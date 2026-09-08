@@ -27,6 +27,7 @@
         ]
       },
       "needs": [],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
@@ -67,6 +68,7 @@
         ]
       },
       "needs": [],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
@@ -110,6 +112,7 @@
         "ga.exec-stdout",
         "ga.parse-sarif"
       ],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
@@ -152,6 +155,7 @@
       "needs": [
         "ga.artifact-sha"
       ],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
@@ -194,6 +198,7 @@
       "needs": [
         "ga.settle-write"
       ],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
@@ -236,6 +241,7 @@
       "needs": [
         "ga.friction"
       ],
+      "setup": "bun install --frozen-lockfile",
       "accept": {
         "smoke": "/Users/jahala/.local/bin/weeder check --strict",
         "audit": {
