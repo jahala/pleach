@@ -10,9 +10,13 @@ their own runs added.
 
 ### pollen
 
-1. **Watcher rings one knock hundreds of times** · minor · `pollen.mjs --watch pleach` printed
-   "cape-town is knocking" ~300 times for one held peer (once per poll tick). Expected one line per
-   knock. → jahala/pollen#19.
+1. **Watcher rings one knock hundreds of times, and re-announces every read message forever** ·
+   moderate · `pollen.mjs --watch pleach` printed "cape-town is knocking" ~300 times for one held
+   peer, then rang all ten historical messages on every tick. Root cause (from the journal on disk):
+   two processes append to one journal with independent `seq` counters (the receiver's `delivered`
+   series and the gate's `pending` series interleave; three lines duplicated outright), so "entry N
+   is line N" fails, the watcher's resync resets to 0 each tick and replays. → jahala/pollen#19
+   (with the root cause as a comment). Workaround: `tail -F` the journal file.
 2. **The gate is invisible from the MCP side** · moderate · startup said "5 knocks waiting" without
    names; `pollen_inbox` said "No new messages" while five messages were held. Only the watcher's
    stderr named the peer. → jahala/pollen#19.
