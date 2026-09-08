@@ -119,6 +119,19 @@ four nodes not yet run. Resume is the same command; the ledger skips the verifie
 - Tried transcription must wait for the whole loop: adding a Tried line moves the page's payload, the plan's `--expect-payload` goes stale, and the closed nodes' recorded acceptance no longer matches the plan → they would re-dispatch under acceptance evolution. tend#159 (pin the checks section) resolves it.
 
 
+### Issues filed from this loop (2026-09-08/09)
+
+- pleach: #62 (the loop), #66 (handback kept nowhere), #67 (teardown-killed node settles failed, no
+  receipt), #72 (umbel adapter passes no --idle-timeout), #73 (stagedFiles overstates).
+- tend: #163 (no phased node from emit-plan), #164 (repeated --check), #165 (verb --help), #176
+  (skipped-fresh relays a pass), #177 (preflight contradicts next; skipped loops unnamed), #178
+  (the .loop-scratch/ promise nobody honours under a conductor); comment on #174 (no repo-wide
+  preamble in the work order). cape-town filed #159 and #160 from this report.
+- umbel: #66 (spawn --help), #71 (ls LAST empty for an active session); comment on #65 (kill
+  deletes the session dir → the handback is lost).
+- pollen: #19 (watcher replay, root cause; invisible gate; no message id/time).
+- umbrella: jahala/plotplot#19 (merged): the three pleach kinds + plotplot.runner.
+
 ## Tried lines from the workers' handbacks (transcribed; to move onto the page when the loop lands)
 
 Each node's worker ended every phase with a dated `Tried:` line as its work order required. They
