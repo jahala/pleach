@@ -8,3 +8,7 @@ dist
 # Playwright MCP session droppings (screenshots, page snapshots)
 .playwright-mcp/
 docs/research/
+
+# Worker scratch (tend2's work-order convention: "goes in .loop-scratch/ only — never collected").
+# pleach stages every untracked-unignored path, so the repo must ignore it or scratch ships.
+.loop-scratch/
