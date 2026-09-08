@@ -241,6 +241,23 @@ checkpoint but have different lifetimes and trust domains.**
   leaves the receipt byte-identical. Tests: `test/integration/exec-stdout.test.ts`,
   `test/unit/sarif.test.ts`, `test/loop/gate-artifact-*.test.ts`, `test/e2e/gate-artifact.test.ts`.
 
+- **D15 ⚠ [field] Three append-only streams, three envelopes.** jahala/pleach#60, jahala/plotplot#16
+  (view-from-above pass, 2026-09-08): the garden writes pleach's run journal, the friction journal and
+  mull's spend log as JSONL with three different envelopes for one purpose; tend2's ledger face
+  (jahala/tend#154) would ship with three loaders. The friction profile (contracts/friction-profile.md,
+  jahala/plotplot v1.1.0) is the envelope; contracts/fixtures/friction.jsonl line 2 is a pleach journal
+  line authored in it because pleach had not landed the change. **Fix:** a pure `envelope(event, now)`
+  in core adds, to every line the journal seam writes, `time` (UTC, `Z`), `event.name`
+  (`pleach.<event>`), `plotplot.kind` from one exhaustive table (`gate.retry` pinned; `run.lifecycle`,
+  `node.lifecycle`, `gate.result` pinned by PR on the umbrella), `plotplot.count: 1`,
+  `plotplot.harness: null`, `gen_ai.conversation.id: null`, `plotplot.node`/`plotplot.gate` mirrors;
+  `verdict` lines add `plotplot.runner` (verbatim) and `gen_ai.request.model` when the plan set one —
+  never `gen_ai.provider.name` (the umbrella's ruling: the runner is the fact, the provider behind a
+  CLI is not observable from pleach). Every existing event name and field is unchanged (the
+  stability promise); the documentation pin now covers kinds. Tests:
+  `test/unit/journal-envelope*.test.ts`, `test/integration/journal-envelope.test.ts`,
+  `test/unit/journal-doc.test.ts`, `test/e2e/journal-envelope.test.ts`.
+
 ### Verified-sound (attacks refuted — do not relitigate)
 
 `--detach` fan-out (two detached worktrees at one commit are legal); the closed-add-then-dispose-inside-
