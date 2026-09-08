@@ -45,34 +45,39 @@ core/      plan · validate · classify · errors     ← pure, total
 Stack: Bun + `bun:test`, TypeScript strict, `zod` the only dependency, `biome`. Runtime substrate:
 `git ≥ 2.38` always; the default umbel runner additionally needs `tmux` + the `umbel` binary; a `tend` transport is optional (the bundled gitLedger needs neither).
 
-## Track work in tend (this repo dogfoods itself)
+## Track work in tend2 (this repo dogfoods itself)
 
-tend tracks planned work across sessions in a garden at `docs/tend/` (dashboard: `index.html`). If it's not
+The garden is `docs/tend2/` (hub: `garden.tend2.html`; one `<id>.tend2.html` per loop). A page is markdown
+inside `<script type="text/markdown" id="loop">` — edit it by hand; it is NOT a bash polyglot. Checks are
+`- [ ] (code) claim · evidence-path`; **only `tend2 verify` writes a pass** (`[x] … @sha`). If the map isn't
 updated, the next session starts blind.
 
-- **`/tend`** — see status + what's unblocked. The chain: `/tend position` (personas + jobs) →
-  `/tend brainstorm` (slots + checks) → `/tend plan` (testable steps) → `/tend run` (build) → `/tend audit`
-  (verify with real evidence). Also `/tend discover` (map existing code), `/tend change` (requirements
-  shift), `/tend narrate` (article body + diagrams).
-- **Before multi-file work,** check tend first (`tend_get_unblocked` or `ls docs/tend/features/`). A match →
-  update the touched step's status via `tend_update_feature` (object arrays merge by-id). No match →
-  `/tend brainstorm` a minimal feature.
-- **MCP tools:** `tend_get_context` (full feature in one call) · `tend_get_unblocked` · `tend_get_gaps`
-  (each gap names its closing skill) · `tend_update_feature` (single write surface). Single-feature reads go
-  through the polyglot: `bash docs/tend/<id>.tend.html data | jq` — never parse a `.tend.html` as text.
+- **See where things stand:** `tend2 next docs/tend2` (stale stamps, what needs you) · `tend2 lint <page> --strict`.
+- **Before multi-file work,** find the loop that owns it (`ls docs/tend2/`). None → shape one: page first
+  (Goal, How, Impact, `## Tests` with an evidence path per check, `## Needs`, `## For`, dated `## Tried`),
+  register it in the hub's `## Children`, and a `docs/ledger.md` item — then code.
+- **Earn a pass:** `tend2 verify docs/tend2/<id>.tend2.html --repo-root . --runner "bun test {evidence}"`
+  (`--check N` for one check; `--force` re-runs a fresh stamp). A hand-flipped `[x]` renders as a claim.
+- **Every handback ends with a dated `## Tried` line** — what was done, what was rejected and why.
+- **Conducted builds:** `tend2 emit-plan docs/tend2 --repo-root . --verify-bin /opt/homebrew/bin/tend2
+  --runner "bun test {evidence}"` emits the pleach plan (known gaps: one node per loop, no phased nodes —
+  see `docs/dogfood/make-plan.ts` for the hand-split shape used here).
 
 ## Gotchas
 
-- **The garden lives at `docs/tend2/` (tend2 format)** — `garden.tend2.html` is the hub; the pages
-  are self-contained (loop.css/loop.js live inside `docs/tend2/`). Verify with the tend2 CLI: `node <tend2-checkout>/dist/cli.js verify <page> --repo-root .
-  --runner "bun test {evidence}"`. **A pass only the verifier writes**; stamps live in the page and are
-  content-keyed — re-migration resets un-earned state, so re-run the sweep after any `migrate`. Current:
-  8/11 feature loops fully verified; `cli-run`/`cli-validate`/`conductor-loop` partial (their remainder
-  are proof-level + human checks — honestly amber, don't fake them). The v1 garden is FROZEN history at
-  `docs/tend/`.
+- **The garden lives at `docs/tend2/`** (`tend2` is on PATH — `/opt/homebrew/bin/tend2`); the pages are
+  self-contained (loop.css/loop.js live inside `docs/tend2/`). Stamps live in the page and are
+  content-keyed — editing evidence re-opens its check; re-migration resets un-earned state. The v1 garden
+  is FROZEN history at `docs/tend/` — never run a formatter over either garden (`biome.json` includes
+  `**`; a bare `biome check --write .` rewrites the polyglots and tend2's renderer; the `lint` script is
+  scoped to `src test` for that reason).
 - **`docs/research/` is local-only** (gitignored, untracked): candid competitor analysis and internal
   records. Never re-track it; new research goes there and stays private. Cross-references to it from
   tracked docs are provenance labels for maintainers, not public links.
 - **`.brand/` is a pulled cache** (gitignored, untracked — see `.petalsrc`); the landing page renders
-  without it. `.mcp.json` is gitignored + machine-specific; its tend entry may need repointing to
-  `tend2 mcp` post-sunset.
+  without it. `.mcp.json` is gitignored + machine-specific; its `tend` entry must be `tend2 mcp`
+  (the v1 `dist/bin/tend.js serve` path is gone — a stale entry fails as CONNECTION_CLOSED at session
+  start), and its pollen entry carries `POLLEN_ID=pleach` + `POLLEN_ALLOW`.
+- **Dogfood record:** every conducted loop keeps `docs/dogfood/<loop>.md` (faults, misunderstandings,
+  missing features in tend2/pleach/umbel/weeder hit while building it) beside `docs/dogfood/<loop>/`
+  (its spec + plan). Real defects become issues on the tool's repository.
