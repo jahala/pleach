@@ -33,10 +33,13 @@ export interface LoopSpec {
 const VERIFY = '/opt/homebrew/bin/tend2';
 const WEEDER = '/Users/jahala/.local/bin/weeder';
 const WORKER = { provider: 'claude', model: 'claude-opus-5' };
-// codex is unusable on this machine tonight (its default model 404s from the provider, reproduced by
-// cape-town with a bare `codex exec`); the audit is cast to opencode with DeepSeek V4 Pro, as tend2's
-// runs did. Diversity holds: the builder is claude.
-const AUDITOR = { provider: 'opencode', model: 'deepseek/deepseek-v4-pro' };
+// The cross-provider auditor. codex when it answers (checked with a bare `codex exec` before each
+// resume, per the umbrella); opencode + DeepSeek V4 Pro when it does not (it 404'd on 2026-09-08).
+// Acceptance identity is the command text, so switching the provider re-dispatches nothing.
+const AUDITOR =
+  process.env.PLEACH_AUDITOR === 'opencode'
+    ? { provider: 'opencode', model: 'deepseek/deepseek-v4-pro' }
+    : { provider: 'codex', model: undefined };
 
 const specPath = process.argv[2];
 if (specPath === undefined) {
@@ -100,7 +103,7 @@ const plan = {
       audit: {
         command: verify(c.id === spec.sink ? undefined : c.n),
         provider: AUDITOR.provider,
-        model: AUDITOR.model,
+        ...(AUDITOR.model !== undefined ? { model: AUDITOR.model } : {}),
         selfIntegrity: true,
       },
     },
