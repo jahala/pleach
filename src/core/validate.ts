@@ -156,3 +156,21 @@ export function nodeSummaries(plan: Plan): NodeSummary[] {
     return { id: node.id, work, gates };
   });
 }
+
+// A phased node's GREEN gate is what proves the combined tree (base + red +
+// impl) passes the test. Phases that end on 'impl' never reach it, so the node
+// would close on a failing-test gate alone (ledger D13). That is a plan defect,
+// not an invalid plan — `pleach validate` names it and still exits 0. Pure.
+export function planWarnings(plan: Plan): string[] {
+  const warnings: string[] = [];
+  for (const node of plan.nodes) {
+    if (!('phases' in node.work)) continue;
+    const last = node.work.phases[node.work.phases.length - 1];
+    if (last?.phase === 'impl') {
+      warnings.push(
+        `node '${node.id}': phases end on impl — the green gate never runs, the combined tree is never proven`,
+      );
+    }
+  }
+  return warnings;
+}

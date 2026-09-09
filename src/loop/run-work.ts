@@ -1,5 +1,5 @@
 import { shellOperatorTokens, toArgv } from '../core/argv.ts';
-import { GateFailedError } from '../core/errors.ts';
+import { GateFailedError, PlanInvalidError } from '../core/errors.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, Worker, WorkerResult } from './deps.ts';
 
@@ -44,6 +44,21 @@ export interface RunWorkOpts {
   // Teardown signal (D12): interrupts the WAIT — the run's long pole. Work
   // commands and gates run to completion, bounded by their own timeouts.
   signal?: AbortSignal;
+  // The red-phase seal (D13): called with the red phase's worker result and the
+  // red gate's exit code the moment the RED gate passes and before the next
+  // phase's prompt is sent, so the failing-test state is history. run-node
+  // supplies it — it owns the isolate seam and the journal; runWork only decides
+  // the moment. It also REFUSES an empty red phase, throwing GateFailedError
+  // ('red', …) like any gate: what the phase actually touched is the isolate
+  // seam's to see, which is why the exit code travels there rather than the
+  // file set travelling here.
+  sealRed?: (result: WorkerResult, exitCode: number, phaseIndex: number) => Promise<void>;
+  // The phase index this attempt's tree ALREADY has sealed (D13), or undefined
+  // for a tree that has sealed nothing. run-node tracks it per tree, so a
+  // re-isolated tree (dead+resume) arrives undefined. The ladder re-enters
+  // after that phase instead of remaking a seal the tree can no longer
+  // honestly produce.
+  redSealedAt?: number;
 }
 
 // The base worker prompt for a node, plus an optional clearly-delimited
@@ -90,13 +105,30 @@ export async function runWork(
   const w = worker as Worker;
 
   if ('phases' in work) {
+    // Where this attempt enters the ladder. A tree whose red is already sealed
+    // re-enters AFTER the phase that sealed (D13): the failing-test state is
+    // history, and a second red taken from a tree that now holds impl work
+    // would seal a lie. Everything before that phase goes with it — its output
+    // is inside the red commit already. The index, not merely a flag: a phase
+    // list may carry more than one red, and a later one that never ran must
+    // still run.
+    const start = opts.redSealedAt !== undefined ? opts.redSealedAt + 1 : 0;
+    // Nothing left to run: the list is empty, or it ends on the red phase this
+    // tree already sealed. Either way a retry has no prompt to send that would
+    // not remake the seal — a typed plan error, never a silent empty attempt.
+    if (start >= work.phases.length) {
+      throw new PlanInvalidError([
+        `node '${node.id}': no phase left to run (entering at ${start} of ${work.phases.length} phases)`,
+      ]);
+    }
     let last: WorkerResult | null = null;
-    for (let i = 0; i < work.phases.length; i += 1) {
+    for (let i = start; i < work.phases.length; i += 1) {
       const phase = work.phases[i] as (typeof work.phases)[number];
-      // On a retry, the evidence rides the first phase prompt so the worker
+      // On a retry, the evidence rides the first phase prompt this attempt
+      // actually sends — the impl phase when the red is sealed — so the worker
       // sees why the previous attempt failed before re-entering the cycle (A3).
       const text =
-        i === 0 && opts.evidence !== undefined && opts.evidence.length > 0
+        i === start && opts.evidence !== undefined && opts.evidence.length > 0
           ? withEvidence(phase.prompt, opts.evidence)
           : phase.prompt;
       await w.send(text);
@@ -111,6 +143,11 @@ export async function runWork(
         // RED must FAIL: a test that already passes means no failing test was
         // written (or a harness error) — the TDD guarantee is void.
         if (exitCode === 0) throw new GateFailedError('red', output, exitCode);
+        // The red state is sealed as its own commit before the next prompt goes
+        // out (D13) — after that the tree carries impl work and nothing can
+        // prove the test ever failed. A red phase that wrote nothing fails the
+        // gate here instead of sealing.
+        if (opts.sealRed) await opts.sealRed(last, exitCode, i);
       } else if (phase.phase === 'green') {
         const { output, exitCode } = await guardedExec(exec, work.test, {
           cwd,
@@ -119,7 +156,7 @@ export async function runWork(
         if (exitCode !== 0) throw new GateFailedError('green', output, exitCode);
       }
     }
-    // phases is non-empty by construction (zod array); last is set.
+    // The guard above ran at least one phase, so last is set.
     return last as WorkerResult;
   }
 
