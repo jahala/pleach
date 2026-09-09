@@ -9,9 +9,9 @@ import {
   RebuildRequiredError,
   TendTransportError,
 } from '../core/errors.ts';
-import { PlanSchema } from '../core/plan.ts';
+import { type Plan, PlanSchema } from '../core/plan.ts';
 import { planJsonSchema } from '../core/schema-json.ts';
-import { nodeSummaries, validatePlan } from '../core/validate.ts';
+import { nodeSummaries, planWarnings, validatePlan } from '../core/validate.ts';
 import type { RunSummary } from '../loop/deps.ts';
 import { landPlan } from '../loop/land.ts';
 import { verifyReceipt } from '../loop/receipt-verify.ts';
@@ -232,13 +232,26 @@ function verbSchema(): number {
   return 0;
 }
 
-async function verbValidate(planPath: string): Promise<number> {
-  const plan = await readPlan(planPath);
+// Pure: the whole `pleach validate` report — the JSON line for stdout, a line
+// per plan warning for stderr, and the exit code. Warnings are advice about a
+// valid plan (ledger D13), so the code stays 0 whether or not any fired; only a
+// PlanInvalidError (thrown out of here) changes it, at the face's catch.
+export function validateReport(plan: Plan): { code: number; stdout: string; stderr: string } {
   const { order, waves } = validatePlan(plan);
-  process.stdout.write(
-    `${JSON.stringify({ valid: true, order, waves, nodes: nodeSummaries(plan) })}\n`,
-  );
-  return 0;
+  const warnings = planWarnings(plan);
+  const summary = { valid: true, order, waves, nodes: nodeSummaries(plan), warnings };
+  return {
+    code: 0,
+    stdout: `${JSON.stringify(summary)}\n`,
+    stderr: warnings.map((w) => `pleach: warning: ${w}\n`).join(''),
+  };
+}
+
+async function verbValidate(planPath: string): Promise<number> {
+  const { code, stdout, stderr } = validateReport(await readPlan(planPath));
+  process.stdout.write(stdout);
+  if (stderr !== '') process.stderr.write(stderr);
+  return code;
 }
 
 // Pure: map a RunSummary to the process exit code. 0 only when every node closed
