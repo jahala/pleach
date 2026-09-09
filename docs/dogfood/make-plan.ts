@@ -3,7 +3,7 @@
 // loop beside its plan.json) and writes one PHASED node per check: RED writes the failing test at
 // the check's evidence path, IMPL builds, GREEN proves `bun run check`. Every node's smoke is
 // `weeder check --strict` (garden law §5); its audit is the tend2 verifier on that one check, run
-// cross-provider by codex and relayed as audit egress (contract v1.1.5 self-integral audit).
+// cross-provider (opencode/DeepSeek) and relayed as audit egress (contract v1.1.5 self-integral audit).
 //
 //   bun docs/dogfood/make-plan.ts docs/dogfood/<loop>/loop.ts > docs/dogfood/<loop>/plan.json
 //
@@ -33,7 +33,13 @@ export interface LoopSpec {
 const VERIFY = '/opt/homebrew/bin/tend2';
 const WEEDER = '/Users/jahala/.local/bin/weeder';
 const WORKER = { provider: 'claude', model: 'claude-opus-5' };
-const AUDITOR = 'codex';
+// The cross-provider auditor. codex when it answers (checked with a bare `codex exec` before each
+// resume, per the umbrella); opencode + DeepSeek V4 Pro when it does not (it 404'd on 2026-09-08).
+// Acceptance identity is the command text, so switching the provider re-dispatches nothing.
+const AUDITOR =
+  process.env.PLEACH_AUDITOR === 'opencode'
+    ? { provider: 'opencode', model: 'deepseek/deepseek-v4-pro' }
+    : { provider: 'codex', model: undefined };
 
 const specPath = process.argv[2];
 if (specPath === undefined) {
@@ -96,7 +102,8 @@ const plan = {
       smoke: `${WEEDER} check --strict`,
       audit: {
         command: verify(c.id === spec.sink ? undefined : c.n),
-        provider: AUDITOR,
+        provider: AUDITOR.provider,
+        ...(AUDITOR.model !== undefined ? { model: AUDITOR.model } : {}),
         selfIntegrity: true,
       },
     },
