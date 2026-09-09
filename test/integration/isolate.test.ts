@@ -540,12 +540,19 @@ test('lead: changedFiles lists modified + untracked-unignored, never ignored jun
     await writeFile(join(repo, 'b.txt'), 'new\n'); // untracked unignored
     await mkdir(join(repo, 'junk'), { recursive: true });
     await writeFile(join(repo, 'junk', 'x.bin'), 'zzz'); // ignored
+    await mkdir(join(repo, 'fresh'), { recursive: true });
+    await writeFile(join(repo, 'fresh', 'c.txt'), 'new\n'); // untracked, new dir
 
     const seam = createIsolateSeam(exec, repo);
     const files = await seam.changedFiles(repo);
     expect(files).toContain('a.txt');
     expect(files).toContain('b.txt');
     expect(files.some((f) => f.startsWith('junk'))).toBe(false);
+    // A directory git has never seen is still named file by file: this list is
+    // the staged set every per-file check reads (D13's seal record, the
+    // receipt count, audit-gate tampering), and "fresh/" names nothing.
+    expect(files).toContain('fresh/c.txt');
+    expect(files).not.toContain('fresh/');
   } finally {
     await rm(repo, { recursive: true, force: true });
   }
