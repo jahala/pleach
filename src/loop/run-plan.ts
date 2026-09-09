@@ -9,7 +9,7 @@ import {
   sha256Hex,
 } from '../core/receipt.ts';
 import { DEFAULT_WORKER_PROVIDER, validatePlan } from '../core/validate.ts';
-import type { ConductorDeps, Isolation, RunSummary } from './deps.ts';
+import type { ArtifactKind, ConductorDeps, Isolation, RunSummary } from './deps.ts';
 import { type RunNodeResult, runNode } from './run-node.ts';
 
 // ── run-plan: the scheduler ──────────────────────────────────────────────────
@@ -240,32 +240,65 @@ async function runUnderLock(
     }
   }
 
-  // A gate's findings log outlives the tree (D14). The bytes the sealed
-  // `gates[].artifactSha` hashes are kept beside the receipt BEFORE dispose:
-  // keeping is part of settling a live tree, not of the bookkeeping after it,
-  // so nothing that has to be read from the worktree can be lost to ordering.
+  // A gate's findings log, and the tree's own friction journal, outlive the
+  // tree (D14). Both are kept beside the receipt BEFORE dispose: keeping is
+  // part of settling a live tree, not of the bookkeeping after it, so nothing
+  // that has to be read from the worktree can be lost to ordering.
   // Returns what the receipt file should name, outside its envelope; a gate
-  // that printed something else keeps nothing. A write failure journals
-  // `receipt-write-failed` and the close proceeds, exactly like the receipt
-  // file's own write: the seal is already pinned in the commit trailer.
+  // that printed something else, and a tree with no journal in it, keep
+  // nothing. A write failure journals `receipt-write-failed` and the close
+  // proceeds, exactly like the receipt file's own write: the seal is already
+  // pinned in the commit trailer.
   async function keepArtifactsOrJournal(
     node: Node,
+    iso: Isolation | undefined,
     outcome: RunNodeResult,
     receipt: Receipt,
   ): Promise<Receipt['artifacts']> {
-    const sha256 = receipt.facts.gates.find((g) => g.gate === 'smoke')?.artifactSha;
-    const bytes = outcome.smokeStdout;
-    if (bytes === undefined || sha256 === undefined) return undefined;
+    // The gate's own findings log: kept only when the gate sealed a hash for
+    // it, and hashed by nobody here — one sha256, minted with the facts and
+    // answered by the file.
+    const sealed = receipt.facts.gates.find((g) => g.gate === 'smoke')?.artifactSha;
+    const stdout = outcome.smokeStdout;
+    const sarif = await keepOrJournal(node, 'smoke', 'sarif', async () =>
+      stdout === undefined || sealed === undefined ? null : { bytes: stdout, sha256: sealed },
+    );
+    // The tree's own record (D14): no gate produced it, so nothing sealed it —
+    // it is read here, the last moment the worktree exists, and hashed over
+    // the bytes kept. Collection has already set the directory aside, so what
+    // is kept is exactly what no commit carries.
+    const friction = await keepOrJournal(node, 'friction', 'friction', async () => {
+      const text = iso === undefined ? null : await deps.isolate.readFriction(iso.cwd);
+      return text === null ? null : { bytes: text, sha256: sha256Hex(text) };
+    });
+    if (sarif === undefined && friction === undefined) return undefined;
+    return {
+      ...(sarif !== undefined ? { sarif } : {}),
+      ...(friction !== undefined ? { friction } : {}),
+    };
+  }
+
+  // One artifact, kept or accounted for: nothing to keep returns undefined
+  // quietly, and a read or write that fails is a journal line, never a failed
+  // close — nor a reason to lose the other artifact.
+  async function keepOrJournal(
+    node: Node,
+    gate: 'smoke' | 'friction',
+    kind: ArtifactKind,
+    read: () => Promise<{ bytes: string; sha256: string } | null>,
+  ): Promise<string | undefined> {
     try {
-      const path = await deps.receipts.writeArtifact(node.id, 'sarif', bytes);
+      const artifact = await read();
+      if (artifact === null) return undefined;
+      const path = await deps.receipts.writeArtifact(node.id, kind, artifact.bytes);
       await deps.journal.append({
         event: 'gate-artifact',
         node: node.id,
-        gate: 'smoke',
+        gate,
         path,
-        sha256,
+        sha256: artifact.sha256,
       });
-      return { sarif: path };
+      return path;
     } catch (err) {
       await deps.journal.append({
         event: 'receipt-write-failed',
@@ -397,7 +430,7 @@ async function runUnderLock(
       const receipt = mintReceipt(buildFacts(plan, node, outcome, durationMs, opts.pleachVersion));
       // A failed strict gate wrote the log that says why — exactly the log the
       // calibration folds want, so the quarantine path keeps it too.
-      const artifacts = await keepArtifactsOrJournal(node, outcome, receipt);
+      const artifacts = await keepArtifactsOrJournal(node, iso, outcome, receipt);
       let refs: Receipt['refs'];
       if (iso) {
         refs = await quarantineOrJournal(node, iso, receipt);
@@ -454,7 +487,7 @@ async function runUnderLock(
     // it keeps nothing either — there would be no receipt to name the file.
     const artifacts =
       receipt !== undefined && failure === undefined
-        ? await keepArtifactsOrJournal(node, outcome, receipt)
+        ? await keepArtifactsOrJournal(node, iso, outcome, receipt)
         : undefined;
 
     await disposeOrJournal(iso, node.id);

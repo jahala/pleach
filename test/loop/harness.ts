@@ -241,10 +241,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   };
 
   // ── isolate ─────────────────────────────────────────────────────────────────
-  //
-  // `readFriction` is the seam's read of a worktree file the loop never touches
-  // itself (D14). Annotated alongside IsolateSeam until deps.ts declares it.
-  const isolate: IsolateSeam & { readFriction(cwd: string): Promise<string | null> } = {
+  const isolate: IsolateSeam = {
     async isolate(node: Node, baseRefs): Promise<Isolation> {
       log.push('isolate', node.id, baseRefs.join(','));
       for (const ref of baseRefs) {

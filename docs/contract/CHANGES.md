@@ -40,7 +40,9 @@
 
 - **Receipt, not schema (2026-09-10)** — the close receipt's `GateRecord` gained `artifactSha?` (the
   sha256 of the findings log a gate printed on stdout, D14) and the receipt file gained `artifacts?`
-  beside `refs` (where that log was kept: `<git-dir>/pleach/receipts/<node>.sarif`). Additive, and
+  beside `refs` (where what the tree held was kept: the log at
+  `<git-dir>/pleach/receipts/<node>.sarif`, the worktree's friction journal at `<node>.friction.jsonl`).
+  Additive, and
   outside the contract: `@agent-contract/plan` is untouched — no schema-block change, no version
   bump, drift guards unaffected, nothing for tend or umbel to re-vendor. A receipt that kept no
   artifact hashes exactly as it did before the field existed (`canonicalJson` drops undefined), so
