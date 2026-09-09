@@ -31,24 +31,32 @@ export const exec: ExecFn = async (argv, opts) => {
       stderr: 'pipe',
     });
   } catch (err) {
-    return { output: err instanceof Error ? err.message : String(err), exitCode: 127 };
+    const message = err instanceof Error ? err.message : String(err);
+    return { output: message, stdout: '', exitCode: 127 };
   }
 
   let output = '';
+  let stdout = '';
 
-  // Drain stdout and stderr concurrently so neither blocks the other.
-  const drainStream = async (stream: ReadableStream<Uint8Array>) => {
+  // Drain stdout and stderr concurrently so neither blocks the other. The
+  // stdout drain keeps its own copy of what it read: `output` is the two
+  // streams interleaved, `stdout` is the child's stdout alone.
+  const drainStream = async (stream: ReadableStream<Uint8Array>, isStdout: boolean) => {
     const decoder = new TextDecoder();
     const reader = stream.getReader();
+    const keep = (text: string) => {
+      output += text;
+      if (isStdout) stdout += text;
+    };
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      output += decoder.decode(value, { stream: true });
+      keep(decoder.decode(value, { stream: true }));
     }
-    output += decoder.decode(); // flush any buffered incomplete multi-byte sequence
+    keep(decoder.decode()); // flush any buffered incomplete multi-byte sequence
   };
 
-  const drainDone = Promise.all([drainStream(proc.stdout), drainStream(proc.stderr)]);
+  const drainDone = Promise.all([drainStream(proc.stdout, true), drainStream(proc.stderr, false)]);
 
   // Kill the process group to reap any children spawned by the command; fall
   // back to the process itself (no permission / already exited).
@@ -83,5 +91,5 @@ export const exec: ExecFn = async (argv, opts) => {
   if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
   signal?.removeEventListener('abort', interrupt);
 
-  return { output, exitCode: interrupted && exitCode === 0 ? 1 : exitCode };
+  return { output, stdout, exitCode: interrupted && exitCode === 0 ? 1 : exitCode };
 };

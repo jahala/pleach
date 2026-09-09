@@ -26,7 +26,8 @@ function makeRecordingExec(): { exec: ExecFn; calls: string[][] } {
     calls.push(a);
     const nameIdx = a.indexOf('--name');
     const name = nameIdx >= 0 ? (a[nameIdx + 1] ?? '') : '';
-    return { exitCode: 0, output: `spawned: ${name}\n` };
+    const output = `spawned: ${name}\n`;
+    return { exitCode: 0, output, stdout: output };
   };
   return { exec, calls };
 }
@@ -101,10 +102,12 @@ describe('createUmbelSeam.spawnWorker — post-spawn existence probe', () => {
       calls.push(a);
       if (a.includes('spawn')) {
         const name = a[a.indexOf('--name') + 1] ?? '';
-        return { exitCode: 0, output: `spawned: ${name}\n` };
+        const output = `spawned: ${name}\n`;
+        return { exitCode: 0, output, stdout: output };
       }
       // the status probe: session never materialized
-      return { exitCode: 1, output: 'umbel: Session not found\n' };
+      const output = 'umbel: Session not found\n';
+      return { exitCode: 1, output, stdout: output };
     };
     const seam = createUmbelSeam(exec, { bin: 'umbel' });
 
