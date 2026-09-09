@@ -97,6 +97,8 @@ export class InMemoryGit {
   readonly changed = new Map<string, string[]>();
   // worktree cwd → marker files present (conflict markers gate)
   readonly markers = new Map<string, string[]>();
+  // worktree cwd → paths this tree's git ignores (the collection gate, D14)
+  readonly ignored = new Map<string, string[]>();
   private shaCounter = 0;
 
   // A distinct 40-hex-char sha per commit — the padding used to swallow the
@@ -144,6 +146,8 @@ export interface HarnessOpts {
   commitBranchBusy?: (branch: string) => boolean;
   // marker files left in cwd, keyed by node id (simulates auditor droppings).
   markersByNode?: Record<string, string[]>;
+  // paths the node's tree ignores — the repo's .gitignore, as a fixture (D14).
+  ignoredByNode?: Record<string, string[]>;
   // Awaited inside dispose(node) between 'dispose-start' and 'dispose' — lets a
   // test hold a worktree open to expose scheduling races.
   disposeDelay?: (nodeId: string) => Promise<void>;
@@ -227,6 +231,9 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       if ((opts.markersByNode?.[node.id] ?? []).length > 0) {
         git.markers.set(cwd, [...(opts.markersByNode?.[node.id] ?? [])]);
       }
+      if ((opts.ignoredByNode?.[node.id] ?? []).length > 0) {
+        git.ignored.set(cwd, [...(opts.ignoredByNode?.[node.id] ?? [])]);
+      }
       return {
         cwd,
         conflictFiles,
@@ -246,6 +253,13 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     async scanMarkers(cwd): Promise<string[]> {
       log.push('scanMarkers', undefined, cwd);
       return git.markers.get(cwd) ?? [];
+    },
+    // The tree's ignore rules, as a fixture: the same answer real git gives —
+    // the caller's own paths, filtered to the ones this tree ignores (D14).
+    async ignored(cwd, paths): Promise<string[]> {
+      log.push('ignored', undefined, `${cwd}:${paths.join(',')}`);
+      const rules = git.ignored.get(cwd) ?? [];
+      return paths.filter((p) => rules.includes(p));
     },
     async stage(cwd, files): Promise<void> {
       log.push('stage', undefined, `${cwd}:${files.join(',')}`);
