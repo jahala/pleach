@@ -9,9 +9,10 @@ import {
 } from '../core/errors.ts';
 import { checkDiffHygiene, type HygieneFailure } from '../core/hygiene.ts';
 import { type AuditResult, AuditResultSchema, type Node, type Verdict } from '../core/plan.ts';
-import type { AuditRecord, GateRecord } from '../core/receipt.ts';
+import { type AuditRecord, type GateRecord, sha256Hex } from '../core/receipt.ts';
+import { parseSarif } from '../core/sarif.ts';
 import { DEFAULT_WORKER_PROVIDER } from '../core/validate.ts';
-import type { ConductorDeps, Isolation, WorkerResult } from './deps.ts';
+import type { ConductorDeps, ExecResult, Isolation, WorkerResult } from './deps.ts';
 import { guardedExec, runWork } from './run-work.ts';
 
 // ── run-node: the per-node ladder ────────────────────────────────────────────
@@ -53,6 +54,11 @@ export interface RunNodeResult {
   // distinct from "checked and failed".
   gates?: GateRecord[];
   audit?: AuditRecord[];
+  // The smoke gate's stdout, present only when it parsed as a findings log
+  // (ledger D14) — the very bytes the final attempt's `artifactSha` hashes,
+  // carried so settle can keep them beside the receipt before the tree goes.
+  // Journal/settle material only; the Verdict contract is untouched.
+  smokeStdout?: string;
 }
 
 const REAUDIT_BUDGET = 2;
@@ -90,6 +96,7 @@ export async function runNode(
     const out: RunNodeResult = {
       ...result,
       gates,
+      ...(smokeStdout !== undefined ? { smokeStdout } : {}),
       ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
       ...(result.stagedFiles === undefined && lastStaged !== undefined
         ? { stagedFiles: lastStaged }
@@ -127,6 +134,8 @@ export async function runNode(
   let gates: GateRecord[] = [];
   let auditRecords: AuditRecord[] | undefined;
   let lastStaged: string[] | undefined;
+  // The smoke gate's findings log, when this attempt's gate wrote one (D14).
+  let smokeStdout: string | undefined;
 
   try {
     for (;;) {
@@ -134,6 +143,7 @@ export async function runNode(
       gates = [];
       auditRecords = undefined;
       lastStaged = undefined;
+      smokeStdout = undefined;
 
       // ── isolate (or reuse the tree for a retryable retry) ───────────────────
       if (iso === null) {
@@ -317,14 +327,24 @@ export async function runNode(
 
       // ── smoke ────────────────────────────────────────────────────────────────
       if (node.accept.smoke) {
-        const { output, exitCode } = await execGateWithRetry(
+        const { output, stdout, exitCode } = await execGateWithRetry(
           deps,
           node.id,
           'smoke',
           node.accept.smoke,
           { cwd, timeoutMs },
         );
-        gates.push({ gate: 'smoke', exitCode });
+        // A findings log outlives the tree (D14). The parse decides, not the
+        // exit code: a `weeder check --strict` that fails wrote the log that
+        // says why. The hash is over the stdout bytes verbatim — one sha256,
+        // sealed here and cited by whatever keeps the file.
+        const isFindingsLog = parseSarif(stdout) !== null;
+        if (isFindingsLog) smokeStdout = stdout;
+        gates.push({
+          gate: 'smoke',
+          exitCode,
+          ...(isFindingsLog ? { artifactSha: sha256Hex(stdout) } : {}),
+        });
         if (exitCode !== 0) {
           const settle = settleRetryable(
             node,
@@ -448,6 +468,7 @@ export async function runNode(
         iso: liveIso,
         stagedFiles,
         gates,
+        ...(smokeStdout !== undefined ? { smokeStdout } : {}),
         ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
       };
     }
@@ -542,7 +563,7 @@ async function execGateWithRetry(
   gate: 'setup' | 'smoke',
   command: string,
   opts: { cwd: string; timeoutMs: number },
-): Promise<{ output: string; exitCode: number }> {
+): Promise<ExecResult> {
   const first = await guardedExec(deps.exec, command, opts);
   if (first.exitCode === 0) return first;
   await deps.journal.append({ event: 'gate-retry', node: nodeId, gate });
