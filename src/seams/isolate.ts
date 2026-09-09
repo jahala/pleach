@@ -1,9 +1,14 @@
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
+import { mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { IsolateCatastrophicError, LandBlockedError, LandConflictError } from '../core/errors.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, IsolateSeam, Isolation } from '../loop/deps.ts';
 import { resolveGitDir } from './gitdir.ts';
+
+// Where the friction ledger writes inside a worktree, as path segments
+// (docs/plans/friction-ledger.md §5).
+const FRICTION_DIR = ['.plotplot', 'friction'];
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -233,6 +238,30 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     }
     const reported = new Set(r.output.split('\n').filter((l) => l !== ''));
     return paths.filter((p) => reported.has(p));
+  }
+
+  // ── readFriction ─────────────────────────────────────────────────────────
+
+  async function readFriction(cwd: string): Promise<string | null> {
+    const dir = join(cwd, ...FRICTION_DIR);
+    let entries: Dirent[];
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      // No `.plotplot/friction/` is the common case — most trees never see a
+      // friction ledger. Absence is an answer, not a failure.
+      return null;
+    }
+    // Month files only, and only the ones directly here: the ledger keeps its
+    // cursor under `state/` and its rollup in `hotspots.json`, and neither is
+    // the journal. Filename order IS chronological order for `<yyyy-mm>`.
+    const months = entries
+      .filter((e) => e.isFile() && e.name.endsWith('.jsonl'))
+      .map((e) => e.name)
+      .sort();
+    if (months.length === 0) return null;
+    const text = await Promise.all(months.map((name) => readFile(join(dir, name), 'utf8')));
+    return text.join('');
   }
 
   // ── stage ────────────────────────────────────────────────────────────────
@@ -471,6 +500,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     isolate,
     scanMarkers,
     ignored,
+    readFriction,
     stage,
     stagedDiff,
     stagedNumstat,

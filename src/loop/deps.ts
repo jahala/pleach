@@ -54,6 +54,13 @@ export interface IsolateSeam {
   // removed anything outside the tree. Nothing ignored is an answer, not an
   // error.
   ignored(cwd: string, paths: readonly string[]): Promise<string[]>;
+  // The worktree's friction journal, or null when there is none (D14). The
+  // month files weeder/tend2 write directly in `.plotplot/friction/`
+  // (`<yyyy-mm>.jsonl` — never the ledger's own `state/` or `hotspots.json`),
+  // concatenated in filename order. Never delivery (partitionDelivery sets the
+  // directory aside), so settle keeps it beside the receipt before the tree
+  // goes — the last moment it can be read at all.
+  readFriction(cwd: string): Promise<string | null>;
   // Scoped staging — only the given paths, never `git add -A` (ledger S1).
   stage(cwd: string, files: readonly string[]): Promise<void>;
   // The staged diff's text and per-file numstat — the hygiene gate's raw
