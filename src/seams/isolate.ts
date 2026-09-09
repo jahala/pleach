@@ -256,12 +256,19 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     // --porcelain=v1: "XY path" (or "XY old -> new" for renames). Untracked
     // ignored files are excluded by default — junk that .gitignore names can
     // never enter the staging set this way (ledger S1/C2).
+    // --untracked-files=all because the default collapses a directory git has
+    // never seen to "dir/" and stops naming what is inside it. This list is
+    // the staged set: it is what the red seal journals (D13), what the receipt
+    // counts, and what auditGateTampering matches the audit command's tokens
+    // against — a path that never appears individually is a path no per-file
+    // check can see, so a worker's file lands unnamed simply for being in a
+    // new directory.
     // NOTE: git() not gitMust() — gitMust trims, which eats the leading
     // status character's padding on the first porcelain line.
-    const r = await git(exec, cwd, 'status', '--porcelain');
+    const r = await git(exec, cwd, 'status', '--porcelain', '--untracked-files=all');
     if (r.exitCode !== 0) {
       throw new IsolateCatastrophicError(
-        'git status --porcelain',
+        'git status --porcelain --untracked-files=all',
         `exited ${r.exitCode} in ${cwd}:\n${r.output}`,
       );
     }
@@ -307,6 +314,18 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
       out.push({ file: parts.slice(2).join('\t'), added, deleted });
     }
     return out;
+  }
+
+  // ── commit ───────────────────────────────────────────────────────────────
+
+  // The phase seal (D13): a commit on the worktree's detached HEAD. No branch
+  // move — `node/<id>` is published at settle only, so the close commits on top
+  // of this one and the history reads base → red → verified. No --allow-empty
+  // either: an empty seal would claim a red state that changed nothing.
+  async function commit(cwd: string, message: string): Promise<{ sha: string }> {
+    await gitMust(exec, cwd, 'commit', '-m', message);
+    const sha = await gitMust(exec, cwd, 'rev-parse', 'HEAD');
+    return { sha };
   }
 
   // ── commitBranch ─────────────────────────────────────────────────────────
@@ -431,6 +450,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     stagedDiff,
     stagedNumstat,
     changedFiles,
+    commit,
     commitBranch,
     refSha,
     commitMessageOf,
