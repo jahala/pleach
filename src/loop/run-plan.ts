@@ -240,6 +240,42 @@ async function runUnderLock(
     }
   }
 
+  // A gate's findings log outlives the tree (D14). The bytes the sealed
+  // `gates[].artifactSha` hashes are kept beside the receipt BEFORE dispose:
+  // keeping is part of settling a live tree, not of the bookkeeping after it,
+  // so nothing that has to be read from the worktree can be lost to ordering.
+  // Returns what the receipt file should name, outside its envelope; a gate
+  // that printed something else keeps nothing. A write failure journals
+  // `receipt-write-failed` and the close proceeds, exactly like the receipt
+  // file's own write: the seal is already pinned in the commit trailer.
+  async function keepArtifactsOrJournal(
+    node: Node,
+    outcome: RunNodeResult,
+    receipt: Receipt,
+  ): Promise<Receipt['artifacts']> {
+    const sha256 = receipt.facts.gates.find((g) => g.gate === 'smoke')?.artifactSha;
+    const bytes = outcome.smokeStdout;
+    if (bytes === undefined || sha256 === undefined) return undefined;
+    try {
+      const path = await deps.receipts.writeArtifact(node.id, 'sarif', bytes);
+      await deps.journal.append({
+        event: 'gate-artifact',
+        node: node.id,
+        gate: 'smoke',
+        path,
+        sha256,
+      });
+      return { sarif: path };
+    } catch (err) {
+      await deps.journal.append({
+        event: 'receipt-write-failed',
+        node: node.id,
+        detail: err instanceof Error ? err.message : String(err),
+      });
+      return undefined;
+    }
+  }
+
   // Returns the quarantine refs when a commit landed, undefined otherwise —
   // the caller writes the receipt either way (D11).
   async function quarantineOrJournal(
@@ -359,12 +395,19 @@ async function runUnderLock(
       }
       await deps.ledger.emitVerdict(verdict, plan.source);
       const receipt = mintReceipt(buildFacts(plan, node, outcome, durationMs, opts.pleachVersion));
+      // A failed strict gate wrote the log that says why — exactly the log the
+      // calibration folds want, so the quarantine path keeps it too.
+      const artifacts = await keepArtifactsOrJournal(node, outcome, receipt);
       let refs: Receipt['refs'];
       if (iso) {
         refs = await quarantineOrJournal(node, iso, receipt);
         await disposeOrJournal(iso, node.id);
       }
-      await writeReceiptOrJournal(node.id, refs !== undefined ? { ...receipt, refs } : receipt);
+      await writeReceiptOrJournal(node.id, {
+        ...receipt,
+        ...(refs !== undefined ? { refs } : {}),
+        ...(artifacts !== undefined ? { artifacts } : {}),
+      });
       return;
     }
 
@@ -407,6 +450,13 @@ async function runUnderLock(
       failure = err;
     }
 
+    // Before the tree goes. A close that never committed writes no receipt, so
+    // it keeps nothing either — there would be no receipt to name the file.
+    const artifacts =
+      receipt !== undefined && failure === undefined
+        ? await keepArtifactsOrJournal(node, outcome, receipt)
+        : undefined;
+
     await disposeOrJournal(iso, node.id);
 
     if (failure !== undefined || sha === undefined || decision === undefined) {
@@ -433,7 +483,11 @@ async function runUnderLock(
     // published commit — even when tend declines the close (partial), the
     // pinned hash must stay resolvable to its facts.
     if (receipt !== undefined) {
-      await writeReceiptOrJournal(node.id, { ...receipt, refs: { diffRef: sha } });
+      await writeReceiptOrJournal(node.id, {
+        ...receipt,
+        refs: { diffRef: sha },
+        ...(artifacts !== undefined ? { artifacts } : {}),
+      });
     }
 
     const shouldClose = node.accept.audit ? decision.closed : true;

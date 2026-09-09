@@ -32,7 +32,8 @@ tolerate unknown events and unknown fields.
 | `quarantined` | `node`, `branch` (`quarantine/<id>`), `sha` | failed OR blocked work preserved for inspection (D11 — unfinished is not wrong) |
 | `quarantine-failed` | `node`, `detail` | evidence preservation itself failed |
 | `receipt` | `node`, `sha256`, `derived` (`publishable`\|`quarantined`), `degraded` (string[]) | a sealed close receipt was minted at settle (§D) — facts frozen at classify time, hash pinned as a `receipt-sha256:` trailer in the node/quarantine commit, file at `<git-dir>/pleach/receipts/<node>.json`; verify with `pleach receipt <node>` |
-| `receipt-write-failed` | `node`, `detail` | the receipt file could not be written (the trailer is still pinned in git; the close stands) |
+| `gate-artifact` | `node`, `gate` (`smoke`), `path`, `sha256` | a gate's findings log was kept beside the receipt before the worktree was disposed (D14) — the smoke gate's stdout when it parses as a SARIF 2.1.0 log, at `<git-dir>/pleach/receipts/<node>.sarif`. `sha256` is the sealed `gates[].artifactSha`: one hash, cited by the receipt and answered by the file |
+| `receipt-write-failed` | `node`, `detail` | the receipt file, or one of the artifacts kept beside it, could not be written (the trailer is still pinned in git; the close stands) |
 | `acceptance-changed` | `node`, `recorded` (`{smoke?, audit?}`), `current` (same shape) | a ledger-closed node's receipt records a different acceptance than the current plan — the old verification proves nothing about the new gate, so the node re-dispatches instead of skip-trusting |
 | `acceptance-cascade` | `node`, `via` (the invalidated dependency) | a closed dependent of a re-dispatched node rebuilds too — its close embedded the OLD ancestor, and only sinks land, so skip-trusting it would silently keep the re-verified work off the target branch |
 | `rebuild-required` | `node` | a verified branch moved since close — refusing to trust it |
