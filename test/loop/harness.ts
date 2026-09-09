@@ -109,6 +109,14 @@ export class InMemoryGit {
   }
 }
 
+// ── receipt store naming ─────────────────────────────────────────────────────
+//
+// The real store (src/seams/receipts.ts) owns the directory and the filenames;
+// the in-memory one mirrors both so a loop test reads the same paths the
+// conductor journals. The real `<git-dir>` resolution is proven in e2e.
+const RECEIPT_DIR = '/r/.git/pleach/receipts';
+const ARTIFACT_SUFFIX = { sarif: '.sarif', friction: '.friction.jsonl' } as const;
+
 // ── harness construction ─────────────────────────────────────────────────────
 
 export interface HarnessOpts {
@@ -164,6 +172,9 @@ export interface HarnessOpts {
   landThrows?: Error;
   // Pre-seeded receipts keyed by node id (§D acceptance-evolution tests).
   receiptsSeed?: Record<string, Receipt>;
+  // Make the receipt store's writeArtifact throw (fault injection for the
+  // never-fail-a-close rule at settle, D14).
+  writeArtifactThrows?: Error;
 }
 
 export interface Harness {
@@ -173,6 +184,8 @@ export interface Harness {
   emitted: Verdict[];
   journal: Record<string, unknown>[];
   receipts: Map<string, Receipt>;
+  // Kept gate artifacts by the path the store returned (D14).
+  artifacts: Map<string, string>;
   // concurrency instrumentation
   maxConcurrentWorkers: number;
 }
@@ -427,7 +440,15 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
 
   // ── receipts ────────────────────────────────────────────────────────────────
   const receiptsStore = new Map<string, Receipt>(Object.entries(opts.receiptsSeed ?? {}));
+  const artifactStore = new Map<string, string>();
   const receipts = {
+    async writeArtifact(node: string, kind: 'sarif' | 'friction', bytes: string): Promise<string> {
+      if (opts.writeArtifactThrows) throw opts.writeArtifactThrows;
+      const path = `${RECEIPT_DIR}/${node}${ARTIFACT_SUFFIX[kind]}`;
+      artifactStore.set(path, bytes);
+      log.push('receipt.artifact', node, path);
+      return path;
+    },
     async write(node: string, receipt: Receipt): Promise<void> {
       log.push('receipt.write', node, receipt.sha256);
       receiptsStore.set(node, JSON.parse(JSON.stringify(receipt)) as Receipt);
@@ -446,6 +467,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     emitted,
     journal: journalEvents,
     receipts: receiptsStore,
+    artifacts: artifactStore,
     get maxConcurrentWorkers() {
       return state.maxConcurrent;
     },
