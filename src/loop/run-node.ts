@@ -1,5 +1,6 @@
 import { auditGateTampering, buildAuditPrompt, extractAuditJson } from '../core/audit-egress.ts';
 import { classify } from '../core/classify.ts';
+import { partitionDelivery } from '../core/delivery.ts';
 import {
   AuditParseError,
   GateFailedError,
@@ -285,8 +286,7 @@ export async function runNode(
       }
 
       // ── scoped staging (ledger C2 — nothing re-stages after this) ────────────
-      const changed = await deps.isolate.changedFiles(cwd);
-      const stagedFiles = dedup([...result.filesTouched, ...changed]);
+      const stagedFiles = await collectDelivery(deps, node, cwd, result);
       await deps.isolate.stage(cwd, stagedFiles);
       lastStaged = stagedFiles;
 
@@ -583,6 +583,36 @@ async function scanHygiene(
   });
 }
 
+// ── collection (ledger D14) ──────────────────────────────────────────────────
+//
+// What a node stages: what the worker reported touching ∪ what the tree shows
+// changed, MINUS what is not delivery. The manifest is a report, not a
+// promise — it names absolute paths, scratch probes the work order itself
+// asked for, and files git ignores; `git add` of any of those exits non-zero,
+// and a collection that dies takes the FINISHED node's tree with it
+// (jahala/pleach#74, #79 — forty minutes of a build lost). So the pure
+// predicate decides what the path alone settles, the seam answers what only
+// git's rules can, and the journal names everything set aside. Nothing about
+// a set-aside path can fail the node: they are removed, not refused.
+async function collectDelivery(
+  deps: ConductorDeps,
+  node: Node,
+  cwd: string,
+  result: WorkerResult,
+): Promise<string[]> {
+  const changed = await deps.isolate.changedFiles(cwd);
+  const { keep, setAside } = partitionDelivery(dedup([...result.filesTouched, ...changed]), cwd);
+  // dedup AFTER normalisation: the same file named absolutely by the manifest
+  // and relatively by the tree is one delivery, not two.
+  const candidates = dedup(keep);
+  const ignored = await deps.isolate.ignored(cwd, candidates);
+  const aside = [...setAside, ...ignored];
+  if (aside.length > 0) {
+    await deps.journal.append({ event: 'set-aside', node: node.id, paths: aside });
+  }
+  return candidates.filter((f) => !ignored.includes(f));
+}
+
 // ── the red-phase seal (D13) ─────────────────────────────────────────────────
 //
 // What the close does, in miniature: the red phase's files (what the worker
@@ -615,8 +645,7 @@ async function sealRedPhase(
   result: WorkerResult,
   exitCode: number,
 ): Promise<void> {
-  const changed = await deps.isolate.changedFiles(cwd);
-  const files = dedup([...result.filesTouched, ...changed]);
+  const files = await collectDelivery(deps, node, cwd, result);
   if (files.length === 0) throw new GateFailedError('red', EMPTY_RED_EVIDENCE, exitCode);
   const markers = await deps.isolate.scanMarkers(cwd);
   if (markers.length > 0) throw new GateFailedError('marker', markerEvidence(markers), SCAN_EXIT);

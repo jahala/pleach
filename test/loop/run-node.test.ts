@@ -554,3 +554,38 @@ describe('a dispose throw never eats a blocked verdict (ledger #44.1, dispose no
     expect(disposeFailed?.node).toBe('n');
   });
 });
+
+// ledger: D14 — collection sets aside what is not delivery BEFORE staging, so
+// `git add` never sees a scratch probe, a friction line or an ignored path.
+// The seam-and-real-git proof lives in test/integration/collect-set-aside.test.ts;
+// what the loop owes is here: the journal names what went, the staged set is
+// the delivery alone, and the node closes on it.
+describe('collection sets aside what is not delivery (D14)', () => {
+  test('scratch, friction and ignored paths are journaled and never staged', async () => {
+    const h = makeHarness({
+      changedByNode: { n: ['src/app.ts', '.plotplot/friction/2026-09.jsonl'] },
+      ignoredByNode: { n: ['scratch.log'] },
+      waitScript: (ctx) =>
+        ctx.role === 'build'
+          ? stop({ filesTouched: ['src/app.ts', '.loop-scratch/probe.ts', 'scratch.log'] })
+          : stop(),
+    });
+    const node = makeNode({ id: 'n', work: { prompt: 'do' } });
+
+    const r = await runNode(node, ['base'], h.deps, { defaultTimeoutMs: DEF });
+
+    expect(r.verdict.status).toBe('done');
+    expect(r.stagedFiles).toEqual(['src/app.ts']);
+    const staged = h.log.of('stage').at(-1)?.detail;
+    expect(staged?.endsWith(':src/app.ts')).toBe(true);
+
+    const setAside = h.journal.filter((e) => e.event === 'set-aside');
+    expect(setAside.length).toBe(1);
+    expect(setAside[0]?.node).toBe('n');
+    expect([...(setAside[0]?.paths as string[])].sort()).toEqual([
+      '.loop-scratch/probe.ts',
+      '.plotplot/friction/2026-09.jsonl',
+      'scratch.log',
+    ]);
+  });
+});

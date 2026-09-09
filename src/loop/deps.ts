@@ -43,6 +43,13 @@ export interface IsolateSeam {
   // Paths (relative to cwd) of tracked-or-staged files containing conflict
   // markers. Empty array = the marker gate passes (ledger C1).
   scanMarkers(cwd: string): Promise<string[]>;
+  // Which of `paths` this worktree's git ignores, verbatim as given. The other
+  // half of collection (ledger D14): `git add` of an ignored path exits 1 and
+  // killed FINISHED nodes (#74/#76), so ignored paths are set aside before
+  // staging. Paths are worktree-relative — partitionDelivery has already
+  // removed anything outside the tree. Nothing ignored is an answer, not an
+  // error.
+  ignored(cwd: string, paths: readonly string[]): Promise<string[]>;
   // Scoped staging — only the given paths, never `git add -A` (ledger S1).
   stage(cwd: string, files: readonly string[]): Promise<void>;
   // The staged diff's text and per-file numstat — the hygiene gate's raw
