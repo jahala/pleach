@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Receipt } from '../core/receipt.ts';
 import type { ArtifactKind, ReceiptStore } from '../loop/deps.ts';
@@ -7,7 +7,9 @@ import type { ArtifactKind, ReceiptStore } from '../loop/deps.ts';
 // refname-safe by schema ([A-Za-z0-9._-]), so the id IS the filename.
 //
 // Gate artifacts (D14) sit beside their receipt under the node's own name, so
-// a kept findings log is found from the receipt without an index.
+// a kept findings log is found from the receipt without an index. That name is
+// the node's alone, so a close that keeps nothing must also discard what an
+// earlier close of the same node left there — see run-plan's settle.
 //
 // read() returns null for missing OR unreadable — both callers degrade the
 // same honest way: the acceptance-evolution check skips comparison (no record
@@ -39,6 +41,15 @@ export function createReceiptStore(dir: string): ReceiptStore {
       const path = join(dir, `${node}${ARTIFACT_EXTENSION[kind]}`);
       await writeFile(path, bytes, 'utf8');
       return path;
+    },
+    async discardArtifact(node: string, kind: ArtifactKind): Promise<void> {
+      try {
+        await unlink(join(dir, `${node}${ARTIFACT_EXTENSION[kind]}`));
+      } catch (err) {
+        // No file is the common case — most closes keep nothing and have
+        // nothing to forget. Anything else is a real failure of the store.
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+      }
     },
     async read(node: string): Promise<Receipt | null> {
       let text: string;
