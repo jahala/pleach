@@ -5,7 +5,11 @@ import type { Receipt } from '../core/receipt.ts';
 // loop/ — the loop never imports a seam module directly (ENGINEERING.md).
 
 export interface ExecResult {
+  // Both streams, interleaved in arrival order.
   output: string;
+  // The child's stdout alone. A findings log a gate writes to stdout is only
+  // parseable with stderr's noise out of the way (ledger D14).
+  stdout: string;
   exitCode: number;
 }
 
@@ -43,6 +47,20 @@ export interface IsolateSeam {
   // Paths (relative to cwd) of tracked-or-staged files containing conflict
   // markers. Empty array = the marker gate passes (ledger C1).
   scanMarkers(cwd: string): Promise<string[]>;
+  // Which of `paths` this worktree's git ignores, verbatim as given. The other
+  // half of collection (ledger D14): `git add` of an ignored path exits 1 and
+  // killed FINISHED nodes (#74/#76), so ignored paths are set aside before
+  // staging. Paths are worktree-relative — partitionDelivery has already
+  // removed anything outside the tree. Nothing ignored is an answer, not an
+  // error.
+  ignored(cwd: string, paths: readonly string[]): Promise<string[]>;
+  // The worktree's friction journal, or null when there is none (D14). The
+  // month files weeder/tend2 write directly in `.plotplot/friction/`
+  // (`<yyyy-mm>.jsonl` — never the ledger's own `state/` or `hotspots.json`),
+  // concatenated in filename order. Never delivery (partitionDelivery sets the
+  // directory aside), so settle keeps it beside the receipt before the tree
+  // goes — the last moment it can be read at all.
+  readFriction(cwd: string): Promise<string | null>;
   // Scoped staging — only the given paths, never `git add -A` (ledger S1).
   stage(cwd: string, files: readonly string[]): Promise<void>;
   // The staged diff's text and per-file numstat — the hygiene gate's raw
@@ -135,9 +153,20 @@ export interface JournalSeam {
 // <git-dir>/pleach/receipts/. read() returns null for missing OR unreadable —
 // the callers' honest degradations (no invalidation without a record; the
 // receipt verb reports UNDERIVABLE).
+// What can be kept beside a receipt (D14): a gate's findings log, or the
+// worktree's friction journal. The store owns the filenames — a caller asks
+// for a kind and is told where the bytes went.
+export type ArtifactKind = 'sarif' | 'friction';
+
 export interface ReceiptStore {
   write(node: string, receipt: Receipt): Promise<void>;
   read(node: string): Promise<Receipt | null>;
+  // Returns the path it wrote — what the journal records and the receipt file
+  // names. Write errors propagate; run-plan owns the never-fail-a-close rule.
+  writeArtifact(node: string, kind: ArtifactKind, bytes: string): Promise<string>;
+  // Forget any artifact of this kind for this node. Nothing to forget is an
+  // answer, not a failure; other errors propagate like writeArtifact's.
+  discardArtifact(node: string, kind: ArtifactKind): Promise<void>;
 }
 
 export interface ConductorDeps {

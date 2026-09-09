@@ -6,7 +6,7 @@ import { join } from 'node:path';
 export const execLocal = async (
   argv: string[],
   cwd: string,
-): Promise<{ output: string; exitCode: number }> => {
+): Promise<{ output: string; stdout: string; exitCode: number }> => {
   const proc = Bun.spawn(argv, {
     cwd,
     env: process.env,
@@ -18,7 +18,7 @@ export const execLocal = async (
     new Response(proc.stderr).text(),
   ]);
   const exitCode = await proc.exited;
-  return { output: out + err, exitCode };
+  return { output: out + err, stdout: out, exitCode };
 };
 
 export async function gitIn(repo: string, ...args: string[]): Promise<string> {

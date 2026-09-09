@@ -1,0 +1,100 @@
+{
+  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "weeder",
+          "version": "0.1.0",
+          "rules": [
+            {
+              "id": "S2",
+              "shortDescription": {
+                "text": "An error was swallowed"
+              },
+              "fullDescription": {
+                "text": "An added handler in production code discards a failure without logging it, wrapping it, or passing it on."
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "X1",
+              "shortDescription": {
+                "text": "A secret-looking string was added"
+              },
+              "fullDescription": {
+                "text": "An added line carries a known credential prefix, or a high-entropy literal assigned to a name that reads like a key. A credential a vendor published in its own documentation is named as an example and reported as a note."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            }
+          ]
+        }
+      },
+      "invocations": [
+        {
+          "executionSuccessful": false,
+          "exitCode": 1
+        }
+      ],
+      "results": [
+        {
+          "ruleId": "S2",
+          "ruleIndex": 0,
+          "level": "warning",
+          "message": {
+            "text": "a `catch` was added whose block does nothing with the failure. the program learns the call went wrong and carries on as though it had not. log the failure, wrap it for the caller, hand it on, or say in a comment why it is right to drop it."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/seams/receipts.ts"
+                },
+                "region": {
+                  "startLine": 32
+                }
+              }
+            }
+          ],
+          "properties": {
+            "path": "src/seams/receipts.ts"
+          }
+        },
+        {
+          "ruleId": "X1",
+          "ruleIndex": 1,
+          "level": "note",
+          "message": {
+            "text": "a private key block was added. a credential in a commit is a credential published, and deleting the line later leaves it in the history. take the value out, rotate it, and read the credential from the environment at run time."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/core/hygiene.ts"
+                },
+                "region": {
+                  "startLine": 27
+                }
+              }
+            }
+          ],
+          "suppressions": [
+            {
+              "kind": "inSource",
+              "justification": "fixture strings in the secret-pattern tests"
+            }
+          ],
+          "properties": {
+            "path": "src/core/hygiene.ts"
+          }
+        }
+      ]
+    }
+  ]
+}
