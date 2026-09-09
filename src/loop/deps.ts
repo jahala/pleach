@@ -5,7 +5,11 @@ import type { Receipt } from '../core/receipt.ts';
 // loop/ — the loop never imports a seam module directly (ENGINEERING.md).
 
 export interface ExecResult {
+  // Both streams, interleaved in arrival order.
   output: string;
+  // The child's stdout alone. A findings log a gate writes to stdout is only
+  // parseable with stderr's noise out of the way (ledger D14).
+  stdout: string;
   exitCode: number;
 }
 

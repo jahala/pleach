@@ -239,6 +239,8 @@ describe('umbel seam — sinceMtime threading (spy exec, no binary)', () => {
   //   - diff → "" (no diff → diff field omitted)
   // All calls are appended to `calls` so assertions can inspect argv.
   function makeSpyExec(calls: Array<readonly string[]>): ExecFn {
+    // umbel answers every verb on stdout, so the spy's stdout is its output.
+    const said = (output: string): ExecResult => ({ exitCode: 0, output, stdout: output });
     return async (argv): Promise<ExecResult> => {
       calls.push(argv);
       const verb = argv[1]; // argv[0] is BIN
@@ -246,31 +248,29 @@ describe('umbel seam — sinceMtime threading (spy exec, no binary)', () => {
         // Extract the --name value (follows '--name' flag)
         const nameIdx = argv.indexOf('--name');
         const name = nameIdx >= 0 ? argv[nameIdx + 1] : 'unknown';
-        return { exitCode: 0, output: `spawned: ${name}\n` };
+        return said(`spawned: ${name}\n`);
       }
       if (verb === 'send') {
-        return { exitCode: 0, output: `{"sinceMtime":${FIXED_MTIME}}\n` };
+        return said(`{"sinceMtime":${FIXED_MTIME}}\n`);
       }
       if (verb === 'wait') {
-        return { exitCode: 0, output: '{"reason":"stop"}\n' };
+        return said('{"reason":"stop"}\n');
       }
       if (verb === 'read') {
-        return { exitCode: 0, output: 'spy response\n' };
+        return said('spy response\n');
       }
       if (verb === 'actions') {
-        return {
-          exitCode: 0,
-          output:
-            '{"turnCount":1,"finalMessage":"spy response","filesEdited":[],"filesWritten":[]}\n',
-        };
+        return said(
+          '{"turnCount":1,"finalMessage":"spy response","filesEdited":[],"filesWritten":[]}\n',
+        );
       }
       if (verb === 'diff') {
-        return { exitCode: 0, output: '' };
+        return said('');
       }
       if (verb === 'kill') {
-        return { exitCode: 0, output: '' };
+        return said('');
       }
-      return { exitCode: 0, output: '' };
+      return said('');
     };
   }
 

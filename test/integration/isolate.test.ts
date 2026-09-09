@@ -40,6 +40,7 @@ const execLocal: ExecFn = async (argv, { cwd, timeoutMs, env }) => {
   if (timer !== undefined) clearTimeout(timer);
   return {
     output: stdoutBuf + stderrBuf,
+    stdout: stdoutBuf,
     exitCode: killed ? 1 : exitCode,
   };
 };
@@ -502,7 +503,7 @@ test('dispose: unrecognized git worktree remove failure surfaces as IsolateCatas
     // runs for real, so the worktree is created normally and only remove fails.
     const spoofExec: ExecFn = async (argv, opts) => {
       if (argv.includes('worktree') && argv.includes('remove')) {
-        return { output: 'catastrophic unrecognized failure', exitCode: 128 };
+        return { output: 'catastrophic unrecognized failure', stdout: '', exitCode: 128 };
       }
       return execLocal(argv, opts);
     };

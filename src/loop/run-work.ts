@@ -1,7 +1,7 @@
 import { shellOperatorTokens, toArgv } from '../core/argv.ts';
 import { GateFailedError, PlanInvalidError } from '../core/errors.ts';
 import type { Node } from '../core/plan.ts';
-import type { ExecFn, Worker, WorkerResult } from './deps.ts';
+import type { ExecFn, ExecResult, Worker, WorkerResult } from './deps.ts';
 
 // Exec a plan-authored command string with the no-shell guard: a bare shell
 // operator would be passed as a literal argument and do silently-wrong things
@@ -11,15 +11,17 @@ export async function guardedExec(
   exec: ExecFn,
   command: string,
   opts: { cwd: string; timeoutMs: number },
-): Promise<{ output: string; exitCode: number }> {
+): Promise<ExecResult> {
   const tokens = toArgv(command);
   const ops = shellOperatorTokens(tokens);
   if (ops.length > 0) {
+    // No child ran, so there is no stdout — pleach's own finding, on `output`.
     return {
       output:
         `command contains bare shell operator(s): ${ops.join(' ')} — pleach execs ` +
         `without a shell (arg-array; contract exec semantics). For shell features, ` +
         `wrap the command: bash -lc '<command>'`,
+      stdout: '',
       exitCode: -1,
     };
   }

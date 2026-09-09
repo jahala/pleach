@@ -4,7 +4,6 @@ import type { Receipt } from '../../src/core/receipt.ts';
 import type {
   ConductorDeps,
   ExecFn,
-  ExecResult,
   IsolateSeam,
   Isolation,
   JournalSeam,
@@ -123,8 +122,10 @@ export interface HarnessOpts {
   // finalMessage for audit workers (the tend-audit-result egress). If a
   // function, called per audit spawn; lets tests vary egress across re-audits.
   auditEgress?: (ctx: SpawnCtx) => string;
-  // exec results keyed by argv head; default exit 0 empty output.
-  execScript?: (argv: readonly string[], cwd: string) => ExecResult;
+  // exec results keyed by argv head; default exit 0 empty output. A script
+  // names one stream; the harness reports it as the child's stdout, like a
+  // real child that wrote nothing to stderr.
+  execScript?: (argv: readonly string[], cwd: string) => { output: string; exitCode: number };
   // pre-seeded refs (id/sha) — e.g. recorded SHAs for B1 reconciliation tests.
   refs?: Record<string, string>;
   // closed map tend returns from readClosed.
@@ -201,7 +202,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   const exec: ExecFn = async (argv, execOpts) => {
     log.push('exec', undefined, argv.join(' '));
     const r = opts.execScript ? opts.execScript(argv, execOpts.cwd) : { output: '', exitCode: 0 };
-    return r;
+    return { ...r, stdout: r.output };
   };
 
   // ── isolate ─────────────────────────────────────────────────────────────────
