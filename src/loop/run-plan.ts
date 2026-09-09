@@ -289,7 +289,17 @@ async function runUnderLock(
   ): Promise<string | undefined> {
     try {
       const artifact = await read();
-      if (artifact === null) return undefined;
+      // Nothing to keep, so nothing of this kind may sit beside the receipt.
+      // A node closes more than once — §D acceptance evolution re-dispatches
+      // one whose gate changed, which is exactly when a gate that printed a
+      // findings log is replaced by one that prints none — and the artifact
+      // name is the node's, not the close's. Left alone, the earlier close's
+      // log would outlive the receipt that sealed it and be read as this
+      // close's by whoever counts its findings.
+      if (artifact === null) {
+        await deps.receipts.discardArtifact(node.id, kind);
+        return undefined;
+      }
       const path = await deps.receipts.writeArtifact(node.id, kind, artifact.bytes);
       await deps.journal.append({
         event: 'gate-artifact',

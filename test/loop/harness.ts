@@ -479,6 +479,10 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       log.push('receipt.artifact', node, path);
       return path;
     },
+    async discardArtifact(node: string, kind: 'sarif' | 'friction'): Promise<void> {
+      const path = `${RECEIPT_DIR}/${node}${ARTIFACT_SUFFIX[kind]}`;
+      if (artifactStore.delete(path)) log.push('receipt.artifact-discard', node, path);
+    },
     async write(node: string, receipt: Receipt): Promise<void> {
       log.push('receipt.write', node, receipt.sha256);
       receiptsStore.set(node, JSON.parse(JSON.stringify(receipt)) as Receipt);

@@ -164,6 +164,9 @@ export interface ReceiptStore {
   // Returns the path it wrote — what the journal records and the receipt file
   // names. Write errors propagate; run-plan owns the never-fail-a-close rule.
   writeArtifact(node: string, kind: ArtifactKind, bytes: string): Promise<string>;
+  // Forget any artifact of this kind for this node. Nothing to forget is an
+  // answer, not a failure; other errors propagate like writeArtifact's.
+  discardArtifact(node: string, kind: ArtifactKind): Promise<void>;
 }
 
 export interface ConductorDeps {
