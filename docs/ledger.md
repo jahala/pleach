@@ -199,6 +199,31 @@ checkpoint but have different lifetimes and trust domains.**
   `WorkerResult`, journaled when the runner supplies them — the pleach half of umbel's
   pane-capture-at-death, never fabricated). Tests: `test/loop/terminal-evidence.test.ts`.
 
+- **D12 ✅ [field] Signal-aborted runs left sessions, worktrees and the lock behind.** bandung's
+  dogfood P5 (2026-09-05): `pkill` mid-run left the umbel session alive, the temp worktree
+  registered in the repository, and the lock file behind. **Fix:** worktrees live under
+  `<git-dir>/pleach/worktrees/` (ownership unambiguous); SIGINT/SIGTERM tears down — no new launches,
+  in-flight waits interrupted, nodes settle with evidence (`run-aborted`); `pleach clean` sweeps stale
+  locks and orphaned pleach worktrees through git. Landed in PR #58; ledgered here after the fact
+  (2026-09-08 dogfood pass found the entry missing).
+
+- **D13 ⚠ [field] A phased node commits once at close — the RED state never exists in history.**
+  weed's bite kill report (umbrella Tried, 2026-09-06): `{test, phases}` work gates RED-must-fail
+  and GREEN-must-pass in the worktree, then `settle` makes ONE commit of the whole tree. Nothing in
+  `node/<id>` history proves a failing test ever existed; `weeder bite` ("a test passed without the
+  change it covers", B1) has no commit to check out; copeca's corpus minting and the slice-coverage
+  rule stand on the same missing commit. Compounding: a plan whose phases end on `impl` never runs
+  the green gate, so the combined tree is never proven — and `pleach validate` said nothing.
+  **Fix:** the moment the RED gate passes, the red phase's files are scoped-staged, marker- and
+  hygiene-gated exactly like a close, and sealed as their own commit (subject `pleach: <id> red
+  phase`, trailer `pleach-phase: red`; journal `phase-commit`) BEFORE the impl prompt is sent; the
+  verified commit stacks on it, so `node/<id>` reads base → red → verified and the GREEN gate ran
+  against the combined tree. An empty red phase fails the `red` gate (no empty seal). A retry after
+  a sealed red resumes at impl with evidence (the seal is never remade — a second "red" would carry
+  impl); a red-gate failure before any seal restarts at red. `pleach validate` warns on
+  impl-terminal phases. Tests: `test/loop/phase-commit*.test.ts`, `test/e2e/phase-commit.test.ts`,
+  `test/unit/validate-phases.test.ts`, `test/unit/journal-doc.test.ts`.
+
 ### Verified-sound (attacks refuted — do not relitigate)
 
 `--detach` fan-out (two detached worktrees at one commit are legal); the closed-add-then-dispose-inside-
