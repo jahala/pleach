@@ -1,13 +1,20 @@
 import { describe, expect, test } from 'bun:test';
 import { GateFailedError } from '../../src/core/errors.ts';
 import type { Node } from '../../src/core/plan.ts';
-import type { ExecFn, Worker, WorkerResult } from '../../src/loop/deps.ts';
+import type { ExecFn, ExecResult, Worker, WorkerResult } from '../../src/loop/deps.ts';
 import { promptFor, runWork } from '../../src/loop/run-work.ts';
 
 // spec: §6 run-work — the three Work shapes and their gates. In-memory Worker
 // and scripted ExecFn; the subject is runWork's control flow.
 
 const TIMEOUT = 1000;
+
+// A scripted child speaks on stdout; nothing here writes to stderr.
+const said = (output: string, exitCode: number): ExecResult => ({
+  output,
+  stdout: output,
+  exitCode,
+});
 
 function node(over: Partial<Node>): Node {
   return {
@@ -68,7 +75,7 @@ function scriptedExec(byHead: Record<string, { output: string; exitCode: number 
     const head = argv[0] ?? '';
     const r = byHead[head];
     if (!r) throw new Error(`test: no scripted exec for head '${head}'`);
-    return r;
+    return { ...r, stdout: r.output };
   };
   return { exec, calls };
 }
@@ -113,7 +120,7 @@ describe('runWork — {test, phases}: RED/GREEN exec gates', () => {
     const exec: ExecFn = async (argv) => {
       if (argv[0] === 'runtests') {
         testCalls += 1;
-        return { output: 'x', exitCode: testCalls === 1 ? 1 : 0 };
+        return said('x', testCalls === 1 ? 1 : 0);
       }
       throw new Error('unexpected exec');
     };
@@ -125,7 +132,7 @@ describe('runWork — {test, phases}: RED/GREEN exec gates', () => {
 
   test('RED passes immediately (exit 0) → GateFailedError(red)', async () => {
     const w = scriptedWorker([stopResult(), stopResult(), stopResult()]);
-    const exec: ExecFn = async () => ({ output: 'all green already', exitCode: 0 });
+    const exec: ExecFn = async () => said('all green already', 0);
     let err: unknown;
     try {
       await runWork(phasesNode, w.worker, exec, '/wt', { timeoutMs: TIMEOUT });
@@ -142,7 +149,7 @@ describe('runWork — {test, phases}: RED/GREEN exec gates', () => {
     let testCalls = 0;
     const exec: ExecFn = async () => {
       testCalls += 1;
-      return { output: testCalls === 1 ? 'red fails' : 'still failing', exitCode: 1 };
+      return said(testCalls === 1 ? 'red fails' : 'still failing', 1);
     };
     let err: unknown;
     try {
@@ -160,7 +167,7 @@ describe('runWork — {test, phases}: RED/GREEN exec gates', () => {
     let testCalls = 0;
     const exec: ExecFn = async () => {
       testCalls += 1;
-      return { output: '', exitCode: 1 };
+      return said('', 1);
     };
     const result = await runWork(phasesNode, w.worker, exec, '/wt', { timeoutMs: TIMEOUT });
     expect(result.reason).toBe('dead');
@@ -175,7 +182,7 @@ describe('runWork — {command}', () => {
     const w = scriptedWorker([]);
     const exec: ExecFn = async (argv) => {
       expect(argv).toEqual(['echo', 'hi']);
-      return { output: 'hi\n', exitCode: 0 };
+      return said('hi\n', 0);
     };
     const result = await runWork(n, w.worker, exec, '/wt', { timeoutMs: TIMEOUT });
     expect(result.reason).toBe('stop');
@@ -188,7 +195,7 @@ describe('runWork — {command}', () => {
   test('non-zero → GateFailedError(command) with the output', async () => {
     const n = node({ work: { command: 'false' } });
     const w = scriptedWorker([]);
-    const exec: ExecFn = async () => ({ output: 'boom', exitCode: 3 });
+    const exec: ExecFn = async () => said('boom', 3);
     let err: unknown;
     try {
       await runWork(n, w.worker, exec, '/wt', { timeoutMs: TIMEOUT });

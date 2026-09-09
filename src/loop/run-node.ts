@@ -1,5 +1,6 @@
 import { auditGateTampering, buildAuditPrompt, extractAuditJson } from '../core/audit-egress.ts';
 import { classify } from '../core/classify.ts';
+import { partitionDelivery } from '../core/delivery.ts';
 import {
   AuditParseError,
   GateFailedError,
@@ -8,9 +9,10 @@ import {
 } from '../core/errors.ts';
 import { checkDiffHygiene, type HygieneFailure } from '../core/hygiene.ts';
 import { type AuditResult, AuditResultSchema, type Node, type Verdict } from '../core/plan.ts';
-import type { AuditRecord, GateRecord } from '../core/receipt.ts';
+import { type AuditRecord, type GateRecord, sha256Hex } from '../core/receipt.ts';
+import { parseSarif } from '../core/sarif.ts';
 import { DEFAULT_WORKER_PROVIDER } from '../core/validate.ts';
-import type { ConductorDeps, Isolation, WorkerResult } from './deps.ts';
+import type { ConductorDeps, ExecResult, Isolation, WorkerResult } from './deps.ts';
 import { guardedExec, runWork } from './run-work.ts';
 
 // ── run-node: the per-node ladder ────────────────────────────────────────────
@@ -52,6 +54,11 @@ export interface RunNodeResult {
   // distinct from "checked and failed".
   gates?: GateRecord[];
   audit?: AuditRecord[];
+  // The smoke gate's stdout, present only when it parsed as a findings log
+  // (ledger D14) — the very bytes the final attempt's `artifactSha` hashes,
+  // carried so settle can keep them beside the receipt before the tree goes.
+  // Journal/settle material only; the Verdict contract is untouched.
+  smokeStdout?: string;
 }
 
 const REAUDIT_BUDGET = 2;
@@ -89,6 +96,7 @@ export async function runNode(
     const out: RunNodeResult = {
       ...result,
       gates,
+      ...(smokeStdout !== undefined ? { smokeStdout } : {}),
       ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
       ...(result.stagedFiles === undefined && lastStaged !== undefined
         ? { stagedFiles: lastStaged }
@@ -126,6 +134,8 @@ export async function runNode(
   let gates: GateRecord[] = [];
   let auditRecords: AuditRecord[] | undefined;
   let lastStaged: string[] | undefined;
+  // The smoke gate's findings log, when this attempt's gate wrote one (D14).
+  let smokeStdout: string | undefined;
 
   try {
     for (;;) {
@@ -133,6 +143,7 @@ export async function runNode(
       gates = [];
       auditRecords = undefined;
       lastStaged = undefined;
+      smokeStdout = undefined;
 
       // ── isolate (or reuse the tree for a retryable retry) ───────────────────
       if (iso === null) {
@@ -285,8 +296,7 @@ export async function runNode(
       }
 
       // ── scoped staging (ledger C2 — nothing re-stages after this) ────────────
-      const changed = await deps.isolate.changedFiles(cwd);
-      const stagedFiles = dedup([...result.filesTouched, ...changed]);
+      const stagedFiles = await collectDelivery(deps, node, cwd, result);
       await deps.isolate.stage(cwd, stagedFiles);
       lastStaged = stagedFiles;
 
@@ -317,14 +327,24 @@ export async function runNode(
 
       // ── smoke ────────────────────────────────────────────────────────────────
       if (node.accept.smoke) {
-        const { output, exitCode } = await execGateWithRetry(
+        const { output, stdout, exitCode } = await execGateWithRetry(
           deps,
           node.id,
           'smoke',
           node.accept.smoke,
           { cwd, timeoutMs },
         );
-        gates.push({ gate: 'smoke', exitCode });
+        // A findings log outlives the tree (D14). The parse decides, not the
+        // exit code: a `weeder check --strict` that fails wrote the log that
+        // says why. The hash is over the stdout bytes verbatim — one sha256,
+        // sealed here and cited by whatever keeps the file.
+        const isFindingsLog = parseSarif(stdout) !== null;
+        if (isFindingsLog) smokeStdout = stdout;
+        gates.push({
+          gate: 'smoke',
+          exitCode,
+          ...(isFindingsLog ? { artifactSha: sha256Hex(stdout) } : {}),
+        });
         if (exitCode !== 0) {
           const settle = settleRetryable(
             node,
@@ -448,6 +468,7 @@ export async function runNode(
         iso: liveIso,
         stagedFiles,
         gates,
+        ...(smokeStdout !== undefined ? { smokeStdout } : {}),
         ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
       };
     }
@@ -542,7 +563,7 @@ async function execGateWithRetry(
   gate: 'setup' | 'smoke',
   command: string,
   opts: { cwd: string; timeoutMs: number },
-): Promise<{ output: string; exitCode: number }> {
+): Promise<ExecResult> {
   const first = await guardedExec(deps.exec, command, opts);
   if (first.exitCode === 0) return first;
   await deps.journal.append({ event: 'gate-retry', node: nodeId, gate });
@@ -583,6 +604,36 @@ async function scanHygiene(
   });
 }
 
+// ── collection (ledger D14) ──────────────────────────────────────────────────
+//
+// What a node stages: what the worker reported touching ∪ what the tree shows
+// changed, MINUS what is not delivery. The manifest is a report, not a
+// promise — it names absolute paths, scratch probes the work order itself
+// asked for, and files git ignores; `git add` of any of those exits non-zero,
+// and a collection that dies takes the FINISHED node's tree with it
+// (jahala/pleach#74, #79 — forty minutes of a build lost). So the pure
+// predicate decides what the path alone settles, the seam answers what only
+// git's rules can, and the journal names everything set aside. Nothing about
+// a set-aside path can fail the node: they are removed, not refused.
+async function collectDelivery(
+  deps: ConductorDeps,
+  node: Node,
+  cwd: string,
+  result: WorkerResult,
+): Promise<string[]> {
+  const changed = await deps.isolate.changedFiles(cwd);
+  const { keep, setAside } = partitionDelivery(dedup([...result.filesTouched, ...changed]), cwd);
+  // dedup AFTER normalisation: the same file named absolutely by the manifest
+  // and relatively by the tree is one delivery, not two.
+  const candidates = dedup(keep);
+  const ignored = await deps.isolate.ignored(cwd, candidates);
+  const aside = [...setAside, ...ignored];
+  if (aside.length > 0) {
+    await deps.journal.append({ event: 'set-aside', node: node.id, paths: aside });
+  }
+  return candidates.filter((f) => !ignored.includes(f));
+}
+
 // ── the red-phase seal (D13) ─────────────────────────────────────────────────
 //
 // What the close does, in miniature: the red phase's files (what the worker
@@ -615,8 +666,7 @@ async function sealRedPhase(
   result: WorkerResult,
   exitCode: number,
 ): Promise<void> {
-  const changed = await deps.isolate.changedFiles(cwd);
-  const files = dedup([...result.filesTouched, ...changed]);
+  const files = await collectDelivery(deps, node, cwd, result);
   if (files.length === 0) throw new GateFailedError('red', EMPTY_RED_EVIDENCE, exitCode);
   const markers = await deps.isolate.scanMarkers(cwd);
   if (markers.length > 0) throw new GateFailedError('marker', markerEvidence(markers), SCAN_EXIT);

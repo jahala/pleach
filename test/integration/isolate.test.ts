@@ -40,6 +40,7 @@ const execLocal: ExecFn = async (argv, { cwd, timeoutMs, env }) => {
   if (timer !== undefined) clearTimeout(timer);
   return {
     output: stdoutBuf + stderrBuf,
+    stdout: stdoutBuf,
     exitCode: killed ? 1 : exitCode,
   };
 };
@@ -502,7 +503,7 @@ test('dispose: unrecognized git worktree remove failure surfaces as IsolateCatas
     // runs for real, so the worktree is created normally and only remove fails.
     const spoofExec: ExecFn = async (argv, opts) => {
       if (argv.includes('worktree') && argv.includes('remove')) {
-        return { output: 'catastrophic unrecognized failure', exitCode: 128 };
+        return { output: 'catastrophic unrecognized failure', stdout: '', exitCode: 128 };
       }
       return execLocal(argv, opts);
     };
@@ -555,5 +556,32 @@ test('lead: changedFiles lists modified + untracked-unignored, never ignored jun
     expect(files).not.toContain('fresh/');
   } finally {
     await rm(repo, { recursive: true, force: true });
+  }
+});
+
+// ledger: D14 — the friction journal is read out of the tree at settle, so the
+// read is proven against a real directory: the month files, in name order,
+// and nothing else the ledger keeps beside them.
+test('readFriction concatenates the month files in name order, and only those', async () => {
+  const { exec } = await import('../../src/seams/exec.ts');
+  const tree = await mkdtemp(join(tmpdir(), 'pleach-friction-'));
+  const friction = join(tree, '.plotplot', 'friction');
+  try {
+    const seam = createIsolateSeam(exec, tree);
+    // No `.plotplot/friction/` at all — the common case.
+    expect(await seam.readFriction(tree)).toBeNull();
+
+    await mkdir(join(friction, 'state'), { recursive: true });
+    await writeFile(join(friction, 'hotspots.json'), '{"src/loop/run-plan.ts":3}\n');
+    await writeFile(join(friction, 'state', 'cursor.jsonl'), '{"seen":41}\n');
+    // A directory the ledger has written to, but no journal in it yet.
+    expect(await seam.readFriction(tree)).toBeNull();
+
+    // Written newest-first: the answer is name order, not creation order.
+    await writeFile(join(friction, '2026-09.jsonl'), '{"at":"2026-09-02"}\n');
+    await writeFile(join(friction, '2026-08.jsonl'), '{"at":"2026-08-30"}\n');
+    expect(await seam.readFriction(tree)).toBe('{"at":"2026-08-30"}\n{"at":"2026-09-02"}\n');
+  } finally {
+    await rm(tree, { recursive: true, force: true });
   }
 });
