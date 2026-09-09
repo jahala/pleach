@@ -27,6 +27,12 @@ export interface GateRecord {
   // sha256 of the failing gate's journaled output tail — the journal keeps
   // the verbatim text; the sealed receipt keeps the pointer.
   outputTailSha?: string;
+  // sha256 of the findings log this gate wrote to stdout, when it wrote one
+  // (ledger D14) — the same hash settle's kept file carries and the umbrella's
+  // receipt predicate cites. Absent for every gate that printed something else,
+  // and canonicalJson drops undefined, so a receipt without an artifact hashes
+  // exactly as it did before the field existed.
+  artifactSha?: string;
 }
 
 // Tri-state-plus-partial audit record: 'pass'/'partial'/'fail' relay the
@@ -75,6 +81,14 @@ export interface Receipt {
     // The receipt this write replaced (a retried node) — the settle trail
     // survives the overwrite without receipt-chaining infrastructure.
     previousReceiptSha256?: string;
+  };
+  // The gate artifacts settle kept, as paths — never content (D14). Outside
+  // the envelope for the same reason refs are: they are written after the
+  // freeze. The integrity claim is the sealed `gates[].artifactSha`; a path is
+  // only a place to look, and a moved file cannot forge its own hash.
+  artifacts?: {
+    sarif?: string;
+    friction?: string;
   };
 }
 

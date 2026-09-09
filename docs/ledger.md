@@ -224,6 +224,27 @@ checkpoint but have different lifetimes and trust domains.**
   impl-terminal phases. Tests: `test/loop/phase-commit*.test.ts`, `test/e2e/phase-commit.test.ts`,
   `test/unit/validate-phases.test.ts`, `test/unit/journal-doc.test.ts`.
 
+- **D14 ⚠ [field] The smoke gate's findings log and the worktree's friction journal die with the
+  tree.** jahala/pleach#59 (harness-placement pass, 2026-09-08): the receipt records the smoke gate as
+  an exit code and the sha256 of a 2000-character output tail; when the smoke is `weeder check
+  --strict` its stdout is a SARIF 2.1.0 log whose `suppressions` are the only record of what an agent
+  waved through in that node, and the friction journal weeder/tend2 write inside the worktree
+  (`.plotplot/friction/<yyyy-mm>.jsonl`) is disposed with it. The umbrella's calibration folds need
+  per-rule counts from the gate; most garden work runs under pleach in worktrees nobody keeps.
+  **Fix:** the exec seam reports `stdout` separately (additive); a stdout that parses as SARIF 2.1.0
+  is hashed into the sealed gate record (`gates[].artifactSha` — ONE sha256 of the kept bytes, the
+  same the umbrella predicate's `weeder.sarif.sha256` cites) and written at settle, before dispose,
+  beside the receipt as `<git-dir>/pleach/receipts/<node>.sarif`; a worktree friction journal is
+  kept as `<node>.friction.jsonl`; each kept file journals `gate-artifact` {node, gate, path,
+  sha256}; collection sets aside what is not delivery BEFORE staging — `.loop-scratch/`,
+  `.plotplot/friction/`, anything git ignores, anything outside the worktree — journals it
+  (`set-aside`) and closes the node on what remains (#74/#76/#79: `git add` of an ignored scratch
+  path killed finished nodes, tree and all); a write failure
+  journals `receipt-write-failed` and never blocks the close. Non-SARIF stdout keeps nothing and
+  leaves the receipt byte-identical. Tests: `test/integration/collect-set-aside.test.ts`,
+  `test/integration/exec-stdout.test.ts`, `test/unit/sarif.test.ts`,
+  `test/loop/gate-artifact-*.test.ts`, `test/e2e/gate-artifact.test.ts`.
+
 ### Verified-sound (attacks refuted — do not relitigate)
 
 `--detach` fan-out (two detached worktrees at one commit are legal); the closed-add-then-dispose-inside-

@@ -1,9 +1,14 @@
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
+import { mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { IsolateCatastrophicError, LandBlockedError, LandConflictError } from '../core/errors.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, IsolateSeam, Isolation } from '../loop/deps.ts';
 import { resolveGitDir } from './gitdir.ts';
+
+// Where the friction ledger writes inside a worktree, as path segments
+// (docs/plans/friction-ledger.md §5).
+const FRICTION_DIR = ['.plotplot', 'friction'];
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -209,6 +214,54 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     // reporting "clean" here would let conflict markers reach a verified
     // branch (ledger C1).
     throw new IsolateCatastrophicError('git grep', `exited ${r.exitCode} in ${cwd}:\n${r.output}`);
+  }
+
+  // ── ignored ──────────────────────────────────────────────────────────────
+
+  async function ignored(cwd: string, paths: readonly string[]): Promise<string[]> {
+    if (paths.length === 0) return [];
+    // The index is consulted deliberately (NOT --no-index): a TRACKED file
+    // that matches an ignore rule stages fine, so a change to it IS delivery
+    // and must never be set aside. core.quotePath=false keeps non-ASCII paths
+    // readable back as the bytes we passed in, and the answer is the caller's
+    // own paths — only what they named can be set aside.
+    const r = await git(exec, cwd, '-c', 'core.quotePath=false', 'check-ignore', '--', ...paths);
+    // Exit 1 = no path is ignored: check-ignore's documented "no match", not a
+    // failure. Anything else is git itself failing and must not pass silently
+    // — reporting "nothing ignored" would hand the ignored path to `git add`.
+    if (r.exitCode === 1) return [];
+    if (r.exitCode !== 0) {
+      throw new IsolateCatastrophicError(
+        'git check-ignore',
+        `exited ${r.exitCode} in ${cwd}:\n${r.output}`,
+      );
+    }
+    const reported = new Set(r.output.split('\n').filter((l) => l !== ''));
+    return paths.filter((p) => reported.has(p));
+  }
+
+  // ── readFriction ─────────────────────────────────────────────────────────
+
+  async function readFriction(cwd: string): Promise<string | null> {
+    const dir = join(cwd, ...FRICTION_DIR);
+    let entries: Dirent[];
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      // No `.plotplot/friction/` is the common case — most trees never see a
+      // friction ledger. Absence is an answer, not a failure.
+      return null;
+    }
+    // Month files only, and only the ones directly here: the ledger keeps its
+    // cursor under `state/` and its rollup in `hotspots.json`, and neither is
+    // the journal. Filename order IS chronological order for `<yyyy-mm>`.
+    const months = entries
+      .filter((e) => e.isFile() && e.name.endsWith('.jsonl'))
+      .map((e) => e.name)
+      .sort();
+    if (months.length === 0) return null;
+    const text = await Promise.all(months.map((name) => readFile(join(dir, name), 'utf8')));
+    return text.join('');
   }
 
   // ── stage ────────────────────────────────────────────────────────────────
@@ -446,6 +499,8 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
   return {
     isolate,
     scanMarkers,
+    ignored,
+    readFriction,
     stage,
     stagedDiff,
     stagedNumstat,
