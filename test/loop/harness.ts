@@ -123,9 +123,14 @@ export interface HarnessOpts {
   // function, called per audit spawn; lets tests vary egress across re-audits.
   auditEgress?: (ctx: SpawnCtx) => string;
   // exec results keyed by argv head; default exit 0 empty output. A script
-  // names one stream; the harness reports it as the child's stdout, like a
-  // real child that wrote nothing to stderr.
-  execScript?: (argv: readonly string[], cwd: string) => { output: string; exitCode: number };
+  // naming only `output` models a child that wrote nothing to stderr, so the
+  // interleaved stream IS its stdout; a script naming `stdout` too models one
+  // whose stderr also spoke — `output` interleaved, `stdout` the child's own
+  // stream, which is the only one a findings log can be read from (D14).
+  execScript?: (
+    argv: readonly string[],
+    cwd: string,
+  ) => { output: string; stdout?: string; exitCode: number };
   // pre-seeded refs (id/sha) — e.g. recorded SHAs for B1 reconciliation tests.
   refs?: Record<string, string>;
   // closed map tend returns from readClosed.
@@ -202,7 +207,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   const exec: ExecFn = async (argv, execOpts) => {
     log.push('exec', undefined, argv.join(' '));
     const r = opts.execScript ? opts.execScript(argv, execOpts.cwd) : { output: '', exitCode: 0 };
-    return { ...r, stdout: r.output };
+    return { output: r.output, stdout: r.stdout ?? r.output, exitCode: r.exitCode };
   };
 
   // ── isolate ─────────────────────────────────────────────────────────────────
