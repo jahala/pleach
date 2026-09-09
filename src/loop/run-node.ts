@@ -6,7 +6,7 @@ import {
   IsolateCatastrophicError,
   PlanInvalidError,
 } from '../core/errors.ts';
-import { checkDiffHygiene } from '../core/hygiene.ts';
+import { checkDiffHygiene, type HygieneFailure } from '../core/hygiene.ts';
 import { type AuditResult, AuditResultSchema, type Node, type Verdict } from '../core/plan.ts';
 import type { AuditRecord, GateRecord } from '../core/receipt.ts';
 import { DEFAULT_WORKER_PROVIDER } from '../core/validate.ts';
@@ -112,6 +112,11 @@ export async function runNode(
   // disposes and re-isolates. A terminal/done verdict hands `iso` to the caller
   // (done) or disposes it here (failed/dead/blocked).
   let iso: Isolation | null = null;
+  // The phase the CURRENT tree has sealed a red commit for (D13), if any. It
+  // belongs to the tree, not to the node: a retry that reuses the tree re-enters
+  // after that phase, and a re-isolated tree (dead+resume) has sealed nothing
+  // and earns a fresh red.
+  let redSealedAt: number | undefined;
   // Evidence threaded into the next attempt's re-prompt (A3). undefined on the
   // first attempt.
   let evidence: string | undefined;
@@ -131,6 +136,7 @@ export async function runNode(
 
       // ── isolate (or reuse the tree for a retryable retry) ───────────────────
       if (iso === null) {
+        redSealedAt = undefined;
         try {
           iso = await deps.isolate.isolate(node, baseRefs);
         } catch (err) {
@@ -192,6 +198,11 @@ export async function runNode(
           timeoutMs,
           evidence: promptEvidence,
           signal: opts.signal,
+          redSealedAt,
+          sealRed: async (red, exitCode, phaseIndex) => {
+            await sealRedPhase(node, cwd, deps, red, exitCode);
+            redSealedAt = phaseIndex;
+          },
         });
       } catch (err) {
         await worker?.kill();
@@ -269,7 +280,7 @@ export async function runNode(
           gate: { ran: 'marker', exitCode: -1 },
         });
         if (settle) return handBack(settle);
-        evidence = `Conflict markers remain in:\n${markers.join('\n')}\nResolve the conflict markers.`;
+        evidence = markerEvidence(markers);
         continue;
       }
 
@@ -285,14 +296,7 @@ export async function runNode(
       // bulk-deletion tripwire with its deterministic re-state escape. All
       // retryable with evidence; terminal failure quarantines like any gate.
       {
-        const hygiene = checkDiffHygiene({
-          workKind:
-            'command' in node.work ? 'command' : 'phases' in node.work ? 'phases' : 'prompt',
-          stagedFiles,
-          diff: stagedFiles.length > 0 ? await deps.isolate.stagedDiff(cwd) : '',
-          numstat: stagedFiles.length > 0 ? await deps.isolate.stagedNumstat(cwd) : [],
-          finalMessage: result.finalMessage,
-        });
+        const hygiene = await scanHygiene(deps, node, cwd, stagedFiles, result.finalMessage);
         gates.push({
           gate: hygiene === null ? 'hygiene' : `hygiene:${hygiene.kind}`,
           exitCode: hygiene === null ? 0 : -1,
@@ -547,6 +551,97 @@ async function execGateWithRetry(
     await deps.journal.append({ event: 'gate-flaky', node: nodeId, gate });
   }
   return retry; // green: proceed; red: the RETRY run is the evidence.
+}
+
+// ── the deterministic scans (shared by the close and the seal) ───────────────
+//
+// Neither scan runs a command, so neither has an exit code of its own: -1 is
+// the ladder's "pleach's own finding" marker, the value the close's gate
+// records already carry.
+const SCAN_EXIT = -1;
+
+function markerEvidence(markers: readonly string[]): string {
+  return `Conflict markers remain in:\n${markers.join('\n')}\nResolve the conflict markers.`;
+}
+
+// The hygiene battery over a staged set. The diff and numstat are read only
+// when something is staged — an empty index has neither, and the empty-diff
+// rule already speaks for that case.
+async function scanHygiene(
+  deps: ConductorDeps,
+  node: Node,
+  cwd: string,
+  stagedFiles: readonly string[],
+  finalMessage: string,
+): Promise<HygieneFailure | null> {
+  return checkDiffHygiene({
+    workKind: 'command' in node.work ? 'command' : 'phases' in node.work ? 'phases' : 'prompt',
+    stagedFiles,
+    diff: stagedFiles.length > 0 ? await deps.isolate.stagedDiff(cwd) : '',
+    numstat: stagedFiles.length > 0 ? await deps.isolate.stagedNumstat(cwd) : [],
+    finalMessage,
+  });
+}
+
+// ── the red-phase seal (D13) ─────────────────────────────────────────────────
+//
+// What the close does, in miniature: the red phase's files (what the worker
+// reported touching ∪ what the tree shows changed) are scoped-staged, put
+// through the close's own two deterministic scans, and committed on the
+// detached HEAD. No branch moves — node/<id> is published at settle only — so
+// the close's commit stacks on this one and the history reads base → red →
+// verified. The close's own scoped staging then picks up only what changed
+// after the seal, HEAD having moved.
+//
+// The scans are not the close's to run alone: a commit made before them is one
+// the close can never take back. Conflict markers sealed into the red state
+// mint a history nobody can build (`weeder bite` checks that commit out), and a
+// credential sealed there is compromised the moment node/<id> publishes — the
+// close would then be gating a leak that is already a parent of the verified
+// commit. Both refusals are ladder gate failures (`marker`, `hygiene:<kind>`)
+// carrying the evidence and the labels the close records, so they retry in the
+// same tree and leave nothing behind.
+//
+// An EMPTY file set is refused, not sealed: a commit of nothing would claim a
+// failing test exists when none was written — the exact lie D13 exists to
+// prevent — and `weeder bite` would check it out and find the state unchanged.
+// The refusal is a `red` gate failure carrying the gate's own exit code, so the
+// handleGate → settleRetryable ladder retries it in the same tree, restarting
+// at the red phase with the evidence attached to its prompt.
+async function sealRedPhase(
+  node: Node,
+  cwd: string,
+  deps: ConductorDeps,
+  result: WorkerResult,
+  exitCode: number,
+): Promise<void> {
+  const changed = await deps.isolate.changedFiles(cwd);
+  const files = dedup([...result.filesTouched, ...changed]);
+  if (files.length === 0) throw new GateFailedError('red', EMPTY_RED_EVIDENCE, exitCode);
+  const markers = await deps.isolate.scanMarkers(cwd);
+  if (markers.length > 0) throw new GateFailedError('marker', markerEvidence(markers), SCAN_EXIT);
+  await deps.isolate.stage(cwd, files);
+  const hygiene = await scanHygiene(deps, node, cwd, files, result.finalMessage);
+  if (hygiene !== null) {
+    throw new GateFailedError(`hygiene:${hygiene.kind}`, hygiene.evidence, SCAN_EXIT);
+  }
+  const { sha } = await deps.isolate.commit(cwd, redPhaseMessage(node));
+  await deps.journal.append({ event: 'phase-commit', node: node.id, phase: 'red', sha, files });
+}
+
+// The command failing over a tree nothing wrote to is a harness fault — a
+// missing runner, a wrong path, an ENOENT — and reads identically to a real red
+// from the exit code alone. Name that for the worker; the retry restarts at red.
+const EMPTY_RED_EVIDENCE =
+  'The red phase changed no file: the test command failed over a tree nothing was written to. ' +
+  'A failing command with no test written is a harness error (missing runner, wrong path, ' +
+  'command not found), not a red — write the failing test, then let the gate run it.';
+
+// Subject names the node and the phase; the body names the command that went
+// red; the trailer is what `weeder bite` reads to find the state to check out.
+function redPhaseMessage(node: Node): string {
+  const test = 'test' in node.work ? node.work.test : '';
+  return `pleach: ${node.id} red phase\n\ntest: ${test}\n\npleach-phase: red`;
 }
 
 function asError(err: unknown): Error {

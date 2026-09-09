@@ -1,3 +1,5 @@
+import type { HygieneFailure } from './hygiene.ts';
+
 export class PlanInvalidError extends Error {
   readonly name = 'PlanInvalidError';
   readonly reasons: string[];
@@ -42,7 +44,17 @@ export class IsolateCatastrophicError extends Error {
   }
 }
 
-export type GateKind = 'smoke' | 'marker' | 'red' | 'green' | 'command' | 'setup';
+// The hygiene battery names its own kinds; the gate label carries the kind so
+// the operator reads one vocabulary wherever the battery runs — the close's
+// ladder and the red-phase seal (D13).
+export type GateKind =
+  | 'smoke'
+  | 'marker'
+  | 'red'
+  | 'green'
+  | 'command'
+  | 'setup'
+  | `hygiene:${HygieneFailure['kind']}`;
 
 export class GateFailedError extends Error {
   readonly name = 'GateFailedError';
