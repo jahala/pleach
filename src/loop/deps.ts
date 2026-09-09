@@ -54,6 +54,11 @@ export interface IsolateSeam {
   // manifest is unavailable; combined with never re-staging at commit time it
   // keeps auditor droppings out of verified commits (ledger S1/C2).
   changedFiles(cwd: string): Promise<string[]>;
+  // Commit what is staged on the detached HEAD, moving NO branch — the phase
+  // seal (D13). The red state must exist in history before impl is prompted,
+  // but nothing is published before settle, so the close's commit stacks on
+  // this one. No --allow-empty: a seal over nothing is not a red state.
+  commit(cwd: string, message: string): Promise<{ sha: string }>;
   // Commit what is staged and force-point `branch` at the new commit.
   commitBranch(cwd: string, branch: string, message: string): Promise<{ sha: string }>;
   // Resolve a ref to a commit SHA in the repo containing `cwd`; null if the
