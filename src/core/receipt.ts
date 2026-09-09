@@ -27,6 +27,12 @@ export interface GateRecord {
   // sha256 of the failing gate's journaled output tail — the journal keeps
   // the verbatim text; the sealed receipt keeps the pointer.
   outputTailSha?: string;
+  // sha256 of the findings log this gate wrote to stdout, when it wrote one
+  // (ledger D14) — the same hash settle's kept file carries and the umbrella's
+  // receipt predicate cites. Absent for every gate that printed something else,
+  // and canonicalJson drops undefined, so a receipt without an artifact hashes
+  // exactly as it did before the field existed.
+  artifactSha?: string;
 }
 
 // Tri-state-plus-partial audit record: 'pass'/'partial'/'fail' relay the
