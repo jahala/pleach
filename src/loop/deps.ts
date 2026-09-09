@@ -146,9 +146,17 @@ export interface JournalSeam {
 // <git-dir>/pleach/receipts/. read() returns null for missing OR unreadable —
 // the callers' honest degradations (no invalidation without a record; the
 // receipt verb reports UNDERIVABLE).
+// What can be kept beside a receipt (D14): a gate's findings log, or the
+// worktree's friction journal. The store owns the filenames — a caller asks
+// for a kind and is told where the bytes went.
+export type ArtifactKind = 'sarif' | 'friction';
+
 export interface ReceiptStore {
   write(node: string, receipt: Receipt): Promise<void>;
   read(node: string): Promise<Receipt | null>;
+  // Returns the path it wrote — what the journal records and the receipt file
+  // names. Write errors propagate; run-plan owns the never-fail-a-close rule.
+  writeArtifact(node: string, kind: ArtifactKind, bytes: string): Promise<string>;
 }
 
 export interface ConductorDeps {

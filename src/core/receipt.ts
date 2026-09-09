@@ -82,6 +82,14 @@ export interface Receipt {
     // survives the overwrite without receipt-chaining infrastructure.
     previousReceiptSha256?: string;
   };
+  // The gate artifacts settle kept, as paths — never content (D14). Outside
+  // the envelope for the same reason refs are: they are written after the
+  // freeze. The integrity claim is the sealed `gates[].artifactSha`; a path is
+  // only a place to look, and a moved file cannot forge its own hash.
+  artifacts?: {
+    sarif?: string;
+    friction?: string;
+  };
 }
 
 export type Derivation = { ok: true; status: DerivedStatus } | { ok: false; reason: string };

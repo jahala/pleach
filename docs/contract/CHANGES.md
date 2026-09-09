@@ -37,3 +37,12 @@
   command self-checks its audit target's fitness-function integrity (scoreboard-normalized pin)
   and resolves out-of-tree; the conductor's argv-token tamper rule stands down for it. Fix for
   the phase-2 hub collision (writing verifier × tamper heuristic — finding #10).
+
+- **Receipt, not schema (2026-09-10)** — the close receipt's `GateRecord` gained `artifactSha?` (the
+  sha256 of the findings log a gate printed on stdout, D14) and the receipt file gained `artifacts?`
+  beside `refs` (where that log was kept: `<git-dir>/pleach/receipts/<node>.sarif`). Additive, and
+  outside the contract: `@agent-contract/plan` is untouched — no schema-block change, no version
+  bump, drift guards unaffected, nothing for tend or umbel to re-vendor. A receipt that kept no
+  artifact hashes exactly as it did before the field existed (`canonicalJson` drops undefined), so
+  every receipt already on disk still verifies. Recorded here because the receipt is the surface the
+  umbrella's predicate (`predicate.weeder.sarif.sha256`) cites.
