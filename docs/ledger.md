@@ -236,10 +236,14 @@ checkpoint but have different lifetimes and trust domains.**
   same the umbrella predicate's `weeder.sarif.sha256` cites) and written at settle, before dispose,
   beside the receipt as `<git-dir>/pleach/receipts/<node>.sarif`; a worktree friction journal is
   kept as `<node>.friction.jsonl`; each kept file journals `gate-artifact` {node, gate, path,
-  sha256}; `.plotplot/friction/` and `.loop-scratch/` are never staged as delivery; a write failure
+  sha256}; collection sets aside what is not delivery BEFORE staging — `.loop-scratch/`,
+  `.plotplot/friction/`, anything git ignores, anything outside the worktree — journals it
+  (`set-aside`) and closes the node on what remains (#74/#76/#79: `git add` of an ignored scratch
+  path killed finished nodes, tree and all); a write failure
   journals `receipt-write-failed` and never blocks the close. Non-SARIF stdout keeps nothing and
-  leaves the receipt byte-identical. Tests: `test/integration/exec-stdout.test.ts`,
-  `test/unit/sarif.test.ts`, `test/loop/gate-artifact-*.test.ts`, `test/e2e/gate-artifact.test.ts`.
+  leaves the receipt byte-identical. Tests: `test/integration/collect-set-aside.test.ts`,
+  `test/integration/exec-stdout.test.ts`, `test/unit/sarif.test.ts`,
+  `test/loop/gate-artifact-*.test.ts`, `test/e2e/gate-artifact.test.ts`.
 
 ### Verified-sound (attacks refuted — do not relitigate)
 
