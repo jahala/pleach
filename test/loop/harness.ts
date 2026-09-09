@@ -98,6 +98,10 @@ export class InMemoryGit {
   readonly markers = new Map<string, string[]>();
   // worktree cwd → paths this tree's git ignores (the collection gate, D14)
   readonly ignored = new Map<string, string[]>();
+  // worktree cwd → the files under .plotplot/friction/, path → contents. The
+  // directory as it really is: month files beside the ledger's own state, so
+  // the seam's read has something to choose between (D14).
+  readonly friction = new Map<string, Record<string, string>>();
   private shaCounter = 0;
 
   // A distinct 40-hex-char sha per commit — the padding used to swallow the
@@ -115,6 +119,15 @@ export class InMemoryGit {
 // the in-memory one mirrors both so a loop test reads the same paths the
 // conductor journals. The real `<git-dir>` resolution is proven in e2e.
 const RECEIPT_DIR = '/r/.git/pleach/receipts';
+// Where the friction ledger writes inside a worktree (docs/plans/friction-ledger.md §5).
+const FRICTION_DIR = '.plotplot/friction/';
+
+// A month file of the journal: `<yyyy-mm>.jsonl` directly in that directory —
+// not the ledger's `state/`, not its `hotspots.json`.
+function isFrictionMonth(path: string): boolean {
+  if (!path.startsWith(FRICTION_DIR) || !path.endsWith('.jsonl')) return false;
+  return !path.slice(FRICTION_DIR.length).includes('/');
+}
 const ARTIFACT_SUFFIX = { sarif: '.sarif', friction: '.friction.jsonl' } as const;
 
 // ── harness construction ─────────────────────────────────────────────────────
@@ -162,6 +175,10 @@ export interface HarnessOpts {
   markersByNode?: Record<string, string[]>;
   // paths the node's tree ignores — the repo's .gitignore, as a fixture (D14).
   ignoredByNode?: Record<string, string[]>;
+  // The worktree's `.plotplot/` contents, keyed by node id: worktree-relative
+  // path → file contents. What weeder/tend2 wrote inside the tree while the
+  // node ran; the seam reads the friction journal back out of it (D14).
+  plotplotByNode?: Record<string, Record<string, string>>;
   // Awaited inside dispose(node) between 'dispose-start' and 'dispose' — lets a
   // test hold a worktree open to expose scheduling races.
   disposeDelay?: (nodeId: string) => Promise<void>;
@@ -224,7 +241,10 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   };
 
   // ── isolate ─────────────────────────────────────────────────────────────────
-  const isolate: IsolateSeam = {
+  //
+  // `readFriction` is the seam's read of a worktree file the loop never touches
+  // itself (D14). Annotated alongside IsolateSeam until deps.ts declares it.
+  const isolate: IsolateSeam & { readFriction(cwd: string): Promise<string | null> } = {
     async isolate(node: Node, baseRefs): Promise<Isolation> {
       log.push('isolate', node.id, baseRefs.join(','));
       for (const ref of baseRefs) {
@@ -253,6 +273,8 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       if ((opts.ignoredByNode?.[node.id] ?? []).length > 0) {
         git.ignored.set(cwd, [...(opts.ignoredByNode?.[node.id] ?? [])]);
       }
+      const plotplot = opts.plotplotByNode?.[node.id];
+      if (plotplot !== undefined) git.friction.set(cwd, { ...plotplot });
       return {
         cwd,
         conflictFiles,
@@ -279,6 +301,17 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       log.push('ignored', undefined, `${cwd}:${paths.join(',')}`);
       const rules = git.ignored.get(cwd) ?? [];
       return paths.filter((p) => rules.includes(p));
+    },
+    // The friction journal as the profile writes it: `<yyyy-mm>.jsonl` files
+    // directly in `.plotplot/friction/`, concatenated in filename order — the
+    // ledger's own `state/` and `hotspots.json` are not the journal. No
+    // directory, or no month file in it, is an answer (null), not an error.
+    async readFriction(cwd): Promise<string | null> {
+      log.push('readFriction', undefined, cwd);
+      const tree = git.friction.get(cwd) ?? {};
+      const months = Object.keys(tree).filter(isFrictionMonth).sort();
+      if (months.length === 0) return null;
+      return months.map((p) => tree[p] ?? '').join('');
     },
     async stage(cwd, files): Promise<void> {
       log.push('stage', undefined, `${cwd}:${files.join(',')}`);
