@@ -112,6 +112,11 @@ export async function runNode(
   // disposes and re-isolates. A terminal/done verdict hands `iso` to the caller
   // (done) or disposes it here (failed/dead/blocked).
   let iso: Isolation | null = null;
+  // The phase the CURRENT tree has sealed a red commit for (D13), if any. It
+  // belongs to the tree, not to the node: a retry that reuses the tree re-enters
+  // after that phase, and a re-isolated tree (dead+resume) has sealed nothing
+  // and earns a fresh red.
+  let redSealedAt: number | undefined;
   // Evidence threaded into the next attempt's re-prompt (A3). undefined on the
   // first attempt.
   let evidence: string | undefined;
@@ -131,6 +136,7 @@ export async function runNode(
 
       // ── isolate (or reuse the tree for a retryable retry) ───────────────────
       if (iso === null) {
+        redSealedAt = undefined;
         try {
           iso = await deps.isolate.isolate(node, baseRefs);
         } catch (err) {
@@ -192,7 +198,11 @@ export async function runNode(
           timeoutMs,
           evidence: promptEvidence,
           signal: opts.signal,
-          sealRed: (red, exitCode) => sealRedPhase(node, cwd, deps, red, exitCode),
+          redSealedAt,
+          sealRed: async (red, exitCode, phaseIndex) => {
+            await sealRedPhase(node, cwd, deps, red, exitCode);
+            redSealedAt = phaseIndex;
+          },
         });
       } catch (err) {
         await worker?.kill();
