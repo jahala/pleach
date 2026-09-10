@@ -162,3 +162,51 @@ describe('createUmbelSeam.spawnWorker — unattended posture', () => {
     expect(argv).not.toContain('--permission-mode');
   });
 });
+
+// ── the idle timeout (ledger D16) ────────────────────────────────────────────
+// A wedged worker must end at an idle timeout the conductor chooses, not at the
+// attempt clock. `Worker.wait`'s idleMs is that choice; the adapter's whole job
+// is to hand it to umbel as `--idle-timeout <n>ms`. No idleMs, no flag — the
+// adapter invents no default, because the policy is the conductor's.
+describe('createUmbelSeam.wait — --idle-timeout passthrough', () => {
+  // A real ExecFn that records every argv and answers each verb in its own
+  // shape: spawn echoes the name, status succeeds, send hands back a
+  // sinceMtime, wait reports a finished turn.
+  function makeVerbExec(): { exec: ExecFn; calls: string[][] } {
+    const calls: string[][] = [];
+    const exec: ExecFn = async (argv) => {
+      const a = [...argv];
+      calls.push(a);
+      const ok = (output: string) => ({ exitCode: 0, output, stdout: output });
+      if (a.includes('spawn')) return ok(`spawned: ${a[a.indexOf('--name') + 1] ?? ''}\n`);
+      if (a[1] === 'send') return ok('{"sinceMtime":17}\n');
+      if (a[1] === 'wait') return ok('{"reason":"idle"}\n');
+      return ok('');
+    };
+    return { exec, calls };
+  }
+
+  function waitArgv(calls: string[][]): string[] {
+    const argv = calls.find((a) => a[1] === 'wait');
+    if (argv === undefined) throw new Error('no wait invocation recorded');
+    return argv;
+  }
+
+  test('idleMs rides as --idle-timeout in milliseconds', async () => {
+    const { exec, calls } = makeVerbExec();
+    const seam = createUmbelSeam(exec, { bin: 'umbel' });
+    const worker = await seam.spawnWorker({ cwd: '/tmp' });
+    await worker.send('do the thing');
+    await worker.wait({ timeoutMs: 60_000, idleMs: 600_000 });
+    expect(flagValue(waitArgv(calls), '--idle-timeout')).toBe('600000ms');
+  });
+
+  test('no idleMs, no --idle-timeout — the adapter invents no default', async () => {
+    const { exec, calls } = makeVerbExec();
+    const seam = createUmbelSeam(exec, { bin: 'umbel' });
+    const worker = await seam.spawnWorker({ cwd: '/tmp' });
+    await worker.send('do the thing');
+    await worker.wait({ timeoutMs: 60_000 });
+    expect(waitArgv(calls)).not.toContain('--idle-timeout');
+  });
+});
