@@ -7,9 +7,10 @@
 // contracts/friction-profile.md at jahala/plotplot (v1.1.0 plus the kinds PR):
 // the universal keys below on every line, whatever else the stream carries.
 //
-// This is the universal half — the keys that do not depend on what the line
-// reports. The node and gate mirrors, and the verdict line's runner and model,
-// are added beside these.
+// The universal keys are joined by the mirrors the profile requires per kind —
+// the scope the line reports on, under the profile's name, so one loader can
+// group three streams by node or by gate without knowing any stream's own
+// field names. The verdict line's runner and model are added beside these.
 //
 // Pure and total: the clock is a parameter, the input is never mutated, and an
 // event this table has not pinned throws rather than guessing a kind.
@@ -72,6 +73,19 @@ export const KINDS: Record<string, Kind> = {
   'land-setup-failed': 'gate.result',
 };
 
+// The attributes the profile requires beyond the envelope, by kind. Each is a
+// field the event already carries, mirrored under the profile's name: the kind
+// decides which scopes a line has, never the fields that happen to be on it.
+// A required mirror is written even when the line has no such scope — a
+// land-level gate belongs to no node, and `null` says so, where an absent key
+// would say the question was never asked.
+const MIRRORS: Record<Kind, readonly ('node' | 'gate')[]> = {
+  'run.lifecycle': [],
+  'node.lifecycle': ['node'],
+  'gate.result': ['node', 'gate'],
+  'gate.retry': ['node', 'gate'],
+};
+
 function kindOf(name: unknown): Kind | undefined {
   // `Object.hasOwn` and not a bare lookup: the table is a plain object, so
   // `KINDS['toString']` would otherwise answer with something inherited.
@@ -81,7 +95,7 @@ function kindOf(name: unknown): Kind | undefined {
 
 /**
  * The line to write for `event`, observed at `now`: the event's own keys first
- * and verbatim, then the envelope's.
+ * and verbatim, then the envelope's, then the mirrors its kind requires.
  *
  * @throws JournalEventUnknownError when the event name has no pinned kind.
  */
@@ -90,7 +104,7 @@ export function envelope(event: Record<string, unknown>, now: Date): Record<stri
   const kind = kindOf(name);
   if (kind === undefined) throw new JournalEventUnknownError(String(name));
 
-  return {
+  const line: Record<string, unknown> = {
     // A stream with its own `event` field keeps it; the envelope's name sits
     // beside it, source-namespaced, so one loader can tell three streams apart.
     ...event,
@@ -105,4 +119,9 @@ export function envelope(event: Record<string, unknown>, now: Date): Record<stri
     'plotplot.harness': null,
     'gen_ai.conversation.id': null,
   };
+
+  for (const scope of MIRRORS[kind]) {
+    line[`plotplot.${scope}`] = event[scope] ?? null;
+  }
+  return line;
 }
