@@ -4,11 +4,13 @@ import {
   EXPECTED_EGRESS,
   extractAuditJson,
 } from '../core/audit-egress.ts';
-import { classify } from '../core/classify.ts';
+import { classify, type GateFault, gateFault } from '../core/classify.ts';
 import { partitionDelivery } from '../core/delivery.ts';
 import {
   AuditParseError,
+  GateCannotRunError,
   GateFailedError,
+  type GateKind,
   IsolateCatastrophicError,
   PlanInvalidError,
 } from '../core/errors.ts';
@@ -103,8 +105,9 @@ export interface RunNodeResult {
   // Why the node settled where it did, when the reason is a scheduling
   // decision rather than a gate (D17): an attempt left unspent because the
   // provider that would have run it is the one already known dead, or a
-  // fallback refused for breaking audit diversity. Rides the verdict's journal
-  // line as `detail`; the Verdict contract is untouched.
+  // fallback refused for breaking audit diversity — or a gate that could not
+  // run at all, named as the plan's or the environment's fault (D19). Rides
+  // the verdict's journal line as `detail`; the Verdict contract is untouched.
   verdictDetail?: string;
 }
 
@@ -248,6 +251,10 @@ export async function runNode(
           timeoutMs,
         });
         gates.push({ gate: 'setup', exitCode });
+        const fault = gateFault(exitCode);
+        if (fault !== null) {
+          return handBack(settleCannotRun(node, attempts, node.setup, exitCode, fault, output));
+        }
         if (exitCode !== 0) {
           const settle = settleRetryable(
             node,
@@ -283,6 +290,18 @@ export async function runNode(
         });
       } catch (err) {
         await worker?.kill();
+        if (err instanceof GateCannotRunError) {
+          return handBack(
+            settleCannotRun(
+              node,
+              attempts,
+              gateRanLabel(node, err.gate),
+              err.exitCode,
+              err.fault,
+              err.output,
+            ),
+          );
+        }
         if (err instanceof GateFailedError) {
           const decision = handleGate(node, attempts, maxAttempts, err);
           if (decision.settle) return handBack(decision.settle);
@@ -460,6 +479,12 @@ export async function runNode(
           exitCode,
           ...(isFindingsLog ? { artifactSha: sha256Hex(stdout) } : {}),
         });
+        const fault = gateFault(exitCode);
+        if (fault !== null) {
+          return handBack(
+            settleCannotRun(node, attempts, node.accept.smoke, exitCode, fault, output),
+          );
+        }
         if (exitCode !== 0) {
           const settle = settleRetryable(
             node,
@@ -713,7 +738,9 @@ async function runAudit(
 // flaky-retry doctrine at node level (D10, decker wave 2): a worker prompted
 // to fix a failure that wasn't its fault "fixes" something that isn't broken,
 // and good work ages in quarantine. Deterministic scans (marker, hygiene)
-// never flake and get no retry; the audit has its own reaudit budget.
+// never flake and get no retry; the audit has its own reaudit budget. Nor
+// does a gate that never ran (D19): the guard answers from the command string
+// and a missing binary stays missing, so running it again learns nothing.
 export async function execGateWithRetry(
   deps: ConductorDeps,
   nodeId: string,
@@ -722,7 +749,7 @@ export async function execGateWithRetry(
   opts: { cwd: string; timeoutMs: number },
 ): Promise<ExecResult> {
   const first = await guardedExec(deps.exec, command, opts);
-  if (first.exitCode === 0) return first;
+  if (first.exitCode === 0 || gateFault(first.exitCode) !== null) return first;
   await deps.journal.append({ event: 'gate-retry', node: nodeId, gate });
   const retry = await guardedExec(deps.exec, command, opts);
   if (retry.exitCode === 0) {
@@ -865,7 +892,7 @@ function handleGate(
     node,
     attempts,
     maxAttempts,
-    { gate: { ran: gateRanLabel(node, err), exitCode: err.exitCode } },
+    { gate: { ran: gateRanLabel(node, err.gate), exitCode: err.exitCode } },
     err.evidence,
   );
   if (settle) return { settle };
@@ -874,21 +901,47 @@ function handleGate(
 
 // The label recorded in evidence.gate.ran. For command/red/green/setup the
 // concrete command string is most useful; fall back to the gate kind.
-function gateRanLabel(node: Node, err: GateFailedError): string {
-  switch (err.gate) {
+function gateRanLabel(node: Node, gate: GateKind): string {
+  switch (gate) {
     case 'command':
       return 'command' in node.work ? node.work.command : 'command';
     case 'red':
     case 'green':
-      return 'test' in node.work ? node.work.test : err.gate;
+      return 'test' in node.work ? node.work.test : gate;
     case 'smoke':
       return node.accept.smoke ?? 'smoke';
     case 'setup':
       return node.setup ?? 'setup';
     default:
-      return err.gate;
+      return gate;
   }
 }
+
+// A gate that never ran (D19) settles on the attempt that found it: no retry
+// changes the command the guard refused or the binary the environment lacks,
+// and re-prompting a worker spends its window on a fault it cannot touch. The
+// tree goes back for quarantine like any failed node's; `detail` says whose
+// fault it is, with what the guard or the exec seam said about it.
+function settleCannotRun(
+  node: Node,
+  attempts: number,
+  ran: string,
+  exitCode: number,
+  fault: GateFault,
+  output: string,
+): RunNodeResult {
+  const tail = outputTail(output);
+  return {
+    verdict: failedVerdict(node, attempts, { gate: { ran, exitCode } }),
+    verdictDetail: `${CANNOT_RUN[fault]}: ${tail}`,
+    gateOutputTail: tail,
+  };
+}
+
+const CANNOT_RUN: Record<GateFault, string> = {
+  plan: "the plan's gate cannot run; fix the plan, no attempt can",
+  environment: 'the environment cannot run the gate; fix the environment, no attempt can',
+};
 
 // Settle a retryable failure into a failed Verdict iff attempts are exhausted;
 // otherwise return undefined (caller continues the loop).
@@ -897,7 +950,7 @@ function settleRetryable(
   attempts: number,
   maxAttempts: number,
   extra: { gate?: { ran: string; exitCode: number } },
-  outputTail?: string,
+  output?: string,
 ): RunNodeResult | undefined {
   if (attempts < maxAttempts) return undefined;
   return {
@@ -905,9 +958,7 @@ function settleRetryable(
     // A red with NO output records an explicit marker (D10) — the absence of
     // evidence is itself diagnostic (died before printing, killed, ENOENT),
     // never a silent hole the operator debugs blind.
-    ...(outputTail !== undefined
-      ? { gateOutputTail: outputTail.length > 0 ? outputTail.slice(-2000) : NO_OUTPUT_MARKER }
-      : {}),
+    ...(output !== undefined ? { gateOutputTail: outputTail(output) } : {}),
   };
 }
 
@@ -915,14 +966,13 @@ const EVIDENCE_TAIL = 2000;
 const NO_OUTPUT_MARKER =
   '(gate produced no output — the command died before printing, was killed, or never spawned)';
 
+// A gate's output, capped from the end; no output is named, never left blank.
+function outputTail(output: string): string {
+  return output.length === 0 ? NO_OUTPUT_MARKER : output.slice(-EVIDENCE_TAIL);
+}
+
 function gateEvidence(gate: string, exitCode: number, output: string): string {
-  const tail =
-    output.length === 0
-      ? NO_OUTPUT_MARKER
-      : output.length > EVIDENCE_TAIL
-        ? output.slice(-EVIDENCE_TAIL)
-        : output;
-  return `Gate '${gate}' failed (exit ${exitCode}). Output tail:\n${tail}`;
+  return `Gate '${gate}' failed (exit ${exitCode}). Output tail:\n${outputTail(output)}`;
 }
 
 function auditFailEvidence(failing: AuditResult['verdicts']): string {
