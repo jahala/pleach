@@ -1,4 +1,4 @@
-import { shellOperatorTokens, toArgv } from '../core/argv.ts';
+import { shellOperatorRefusal, toArgv } from '../core/argv.ts';
 import { GateFailedError, PlanInvalidError } from '../core/errors.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, ExecResult, Worker, WorkerResult } from './deps.ts';
@@ -25,13 +25,8 @@ export async function guardedExec(
 // unrunnable before it provisions anything (a land gate, D18) refuses there
 // instead of paying for a worktree first.
 export function shellGuardRefusal(command: string): string | null {
-  const ops = shellOperatorTokens(toArgv(command));
-  if (ops.length === 0) return null;
-  return (
-    `command contains bare shell operator(s): ${ops.join(' ')} — pleach execs ` +
-    `without a shell (arg-array; contract exec semantics). For shell features, ` +
-    `wrap the command: bash -lc '<command>'`
-  );
+  const refusal = shellOperatorRefusal(command);
+  return refusal === null ? null : `command ${refusal}`;
 }
 
 // runWork drives one attempt of a node's Work through its worker + exec gates.
