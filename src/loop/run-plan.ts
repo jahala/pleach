@@ -195,11 +195,16 @@ async function runUnderLock(
       });
     } catch (err) {
       // A node promise must never reject — map a surprise to a failed verdict.
+      // The casting join (G1) does not depend on how the verdict was reached:
+      // who was cast is known from the plan before anything ran, so a surprise
+      // says it too — `provider` is resolved and never absent on a verdict.
       await deps.journal.append({
         event: 'verdict',
         node: node.id,
         status: 'failed',
         detail: err instanceof Error ? err.message : String(err),
+        provider: node.worker.provider ?? DEFAULT_WORKER_PROVIDER,
+        ...(node.worker.model !== undefined ? { model: node.worker.model } : {}),
       });
       failed.add(node.id);
       return;
