@@ -43,6 +43,10 @@ export interface RunPlanOpts {
   // run. The face owns the default; a runner that cannot detect idleness
   // ignores it. Absent leaves the attempt clock as the only bound.
   idleMs?: number;
+  // The run's second cast (D17): the provider a `dead` attempt is re-cast on,
+  // audit diversity re-checked against it. Absent, a dead attempt settles the
+  // node rather than spending another attempt on the same outage.
+  fallbackProvider?: string;
 }
 
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes (binding prose).
@@ -71,6 +75,7 @@ export async function runPlan(
       pleachVersion: opts.pleachVersion ?? '0.0.0-dev',
       ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       ...(opts.idleMs !== undefined ? { idleMs: opts.idleMs } : {}),
+      ...(opts.fallbackProvider !== undefined ? { fallbackProvider: opts.fallbackProvider } : {}),
     });
   } finally {
     await lock.release();
@@ -84,6 +89,7 @@ interface ResolvedOpts {
   pleachVersion: string;
   signal?: AbortSignal;
   idleMs?: number;
+  fallbackProvider?: string;
 }
 
 async function runUnderLock(
@@ -203,6 +209,7 @@ async function runUnderLock(
         defaultTimeoutMs: opts.defaultTimeoutMs,
         signal: opts.signal,
         idleMs: opts.idleMs,
+        fallbackProvider: opts.fallbackProvider,
       });
     } catch (err) {
       // A node promise must never reject — map a surprise to a failed verdict.
@@ -441,6 +448,10 @@ async function runUnderLock(
           }
         : {}),
       ...(verdict.evidence.blockedReason ? { blockedReason: verdict.evidence.blockedReason } : {}),
+      // Why the node settled where it did when no gate says it (D17) — an
+      // attempt left unspent on a dead provider, a fallback refused. The
+      // operator reads the journal, not the source.
+      ...(outcome.verdictDetail !== undefined ? { detail: outcome.verdictDetail } : {}),
       // What the runner saw at an abnormal end (D11) — capped, never fabricated.
       ...(outcome.runnerDetail?.paneTail !== undefined
         ? { paneTail: outcome.runnerDetail.paneTail.slice(-2000) }

@@ -34,6 +34,10 @@ export interface RunNodeOpts {
   // makes, the build worker's and the auditor's alike: a wedged worker of
   // either kind ends here rather than at the attempt clock.
   idleMs?: number;
+  // The run's second cast (D17): who takes over when an attempt comes back
+  // `dead`. Conductor-level, never a plan field — which provider stands in for
+  // a dead one is the operator's call for this run, not a fact about the node.
+  fallbackProvider?: string;
 }
 
 export interface RunNodeResult {
@@ -68,6 +72,12 @@ export interface RunNodeResult {
   // the session it came from is killed moments later. Journal/settle material
   // only, like smokeStdout; absent when the attempt never got a result.
   handback?: string;
+  // Why the node settled where it did, when the reason is a scheduling
+  // decision rather than a gate (D17): an attempt left unspent because the
+  // provider that would have run it is the one already known dead, or a
+  // fallback refused for breaking audit diversity. Rides the verdict's journal
+  // line as `detail`; the Verdict contract is untouched.
+  verdictDetail?: string;
 }
 
 const REAUDIT_BUDGET = 2;
@@ -117,12 +127,16 @@ export async function runNode(
   }
 
   // Resolved-provider diversity preflight (binding prose) — before any spawn.
-  const buildProvider = node.worker.provider ?? DEFAULT_WORKER_PROVIDER;
-  if (node.accept.audit && node.accept.audit.provider === buildProvider) {
-    throw new PlanInvalidError([
-      `node '${node.id}': resolved audit provider '${node.accept.audit.provider}' must differ from build provider '${buildProvider}'`,
-    ]);
-  }
+  const preflight = auditDiversityRefusal(node, node.worker.provider ?? DEFAULT_WORKER_PROVIDER);
+  if (preflight !== undefined) throw new PlanInvalidError([preflight]);
+
+  // Who is cast for the next attempt. The plan's cast until a `dead` attempt
+  // hands the node to the run's fallback (D17) — and a model pin names a model
+  // of the provider that died, so it goes with it.
+  let cast: { provider?: string; model?: string } = {
+    provider: node.worker.provider,
+    model: node.worker.model,
+  };
 
   const timeoutMs = node.policy.timeoutMs ?? opts.defaultTimeoutMs;
   const maxAttempts = node.policy.maxAttempts;
@@ -213,13 +227,7 @@ export async function runNode(
       // {prompt}/{phases} node spawns a build worker — so a command-only plan
       // needs no runner at all.
       const worker =
-        'command' in node.work
-          ? null
-          : await deps.runner.spawnWorker({
-              provider: node.worker.provider,
-              model: node.worker.model,
-              cwd,
-            });
+        'command' in node.work ? null : await deps.runner.spawnWorker({ ...cast, cwd });
       let result: WorkerResult;
       try {
         result = await runWork(node, worker, deps.exec, cwd, {
@@ -274,11 +282,39 @@ export async function runNode(
           });
         }
         if (klass === 'dead') {
+          // A dead attempt says the provider is gone, not that the work is
+          // wrong (D17) — so the next attempt only happens on a DIFFERENT
+          // provider. The run's fallback is that second cast; with no usable
+          // one, the attempt that would have re-run the same outage is not
+          // spent at all, and the verdict's journal line says so.
+          let unspent: string | undefined;
           if (node.policy.onDead === 'resume' && attempts < maxAttempts) {
-            await disposeQuiet(iso);
-            iso = null; // force re-isolate (fresh tree)
-            evidence = undefined;
-            continue;
+            const resolved = cast.provider ?? DEFAULT_WORKER_PROVIDER;
+            const fallback = opts.fallbackProvider;
+            if (fallback === undefined) {
+              unspent = NO_FALLBACK;
+            } else if (fallback === resolved) {
+              unspent = `fallback provider '${fallback}' is the same dead provider`;
+            } else {
+              // The diversity rule is the gate's whole worth: a fallback that
+              // is the auditor would leave one provider grading its own work,
+              // green and meaningless. Refuse the cast, keep the tree.
+              const refusal = auditDiversityRefusal(node, fallback);
+              if (refusal !== undefined) {
+                return handBack({
+                  verdict: failedVerdict(node, attempts, {
+                    gate: { ran: `fallback provider '${fallback}': ${refusal}`, exitCode: -1 },
+                  }),
+                  verdictDetail: refusal,
+                  ...detail,
+                });
+              }
+              cast = { provider: fallback };
+              await disposeQuiet(iso);
+              iso = null; // force re-isolate (fresh tree)
+              evidence = undefined;
+              continue;
+            }
           }
           const base = baseVerdict(node, attempts);
           return handBack({
@@ -289,6 +325,7 @@ export async function runNode(
               // reproduction to diagnose.
               evidence: { ...base.evidence, gate: { ran: 'wait:dead', exitCode: -1 } },
             },
+            ...(unspent !== undefined ? { verdictDetail: unspent } : {}),
             ...detail,
           });
         }
@@ -829,6 +866,19 @@ function auditFailEvidence(failing: AuditResult['verdicts']): string {
 function mergeEvidence(a: string | undefined, b: string | undefined): string | undefined {
   if (a && b) return `${a}\n\n${b}`;
   return a ?? b;
+}
+
+// Why an attempt was left unspent when the run named no second cast (D17).
+const NO_FALLBACK =
+  'no fallback provider; the second attempt would have spent the same dead provider';
+
+// The audit diversity rule (binding prose), against the provider that will
+// actually build: an auditor may never be the builder. Checked before the first
+// spawn and again before a fallback re-cast — the rule is about who ran, not
+// about what the plan said. Returns the refusal, or undefined when it holds.
+function auditDiversityRefusal(node: Node, provider: string): string | undefined {
+  if (!node.accept.audit || node.accept.audit.provider !== provider) return undefined;
+  return `node '${node.id}': resolved audit provider '${node.accept.audit.provider}' must differ from build provider '${provider}'`;
 }
 
 function baseVerdict(node: Node, attempts: number): Verdict {
