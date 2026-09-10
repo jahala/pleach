@@ -194,9 +194,14 @@ export interface RunSummary {
   // 'blocked'). The session is terminated and the prompt text recorded as
   // blockedReason — fix the permission mode / allowlist and re-run.
   blocked: string[];
-  // Failed or blocked nodes whose worktree still held changes: the evidence is
-  // committed to quarantine/<id> before dispose (never node/<id> — nothing
-  // verified). Blocked work is unfinished, not wrong — but worth keeping (D11).
+  // Nodes the run's own signal interrupted mid-wait (Verdict status 'aborted',
+  // D16). They did not fail — the run stopped holding them: the receipt is
+  // written and the tree quarantined as it stands, so a re-run rebuilds from
+  // evidence rather than from nothing. Not clean, but not a defeat either.
+  aborted: string[];
+  // Failed, blocked or aborted nodes whose worktree still held changes: the
+  // evidence is committed to quarantine/<id> before dispose (never node/<id> —
+  // nothing verified). Unfinished work is not wrong — it is worth keeping (D11).
   quarantined: string[];
   // Nodes already verified in the ledger before this run — skipped, not re-run.
   // Re-running a plan resumes: only unbuilt or previously-failed nodes execute.

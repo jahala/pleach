@@ -19,7 +19,7 @@ import { type RunNodeResult, runNode } from './run-node.ts';
 // commit-before-emit + dual-close decision. Composes injected seams only.
 //
 // Concurrency model (the v0.3 shape): ready() = pending nodes whose needs are
-// all closed and that aren't failed/partial/blocked/inflight; launch up to a semaphore
+// all closed and that aren't failed/partial/blocked/aborted/inflight; launch up to a semaphore
 // cap; Promise.race the inflight set; node promises NEVER reject (.catch maps a
 // surprise to a failed verdict). The closed-then-dispose ordering happens
 // inside each node's inflight promise so a dependent can never isolate against
@@ -156,6 +156,8 @@ async function runUnderLock(
 
   const failed = new Set<string>();
   const blocked = new Set<string>();
+  // Nodes the run's own signal cut off mid-wait (D16) — settled, not failed.
+  const aborted = new Set<string>();
   // Audit nodes that reached a 'done' verdict (work committed, gates green) but
   // tend declined to verify-close — published, unverified, terminal (never re-run).
   const partial = new Set<string>();
@@ -163,8 +165,8 @@ async function runUnderLock(
   const quarantined = new Set<string>();
   const inflight = new Map<string, Promise<void>>();
 
-  // A node is schedulable when pending, not yet failed/blocked/partial/inflight,
-  // and all its needs are closed.
+  // A node is schedulable when pending, not yet failed/blocked/aborted/partial/
+  // inflight, and all its needs are closed.
   function ready(): Node[] {
     const out: Node[] = [];
     for (const node of plan.nodes) {
@@ -172,6 +174,7 @@ async function runUnderLock(
         closed.has(node.id) ||
         failed.has(node.id) ||
         blocked.has(node.id) ||
+        aborted.has(node.id) ||
         partial.has(node.id)
       )
         continue;
@@ -181,7 +184,8 @@ async function runUnderLock(
     return out;
   }
 
-  // Run one node to its terminal effect on closed/failed/partial/blocked. Never rejects.
+  // Run one node to its terminal effect on closed/failed/partial/blocked/aborted.
+  // Never rejects.
   async function runOne(node: Node): Promise<void> {
     const baseRefs = baseRefsFor(node, baseRefForClosed);
     await deps.journal.append({ event: 'node-start', node: node.id });
@@ -438,6 +442,11 @@ async function runUnderLock(
           node: node.id,
           reason: verdict.evidence.blockedReason,
         });
+      } else if (verdict.status === 'aborted') {
+        // The run stopped holding this node; it did not lose (D16). Everything
+        // below is the settle every terminal verdict gets — receipt, quarantine,
+        // dispose — so the work survives the halt.
+        aborted.add(node.id);
       } else {
         failed.add(node.id);
       }
@@ -582,7 +591,12 @@ async function runUnderLock(
 
   const skipped = plan.nodes
     .filter(
-      (n) => !closed.has(n.id) && !failed.has(n.id) && !blocked.has(n.id) && !partial.has(n.id),
+      (n) =>
+        !closed.has(n.id) &&
+        !failed.has(n.id) &&
+        !blocked.has(n.id) &&
+        !aborted.has(n.id) &&
+        !partial.has(n.id),
     )
     .map((n) => n.id);
 
@@ -595,6 +609,7 @@ async function runUnderLock(
     partial: [...partial],
     skipped,
     blocked: [...blocked],
+    aborted: [...aborted],
     quarantined: [...quarantined],
     alreadyVerified,
   };

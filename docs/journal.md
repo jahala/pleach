@@ -39,7 +39,7 @@ tolerate unknown events and unknown fields.
 | `rebuild-required` | `node` | a verified branch moved since close — refusing to trust it |
 | `sha-mismatch` | `node`, `recordedSha`, `foundSha` | ledger SHA disagrees with the branch |
 | `dispose-failed` | `node`, `detail` | worktree cleanup failure (diagnostic) |
-| `run-end` | the `RunSummary` fields (`closed`, `failed`, `partial`, `skipped`, `blocked`, `quarantined`, `alreadyVerified`, …) | the run settled |
+| `run-end` | the `RunSummary` fields (`closed`, `failed`, `partial`, `skipped`, `blocked`, `aborted`, `quarantined`, `alreadyVerified`, …) | the run settled — `aborted` names the nodes the run's own signal cut off mid-wait (D16): settled with `status: "aborted"`, receipt written, tree quarantined, never counted as failures |
 | `run-aborted` | — | SIGINT/SIGTERM teardown (D12): no new launches; in-flight waits interrupted, their nodes settle with evidence; `run-end` still follows |
 | `land-start` | `goal` | landing began |
 | `land-setup` | `commands[]` | stack provisioning: the sinks' deduped setup commands run in the gate worktree before their smokes (D9 — a fresh stack has no environment) |

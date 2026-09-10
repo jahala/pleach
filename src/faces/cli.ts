@@ -264,6 +264,7 @@ export function summaryExitCode(summary: RunSummary): number {
     summary.failed.length === 0 &&
     summary.partial.length === 0 &&
     summary.blocked.length === 0 &&
+    summary.aborted.length === 0 &&
     summary.skipped.length === 0;
   return clean ? 0 : 1;
 }

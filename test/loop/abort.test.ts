@@ -32,7 +32,10 @@ describe('an aborted run tears down instead of orphaning (D12)', () => {
       signal: controller.signal,
     });
 
-    expect(summary.failed).toEqual(['a']); // the in-flight node settles failed
+    // The in-flight node settles — as 'aborted', not 'failed' (D16): the run
+    // stopped holding it, which is not the same as the node losing.
+    expect(summary.aborted).toEqual(['a']);
+    expect(summary.failed).toEqual([]);
     expect(summary.skipped).toEqual(['b']); // never launched
     expect(h.log.count('spawn:build')).toBe(1);
     expect(h.log.count('kill', 'a')).toBe(1); // the worker did not outlive the run
