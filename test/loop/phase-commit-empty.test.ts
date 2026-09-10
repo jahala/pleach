@@ -108,8 +108,11 @@ describe('phase commit (D13) — an empty red phase never seals', () => {
     const h = makeHarness({
       changedByNode: { n2: [] },
       waitScript: () => stop({ filesTouched: [] }),
+      // A red that ran and printed nothing. Not 127: a test runner that cannot
+      // be spawned is the environment's fault and settles before any seal is
+      // considered (D19, test/loop/gate-cannot-exec.test.ts).
       execScript: (argv) =>
-        argv[0] === 'runtests' ? { output: '', exitCode: 127 } : { output: '', exitCode: 0 },
+        argv[0] === 'runtests' ? { output: '', exitCode: 1 } : { output: '', exitCode: 0 },
     });
     const summary = await runPlan(plan([phasedNode('n2', 1)]), h.deps, OPTS);
 

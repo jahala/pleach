@@ -1,5 +1,6 @@
-import { PlanInvalidError } from './errors.ts';
-import type { Plan } from './plan.ts';
+import { shellOperatorRefusal } from './argv.ts';
+import { ArgvParseError, PlanInvalidError } from './errors.ts';
+import type { Node, Plan } from './plan.ts';
 
 export const DEFAULT_WORKER_PROVIDER = 'claude';
 
@@ -43,6 +44,17 @@ export function validatePlan(plan: Plan): { order: string[]; waves: string[][] }
           `node '${node.id}': audit provider '${node.accept.audit.provider}' must differ from worker provider (model diversity rule)`,
         );
       }
+    }
+  }
+
+  // Every plan-authored command string is exec'd without a shell; one the exec
+  // guard would refuse is the plan's fault, knowable before a worker spends
+  // anything (ledger D19). accept.audit.command is relayed to the auditor's
+  // shell by contract, so it is not checked.
+  for (const node of plan.nodes) {
+    for (const [field, command] of execCommands(node)) {
+      const fault = commandFault(command);
+      if (fault !== null) reasons.push(`node '${node.id}': ${field} ${fault}`);
     }
   }
 
@@ -96,6 +108,26 @@ export function validatePlan(plan: Plan): { order: string[]; waves: string[][] }
   }
 
   return { order, waves };
+}
+
+// The command strings pleach itself execs for a node, labelled by field.
+function execCommands(node: Node): [string, string][] {
+  const commands: [string, string][] = [];
+  if ('command' in node.work) commands.push(['work.command', node.work.command]);
+  if ('test' in node.work) commands.push(['work.test', node.work.test]);
+  if (node.setup !== undefined) commands.push(['setup', node.setup]);
+  if (node.accept.smoke !== undefined) commands.push(['accept.smoke', node.accept.smoke]);
+  return commands;
+}
+
+// Why exec would refuse `command`, or null when it would run it.
+function commandFault(command: string): string | null {
+  try {
+    return shellOperatorRefusal(command);
+  } catch (err) {
+    if (err instanceof ArgvParseError) return `cannot be tokenised: ${err.message}`;
+    throw err;
+  }
 }
 
 // Level-order Kahn: each wave is the set of nodes whose dependencies are all

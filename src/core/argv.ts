@@ -73,3 +73,17 @@ const SHELL_OPERATORS = new Set(['&&', '||', '|', ';', '>', '>>', '<', '&', '2>'
 export function shellOperatorTokens(tokens: readonly string[]): string[] {
   return tokens.filter((t) => SHELL_OPERATORS.has(t));
 }
+
+// Why `command` cannot be exec'd without a shell, or null when it can — the one
+// wording the exec guard and `validatePlan` share (ledger D19), so a plan
+// refused at validate reads exactly as it would have at exec. Tokenises with
+// toArgv, so malformed quoting throws ArgvParseError as it would at exec.
+export function shellOperatorRefusal(command: string): string | null {
+  const ops = shellOperatorTokens(toArgv(command));
+  if (ops.length === 0) return null;
+  return (
+    `contains bare shell operator(s): ${ops.join(' ')} — pleach execs ` +
+    `without a shell (arg-array; contract exec semantics). For shell features, ` +
+    `wrap the command: bash -lc '<command>'`
+  );
+}

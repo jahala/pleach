@@ -100,6 +100,10 @@ export class InMemoryGit {
   readonly commitStats = new Map<string, string>();
   // worktree cwd → set of "changed" files the worker left behind
   readonly changed = new Map<string, string[]>();
+  // worktree cwd → the paths its index holds against HEAD: what stage() was
+  // handed that the tree actually changed (a named path with no change stages
+  // nothing), emptied by a commit (D19).
+  readonly index = new Map<string, string[]>();
   // worktree cwd → marker files present (conflict markers gate)
   readonly markers = new Map<string, string[]>();
   // worktree cwd → paths this tree's git ignores (the collection gate, D14)
@@ -348,6 +352,13 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     },
     async stage(cwd, files): Promise<void> {
       log.push('stage', undefined, `${cwd}:${files.join(',')}`);
+      const changed = git.changed.get(cwd) ?? [];
+      const held = git.index.get(cwd) ?? [];
+      const added = files.filter((f) => changed.includes(f) && !held.includes(f));
+      git.index.set(cwd, [...held, ...added]);
+    },
+    async stagedPaths(cwd): Promise<string[]> {
+      return [...(git.index.get(cwd) ?? [])];
     },
     async changedFiles(cwd): Promise<string[]> {
       log.push('changedFiles', undefined, cwd);
@@ -366,6 +377,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       git.commitMessages.set(sha, message);
       const stat = git.statOf(cwd);
       if (stat !== null) git.commitStats.set(sha, stat);
+      git.index.delete(cwd);
       log.push('commit', undefined, `${cwd}:${sha}`);
       return { sha };
     },
@@ -380,6 +392,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       git.refs.set(branch, sha);
       git.commitMessages.set(branch, message);
       git.commitMessages.set(sha, message);
+      git.index.delete(cwd);
       log.push('commitBranch', branch, sha);
       return { sha };
     },

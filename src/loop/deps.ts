@@ -70,6 +70,10 @@ export interface IsolateSeam {
   // material (§E). Read-only; called after scoped staging.
   stagedDiff(cwd: string): Promise<string>;
   stagedNumstat(cwd: string): Promise<{ file: string; added: number; deleted: number }[]>;
+  // The paths the index holds against HEAD after staging (D19) — what the
+  // close will commit, which is not always what staging was handed: a path a
+  // worker names but never changed stages nothing. The receipt counts this.
+  stagedPaths(cwd: string): Promise<string[]>;
   // Paths (relative) with uncommitted changes — tracked modifications plus
   // untracked-unignored files. The loop's staging fallback when the worker
   // manifest is unavailable; combined with never re-staging at commit time it

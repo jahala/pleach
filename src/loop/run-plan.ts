@@ -270,6 +270,11 @@ async function runUnderLock(
     await deps.journal.append({ event: 'node-start', node: node.id });
     const startedAt = Date.now();
 
+    // Whether the cast ever ran this node's work, on any attempt (D19). It
+    // rides every verdict line beside `provider`, which names the cast either
+    // way — a {command} node's cast never runs, and neither does a node that
+    // settles before its first spawn.
+    let spawned = false;
     let outcome: RunNodeResult;
     try {
       outcome = await runNode(node, baseRefs, deps, {
@@ -278,6 +283,9 @@ async function runUnderLock(
         idleMs: opts.idleMs,
         fallbackProvider: opts.fallbackProvider,
         resumedFrom: resumed,
+        onSpawn: () => {
+          spawned = true;
+        },
       });
     } catch (err) {
       // A node promise must never reject — map a surprise to a failed verdict.
@@ -291,12 +299,13 @@ async function runUnderLock(
         detail: err instanceof Error ? err.message : String(err),
         provider: node.worker.provider ?? DEFAULT_WORKER_PROVIDER,
         ...(node.worker.model !== undefined ? { model: node.worker.model } : {}),
+        spawned,
       });
       failed.add(node.id);
       return;
     }
 
-    await settle(node, outcome, startedAt, resumed);
+    await settle(node, outcome, startedAt, resumed, spawned);
   }
 
   // A gate's findings log and the tree's own friction journal (D14), and the
@@ -399,6 +408,7 @@ async function runUnderLock(
     outcome: RunNodeResult,
     startedAt: number,
     resumed: ResumedFrom | undefined,
+    spawned: boolean,
   ): Promise<void> {
     const { verdict, iso } = outcome;
     const durationMs = Date.now() - startedAt;
@@ -418,6 +428,7 @@ async function runUnderLock(
       // attributed' was tend2's ledger's first finding; this closes it.
       provider: node.worker.provider ?? DEFAULT_WORKER_PROVIDER,
       ...(node.worker.model !== undefined ? { model: node.worker.model } : {}),
+      spawned,
       ...(verdict.evidence.gate
         ? {
             gate: {

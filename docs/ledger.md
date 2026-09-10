@@ -321,6 +321,24 @@ checkpoint but have different lifetimes and trust domains.**
   command. Tests: `test/integration/land-lock.test.ts`, `test/loop/land-sinks.test.ts`,
   `test/loop/land-gate-command.test.ts`, `test/unit/journal-doc.test.ts`,
   `test/e2e/land-honestly.test.ts`.
+- **D19 ⚠ [field] Faults the conductor could name for free were found after a worker had spent the
+  window.** jahala/pleach#64, #69, #75, #68, #73, #81 (the first conducted week). A smoke joined by
+  `&&` passed `pleach validate` and was refused at exec fifteen minutes of a finished build later, then
+  retried as if the worker had done something wrong; a gate that could not exec at all counted as a
+  red the work should fix; a test quoting AWS's documentation key was refused at close; `pleach
+  schema` told a planner that defaulted fields were required while the validator accepted their
+  absence; `stagedFiles` counted what the editor touched; a command node's verdict named a model no
+  worker ever ran. **Fix:** `validatePlan` refuses a bare shell operator in every plan-authored
+  command string with exec's own tokenizer and message (`pleach validate` exit 2, `pleach run`
+  refuses before the lock); a gate that never ran (the guard's -1, the seam's 127) settles the node
+  once with `gate.ran` and a `detail` naming the fault as the plan's or the environment's, no second
+  attempt, no re-prompt; the secret battery allowlists the documented example credentials (exact
+  match, vendored with provenance); `pleach schema` emits zod-defaulted fields as optional;
+  `stagedFiles` counts the index after staging; `verdict` carries `spawned` beside the cast it names.
+  No contract change. Tests: `test/unit/validate-commands.test.ts`,
+  `test/loop/gate-cannot-exec.test.ts`, `test/unit/hygiene-allowlist.test.ts`,
+  `test/unit/schema-optional.test.ts`, `test/loop/facts-are-facts.test.ts`,
+  `test/unit/journal-doc.test.ts`, `test/e2e/fail-before-spend.test.ts`.
 
 ### Verified-sound (attacks refuted — do not relitigate)
 

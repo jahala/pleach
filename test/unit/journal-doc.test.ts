@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { shellOperatorRefusal } from '../../src/core/argv.ts';
+import { SPAWN_FAILED_EXIT } from '../../src/core/classify.ts';
 import { KINDS } from '../../src/core/journal-envelope.ts';
 import { VerdictSchema } from '../../src/core/plan.ts';
 
@@ -471,5 +473,259 @@ describe('operator surfaces — the landing controls (D18)', () => {
   test('the README names every landing control, and the token a gate substitutes', () => {
     expect(LANDING_CONTROLS.filter((control) => !readme.includes(control))).toEqual([]);
     expect(readme).toContain(baseToken());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ledger: D19 — a fault the conductor can name for free is named before a
+// worker spends anything, and each part of that has an operator surface. A
+// `verdict` line now says whether a worker ever spawned, so the row that
+// documents the line is pinned to every `verdict` append in the source — each
+// field it can carry named, and a field every line carries named without `?`,
+// which is what lets a consumer read it without a presence check. `pleach
+// validate` refuses a bare shell operator with the wording exec refuses it
+// with, and a gate that cannot run at all settles its node once: the help and
+// the README say both, pinned to the refusal the code really prints, the
+// detail a cannot-run settle really writes, and the exit the exec seam really
+// reports. None of these is a hand-kept list.
+// ---------------------------------------------------------------------------
+const RUN_NODE_SRC = new URL('../../src/loop/run-node.ts', import.meta.url).pathname;
+
+const OPENERS = '{([';
+const CLOSERS = '})]';
+
+/**
+ * The last index of the string literal or comment that starts at `at`, or `at`
+ * itself when none starts there — so a brace, comma or apostrophe inside one is
+ * never read as structure.
+ */
+function tokenEnd(src: string, at: number): number {
+  const ch = src.charAt(at);
+  if (src.startsWith('//', at)) {
+    const eol = src.indexOf('\n', at);
+    return eol === -1 ? src.length - 1 : eol - 1;
+  }
+  if (src.startsWith('/*', at)) {
+    const end = src.indexOf('*/', at + 2);
+    return end === -1 ? src.length - 1 : end + 1;
+  }
+  if (ch === "'" || ch === '"' || ch === '`') {
+    let i = at + 1;
+    while (i < src.length && src.charAt(i) !== ch) i += src.charAt(i) === '\\' ? 2 : 1;
+    return i;
+  }
+  return at;
+}
+
+/** `src` with its comments dropped and its string literals kept whole. */
+function uncommented(src: string): string {
+  let out = '';
+  for (let i = 0; i < src.length; ) {
+    const end = tokenEnd(src, i);
+    if (!src.startsWith('//', i) && !src.startsWith('/*', i)) out += src.slice(i, end + 1);
+    i = end + 1;
+  }
+  return out;
+}
+
+/** The text inside the bracket at `open`, up to the bracket that closes it. */
+function bracketed(src: string, open: number): string {
+  let depth = 0;
+  for (let i = open; i < src.length; i = tokenEnd(src, i) + 1) {
+    const ch = src.charAt(i);
+    if (OPENERS.includes(ch)) depth += 1;
+    if (CLOSERS.includes(ch)) {
+      depth -= 1;
+      if (depth === 0) return src.slice(open + 1, i);
+    }
+  }
+  throw new Error(`Unbalanced bracket at offset ${open}`);
+}
+
+/** An object literal's body, cut at its own top-level commas. */
+function literalEntries(body: string): string[] {
+  const cut: string[] = [];
+  let depth = 0;
+  let from = 0;
+  for (let i = 0; i < body.length; i = tokenEnd(body, i) + 1) {
+    const ch = body.charAt(i);
+    if (OPENERS.includes(ch)) depth += 1;
+    else if (CLOSERS.includes(ch)) depth -= 1;
+    else if (ch === ',' && depth === 0) {
+      cut.push(body.slice(from, i));
+      from = i + 1;
+    }
+  }
+  cut.push(body.slice(from));
+  return cut.map((entry) => entry.trim()).filter((entry) => entry !== '');
+}
+
+/** The bodies of the object literals at an expression's own top level. */
+function objectBodies(expr: string): string[] {
+  const bodies: string[] = [];
+  let depth = 0;
+  for (let i = 0; i < expr.length; i = tokenEnd(expr, i) + 1) {
+    const ch = expr.charAt(i);
+    if (ch === '{' && depth === 0) {
+      const body = bracketed(expr, i);
+      bodies.push(body);
+      i += body.length + 1;
+    } else if (OPENERS.includes(ch)) depth += 1;
+    else if (CLOSERS.includes(ch)) depth -= 1;
+  }
+  return bodies;
+}
+
+interface LiteralKey {
+  key: string;
+  /** Written by the literal itself, not added by a conditional spread. */
+  always: boolean;
+}
+
+/** Every key an object literal writes: its own, and those `...(c ? { k } : {})` adds. */
+function literalKeys(body: string, always = true): LiteralKey[] {
+  return literalEntries(body).flatMap((entry) => {
+    if (entry.startsWith('...(')) {
+      return objectBodies(bracketed(entry, 3)).flatMap((inner) => literalKeys(inner, false));
+    }
+    const key = entry.match(/^([A-Za-z_$][\w$]*)\s*(?::|$)/)?.[1];
+    return key === undefined ? [] : [{ key, always }];
+  });
+}
+
+/** Every `journal.append({ event: '<event>', … })` literal in the source, as its keys. */
+function appendLiterals(event: string): LiteralKey[][] {
+  return tsFiles(SRC_DIR).flatMap((path) => {
+    const raw = readFileSync(path, 'utf8');
+    if (!raw.includes(`event: '${event}'`)) return [];
+    const src = uncommented(raw);
+    return [...src.matchAll(/journal\.append\(\{/g)]
+      .map((call) => bracketed(src, (call.index ?? 0) + call[0].length - 1))
+      .filter((body) => literalEntries(body).includes(`event: '${event}'`))
+      .map((body) => literalKeys(body).filter(({ key }) => key !== 'event'));
+  });
+}
+
+/** The fields an event's lines can carry, as `field -> whether every line carries it`. */
+function lineFields(literals: LiteralKey[][]): Map<string, boolean> {
+  const fields = new Map<string, boolean>();
+  for (const { key } of literals.flat()) {
+    fields.set(
+      key,
+      literals.every((keys) => keys.some((k) => k.key === key && k.always)),
+    );
+  }
+  return fields;
+}
+
+describe('journal doc — what a verdict line carries (D19)', () => {
+  const documented = documentedEvents(readFileSync(JOURNAL_DOC, 'utf8'));
+  const literals = appendLiterals('verdict');
+  const fields = lineFields(literals);
+  const fieldsCell = rowCells(documented.get('verdict') ?? '')[2] ?? '';
+
+  test('the verdict appends are read, not vacuously empty', () => {
+    expect(literals.length).toBeGreaterThan(1);
+    expect(fields.size).toBeGreaterThan(8);
+    // The stability promise the row states: `provider` is never absent.
+    expect(fields.get('provider')).toBe(true);
+  });
+
+  test('the `verdict` row names every field a verdict line can carry', () => {
+    const unnamed = [...fields.keys()]
+      .filter((f) => !fieldsCell.includes(`\`${f}\``) && !fieldsCell.includes(`\`${f}?\``))
+      .sort();
+    expect(unnamed).toEqual([]);
+  });
+
+  test('a field every verdict line carries is named without `?`', () => {
+    const optional = [...fields.entries()]
+      .filter(([f, always]) => always && !fieldsCell.includes(`\`${f}\``))
+      .map(([f]) => f)
+      .sort();
+    expect(optional).toEqual([]);
+  });
+});
+
+/** A text's paragraphs — its runs of lines between blank lines — each on one line. */
+function paragraphs(text: string): string[] {
+  return text.split(/\n\s*\n/).map((p) => p.replace(/\s+/g, ' ').trim());
+}
+
+/** A verb's entry in the help's usage block — its line and the lines continuing it — on one line. */
+function usageEntry(help: string, verb: string): string {
+  const lines = help.split('\n');
+  const at = lines.findIndex((line) => line.startsWith(`  pleach ${verb} `));
+  if (at === -1) return '';
+  const rest = lines.slice(at + 1);
+  const end = rest.findIndex((line) => !/^ {3,}\S/.test(line));
+  return lines
+    .slice(at, at + 1 + (end === -1 ? rest.length : end))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** The detail a gate that cannot run settles with, as run-node words it, by fault. */
+function cannotRunDetails(): Map<string, string> {
+  const src = readFileSync(RUN_NODE_SRC, 'utf8');
+  const start = src.indexOf('const CANNOT_RUN: Record<GateFault, string> = {');
+  if (start === -1) throw new Error('No CANNOT_RUN table in src/loop/run-node.ts');
+  const body = src.slice(start, src.indexOf('\n};', start));
+  return new Map(
+    [...body.matchAll(/^ {2}([a-z]+): (['"])(.*)\2,$/gm)].map(([, fault, , text]) => [fault, text]),
+  );
+}
+
+/** Whether `text` says `fact` as a whole word or phrase. */
+function says(text: string, fact: string): boolean {
+  const literal = fact.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![\\w-])${literal}(?![\\w-])`).test(text);
+}
+
+/** What the best paragraph of `text` that speaks of `topic` leaves unsaid of `facts`. */
+function unsaid(text: string, topic: string, facts: string[]): string[] {
+  const candidates = paragraphs(text)
+    .filter((p) => says(p, topic))
+    .map((p) => facts.filter((fact) => !says(p, fact)));
+  if (candidates.length === 0) return [topic, ...facts];
+  return candidates.reduce((best, missing) => (missing.length < best.length ? missing : best));
+}
+
+describe('operator surfaces — faults refused before spend (D19)', () => {
+  const help = helpText();
+  const readme = readFileSync(README, 'utf8');
+  // The one wording validate and the exec guard share, read by calling it.
+  const refusal = shellOperatorRefusal('true && true') ?? '';
+  const hatch = refusal.split(': ').at(-1) ?? '';
+  const details = cannotRunDetails();
+  // What a surface must say of a gate that cannot run: whose fault it can be,
+  // the exit a command the environment cannot spawn reports, and that it is
+  // settled once.
+  const cannotRunFacts = [...details.keys(), String(SPAWN_FAILED_EXIT), 'once'];
+
+  test('the wording is read from the code, not vacuously empty', () => {
+    expect(refusal).toContain('shell operator');
+    expect(hatch).toContain('bash -lc');
+    expect(details.size).toBeGreaterThan(1);
+    for (const detail of details.values()) expect(detail).toContain('cannot run');
+  });
+
+  test('the help says validate refuses a shell operator, and names the escape hatch', () => {
+    const entry = usageEntry(help, 'validate');
+    expect(entry).toContain('pleach validate');
+    expect(['shell operator', hatch].filter((fact) => !entry.includes(fact))).toEqual([]);
+  });
+
+  test('the README says validate refuses a shell operator, and names the escape hatch', () => {
+    expect(unsaid(readme, 'pleach validate', ['shell operator', hatch])).toEqual([]);
+  });
+
+  test('the help says a gate that cannot run fails its node once, and whose fault it is', () => {
+    expect(unsaid(help, 'cannot run', cannotRunFacts)).toEqual([]);
+  });
+
+  test('the README says a gate that cannot run fails its node once, and whose fault it is', () => {
+    expect(unsaid(readme, 'cannot run', cannotRunFacts)).toEqual([]);
   });
 });
