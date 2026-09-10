@@ -46,6 +46,9 @@ export interface RunWorkOpts {
   // Teardown signal (D12): interrupts the WAIT — the run's long pole. Work
   // commands and gates run to completion, bounded by their own timeouts.
   signal?: AbortSignal;
+  // The conductor's idle timeout (D16): every wait this attempt makes ends
+  // when the worker has been quiet that long, instead of riding timeoutMs.
+  idleMs?: number;
   // The red-phase seal (D13): called with the red phase's worker result and the
   // red gate's exit code the moment the RED gate passes and before the next
   // phase's prompt is sent, so the failing-test state is history. run-node
@@ -134,7 +137,7 @@ export async function runWork(
           ? withEvidence(phase.prompt, opts.evidence)
           : phase.prompt;
       await w.send(text);
-      last = await w.wait({ timeoutMs: opts.timeoutMs, signal: opts.signal });
+      last = await w.wait({ timeoutMs: opts.timeoutMs, signal: opts.signal, idleMs: opts.idleMs });
       if (last.reason !== 'stop') return last;
 
       if (phase.phase === 'red') {
@@ -164,5 +167,5 @@ export async function runWork(
 
   // {prompt}: single send/wait.
   await w.send(promptFor(node, opts.evidence));
-  return w.wait({ timeoutMs: opts.timeoutMs, signal: opts.signal });
+  return w.wait({ timeoutMs: opts.timeoutMs, signal: opts.signal, idleMs: opts.idleMs });
 }

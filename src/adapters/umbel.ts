@@ -154,6 +154,7 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
     async function wait(waitOpts?: {
       timeoutMs?: number;
       signal?: AbortSignal;
+      idleMs?: number;
     }): Promise<WorkerResult> {
       const argv: string[] = [bin, 'wait', '--json'];
 
@@ -163,6 +164,14 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
 
       if (waitOpts?.timeoutMs !== undefined) {
         argv.push('--timeout', `${waitOpts.timeoutMs}ms`);
+      }
+
+      // The conductor's idle policy (D16). umbel ends a quiet wait with
+      // `{"reason":"idle"}` — which already maps to blocked — but only when it
+      // is asked to watch; unasked, a wedged worker rides the attempt clock.
+      // The number is never invented here: no idleMs, no flag.
+      if (waitOpts?.idleMs !== undefined) {
+        argv.push('--idle-timeout', `${waitOpts.idleMs}ms`);
       }
 
       argv.push(name);

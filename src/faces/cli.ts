@@ -56,6 +56,9 @@ Flags (run):
   --repo-root PATH        Git repo the worktrees and node/<id> branches live in (default: cwd)
   --max-concurrency N     Parallel node cap (default: plan.maxConcurrency, else CPU cores − 2)
   --timeout-ms N          Default per-attempt timeout when a node omits policy.timeoutMs (default: 30m)
+  --idle-ms N             End a worker's wait after this long with no activity (default: 10m).
+                          A wedged worker (an auditor idle on a 404) settles blocked with its
+                          tree quarantined instead of riding the attempt clock.
   --journal PATH          Run journal JSONL (default: <git-dir>/pleach/journal.jsonl)
   --runner NAME           Bundled runner for zero-config runs: 'umbel' (default; interactive
                           CLIs over tmux) or 'direct-cli' (headless \`claude -p\` / \`codex exec\` —
@@ -115,6 +118,7 @@ interface Flags {
   repoRoot: string;
   maxConcurrency?: number;
   timeoutMs?: number;
+  idleMs: number;
   journal?: string;
   umbelBin: string;
   tendModule?: string;
@@ -127,6 +131,12 @@ interface Flags {
   runnerKind?: 'umbel' | 'direct-cli';
 }
 
+// The conductor's idle policy (D16): a worker quiet this long has stopped
+// working, whatever its attempt clock says. Ten minutes is long enough for a
+// slow tool call and short enough that nobody watches a wedged worker for half
+// an hour. Per-run override: --idle-ms.
+const DEFAULT_IDLE_MS = 10 * 60 * 1000;
+
 class UsageError extends Error {
   readonly name = 'UsageError';
 }
@@ -135,6 +145,7 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
   const positionals: string[] = [];
   const flags: Flags = {
     repoRoot: process.cwd(),
+    idleMs: DEFAULT_IDLE_MS,
     umbelBin: process.env.PLEACH_UMBEL_BIN ?? 'umbel',
     land: false,
     now: false,
@@ -170,6 +181,10 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         break;
       case '--timeout-ms':
         flags.timeoutMs = takeNumber(arg, next);
+        i += 1;
+        break;
+      case '--idle-ms':
+        flags.idleMs = takeNumber(arg, next);
         i += 1;
         break;
       case '--journal':
@@ -333,6 +348,7 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     // The contract's conductor default when neither flag nor plan caps it:
     // cores−2, floored at 1 (the loop stays environment-free).
     defaultConcurrency: Math.max(1, cpus().length - 2),
+    idleMs: flags.idleMs,
     ...(flags.maxConcurrency !== undefined ? { maxConcurrency: flags.maxConcurrency } : {}),
     ...(flags.timeoutMs !== undefined ? { defaultTimeoutMs: flags.timeoutMs } : {}),
   });
