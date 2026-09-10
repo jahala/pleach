@@ -60,6 +60,11 @@ Flags (run):
   --idle-ms N             End a worker's wait after this long with no activity (default: 10m).
                           A wedged worker (an auditor idle on a 404) settles blocked with its
                           tree quarantined instead of riding the attempt clock.
+  --fallback-provider NAME
+                          Re-cast a node on this provider when an attempt comes back dead —
+                          a provider outage, not a red gate. Without it a dead attempt settles
+                          the node instead of spending a second attempt on the same outage.
+                          The audit diversity rule is re-checked against the fallback.
   --journal PATH          Run journal JSONL (default: <git-dir>/pleach/journal.jsonl)
   --runner NAME           Bundled runner for zero-config runs: 'umbel' (default; interactive
                           CLIs over tmux) or 'direct-cli' (headless \`claude -p\` / \`codex exec\` —
@@ -122,6 +127,7 @@ interface Flags {
   maxConcurrency?: number;
   timeoutMs?: number;
   idleMs: number;
+  fallbackProvider?: string;
   journal?: string;
   umbelBin: string;
   tendModule?: string;
@@ -188,6 +194,10 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         break;
       case '--idle-ms':
         flags.idleMs = takeNumber(arg, next);
+        i += 1;
+        break;
+      case '--fallback-provider':
+        flags.fallbackProvider = takeValue(arg, next);
         i += 1;
         break;
       case '--journal':
@@ -354,6 +364,7 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     idleMs: flags.idleMs,
     ...(flags.maxConcurrency !== undefined ? { maxConcurrency: flags.maxConcurrency } : {}),
     ...(flags.timeoutMs !== undefined ? { defaultTimeoutMs: flags.timeoutMs } : {}),
+    ...(flags.fallbackProvider !== undefined ? { fallbackProvider: flags.fallbackProvider } : {}),
   });
 
   const code = summaryExitCode(summary);
