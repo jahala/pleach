@@ -180,6 +180,17 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
         ...(waitOpts?.signal !== undefined ? { signal: waitOpts.signal } : {}),
       });
 
+      // The run's own signal fired: the exec seam SIGKILLed `umbel wait`, so the
+      // non-zero exit below reports our teardown, not the worker. This adapter is
+      // the only layer that knows its signal fired — it answers `aborted` so the
+      // loop hands the tree back instead of reading a stop as a seam failure
+      // (ledger D16). Nothing is gathered: read/actions/diff would ride the
+      // process tree we just killed. sinceMtime is left as the send set it — no
+      // stop was consumed, so a later wait must keep that baseline.
+      if (waitOpts?.signal?.aborted === true) {
+        return gatherWorkerResult(name, cwd, 'aborted', undefined);
+      }
+
       if (result.exitCode !== 0) {
         throw new WorkerSeamError(`wait exited ${result.exitCode}: ${result.output.trim()}`);
       }
