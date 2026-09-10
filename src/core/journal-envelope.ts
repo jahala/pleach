@@ -51,6 +51,8 @@ export const KINDS: Record<string, Kind> = {
   blocked: 'node.lifecycle',
   'phase-commit': 'node.lifecycle',
   'set-aside': 'node.lifecycle',
+  'resumed-from-quarantine': 'node.lifecycle',
+  'resume-refused': 'node.lifecycle',
   'audit-egress-unparseable': 'node.lifecycle',
   verdict: 'node.lifecycle',
   closed: 'node.lifecycle',

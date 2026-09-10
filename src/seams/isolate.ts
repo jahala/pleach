@@ -410,6 +410,17 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     return r.output;
   }
 
+  // What `ref` introduced, as git's own --stat summary (`--format=` drops the
+  // header, so the output is the file list and its totals and nothing else).
+  // A ref that doesn't resolve and a commit that changed nothing are the same
+  // answer here — null, "there is no stat to show" — because the caller (the
+  // resume evidence, D17) has something to say either way.
+  async function commitStat(cwd: string, ref: string): Promise<string | null> {
+    const r = await git(exec, cwd, 'show', '--stat', '--format=', `${ref}^{commit}`);
+    if (r.exitCode !== 0) return null;
+    return r.output.trim() || null;
+  }
+
   // ── land ─────────────────────────────────────────────────────────────────
 
   async function landStack(
@@ -509,6 +520,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     commitBranch,
     refSha,
     commitMessageOf,
+    commitStat,
     landStack,
   };
 }

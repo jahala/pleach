@@ -19,6 +19,8 @@ tolerate unknown events and unknown fields.
 |---|---|---|
 | `run-start` | `goal`, `nodes` (count) | a run began |
 | `node-start` | `node` | a node's attempt ladder began |
+| `resumed-from-quarantine` | `node`, `sha` | a pending node was seeded from `quarantine/<id>` instead of built from nothing (D17) — the sha is the checkout base, its dependencies merge onto it, and the whole gate ladder runs over it: a quarantined tree was never gated. The close records it as `facts.base`; `pleach run --fresh` refuses the seed |
+| `resume-refused` | `node`, `sha`, `detail` | a `quarantine/<id>` was found and not used: the node's latest close kept a different tree (or published one), so the branch is an older failure its own verified close already replaced (D17). The node builds from its dependencies as a first run does |
 | `gate-fail` | `node`, `gate` (`setup`\|`markers`\|`smoke`\|`red`\|`green`\|`command`\|`audit-parse`\|`commit`\|…) | a gate failed (may retry) |
 | `blocked` | `node`, `reason` (the prompt text) | **needs a human** — worker stopped at a permission prompt; session terminated |
 | `gate-retry` | `node`, `gate` (`setup`\|`smoke`) | an exec gate went red — one gate-only re-run in the same worktree before the red becomes worker evidence (D10) |
@@ -76,7 +78,7 @@ profile's names:
 | kind | lines | mirrors |
 |---|---|---|
 | `run.lifecycle` | the run and the landing, beginning to end: `run-start`, `run-end`, `run-aborted`, `run-stopped`, `land-start`, `land-setup`, `land-bisect`, `land-culprit`, `land-integrity-failed`, `land-blocked`, `land-conflict`, `landed` | — |
-| `node.lifecycle` | one node's passage, and every record kept or refused along the way: `node-start`, `blocked`, `phase-commit`, `set-aside`, `audit-egress-unparseable`, `verdict`, `closed`, `not-closed`, `quarantined`, `quarantine-failed`, `receipt`, `gate-artifact`, `receipt-write-failed`, `acceptance-changed`, `acceptance-cascade`, `rebuild-required`, `sha-mismatch`, `dispose-failed` | `plotplot.node` |
+| `node.lifecycle` | one node's passage, and every record kept or refused along the way: `node-start`, `blocked`, `phase-commit`, `set-aside`, `resumed-from-quarantine`, `resume-refused`, `audit-egress-unparseable`, `verdict`, `closed`, `not-closed`, `quarantined`, `quarantine-failed`, `receipt`, `gate-artifact`, `receipt-write-failed`, `acceptance-changed`, `acceptance-cascade`, `rebuild-required`, `sha-mismatch`, `dispose-failed` | `plotplot.node` |
 | `gate.result` | a gate said yes or no: `gate-fail`, `gate-flaky`, `land-gate`, `land-gate-retry`, `land-setup-failed` | `plotplot.gate`, `plotplot.node` (`null` on land-level lines, which belong to no node) |
 | `gate.retry` | an exec gate's one same-tree re-run: `gate-retry` | `plotplot.node`, `plotplot.gate` |
 

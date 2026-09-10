@@ -123,6 +123,14 @@ in-flight nodes settle normally. `--now` adds the hard abort — an interrupted 
 failure. A wedged worker never rides the attempt clock either: `--idle-ms` (default 10m) ends a
 wait that has gone quiet, and the node settles blocked with its tree kept the same way.
 
+**The next run picks that work up.** A pending node whose `quarantine/<id>` still resolves is
+isolated from it — the quarantine is the checkout base, its dependencies merge onto it as they
+always do — and the worker's first prompt names the sha it is resuming and what the tree holds.
+Nothing about that tree is trusted: it was never gated, so the whole ladder runs over it, from the
+marker scan through smoke and the cross-provider audit, and the close records `facts.base` so a
+resumed close stays distinguishable from a fresh one forever. `--fresh` refuses the seed and builds
+every pending node from its dependencies alone.
+
 Two operational facts worth knowing before your first run:
 
 - **Claude Code workers need the repo trusted.** Trust follows the *main checkout*

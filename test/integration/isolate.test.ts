@@ -585,3 +585,47 @@ test('readFriction concatenates the month files in name order, and only those', 
     await rm(tree, { recursive: true, force: true });
   }
 });
+
+// ledger: D17 — a resumed node's prompt names what the interrupted attempt was
+// holding, and that stat comes from real git. Proven against a real quarantine
+// commit: the file list and totals of what THAT commit introduced, never the
+// whole tree, and null where there is nothing to show.
+test('commitStat shows what a commit introduced, and nothing else', async () => {
+  const repo = await createRepo();
+  try {
+    await makeBranch(repo.path, 'node/stat-base', { 'kept.txt': 'kept\n' });
+
+    const seam = createIsolateSeam(execLocal, repo.path);
+    const node = { id: 'stat-node', needs: [], work: { prompt: 'x' } } as never;
+    const iso = await seam.isolate(node, ['node/stat-base']);
+
+    // The tree an interrupted attempt left behind, quarantined as it stands.
+    await writeFile(join(iso.cwd, 'wip.txt'), 'one\ntwo\n');
+    await seam.stage(iso.cwd, ['wip.txt']);
+    const { sha } = await seam.commitBranch(iso.cwd, 'quarantine/stat-node', 'pleach: quarantined');
+
+    const stat = await seam.commitStat(repo.path, 'quarantine/stat-node');
+    expect(stat).not.toBeNull();
+    expect(stat).toContain('wip.txt');
+    expect(stat).toContain('2 +');
+    expect(stat).toContain('1 file changed');
+    // The base's own file is in the tree but not in this commit.
+    expect(stat).not.toContain('kept.txt');
+    // The sha answers exactly as the branch does.
+    expect(await seam.commitStat(repo.path, sha)).toBe(stat as string);
+
+    // A commit that introduced nothing, and a ref that does not resolve, are
+    // the same answer: there is no stat to show.
+    const { sha: empty } = await seam.commitBranch(
+      iso.cwd,
+      'quarantine/stat-empty',
+      'pleach: none',
+    );
+    expect(await seam.commitStat(repo.path, empty)).toBeNull();
+    expect(await seam.commitStat(repo.path, 'refs/heads/no-such-branch')).toBeNull();
+
+    await iso.dispose();
+  } finally {
+    await repo.cleanup();
+  }
+});
