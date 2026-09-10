@@ -34,6 +34,8 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       return `✗ ${s(e.node)}: ${s(e.gate)} gate failed`;
     case 'run-aborted':
       return 'run aborted by signal — no new launches; in-flight nodes settling';
+    case 'run-stopped':
+      return 'run stopped on request — no new launches; in-flight nodes finishing normally';
     case 'gate-flaky':
       return `${s(e.node)}: ${s(e.gate)} gate red once, green on retry — transient, proceeding`;
     case 'blocked':

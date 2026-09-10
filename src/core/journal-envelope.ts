@@ -35,6 +35,7 @@ export const KINDS: Record<string, Kind> = {
   'run-start': 'run.lifecycle',
   'run-end': 'run.lifecycle',
   'run-aborted': 'run.lifecycle',
+  'run-stopped': 'run.lifecycle',
   'land-start': 'run.lifecycle',
   'land-setup': 'run.lifecycle',
   'land-bisect': 'run.lifecycle',
