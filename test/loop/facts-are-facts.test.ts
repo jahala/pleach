@@ -141,6 +141,47 @@ describe('ReceiptFacts.stagedFiles counts the index after staging', () => {
     expect(summary.quarantined).toEqual(['x']);
     expect(h.receipts.get('x')?.facts.stagedFiles).toBe(1);
   });
+
+  // The same fact decides the red seal (D13): a red phase whose worker names a
+  // file it never changed stages nothing, and a seal over an empty index would
+  // claim a failing test that was never written (real git refuses the commit
+  // outright, and the node died with no receipt).
+  test('a red phase that names a file it never changed seals nothing and retries at red', async () => {
+    const h = makeHarness({
+      changedByNode: { p: [] },
+      waitScript: () => stop({ filesTouched: ['test/app.test.ts'] }),
+      execScript: (argv) =>
+        argv[0] === 'runtests'
+          ? { output: 'error: no test files found', exitCode: 1 }
+          : { output: '', exitCode: 0 },
+    });
+    const summary = await runPlan(
+      plan([
+        {
+          id: 'p',
+          work: {
+            test: 'runtests',
+            phases: [
+              { phase: 'red', prompt: 'write the failing test' },
+              { phase: 'impl', prompt: 'make it pass' },
+              { phase: 'green', prompt: 'run the suite' },
+            ],
+          },
+          policy: { maxAttempts: 2 },
+        },
+      ]),
+      h.deps,
+      OPTS,
+    );
+
+    expect(summary.failed).toEqual(['p']);
+    expect(h.log.count('commit')).toBe(0);
+    expect(h.journal.some((e) => e.event === 'phase-commit')).toBe(false);
+    expect(h.log.events.some((e) => e.kind === 'send' && e.detail === 'build:make it pass')).toBe(
+      false,
+    );
+    expect(h.receipts.get('p')?.facts.attempts).toBe(2);
+  });
 });
 
 // ── `spawned` on every verdict line ─────────────────────────────────────────
@@ -240,6 +281,44 @@ describe('every verdict journal line carries `spawned` beside the cast it names'
       status: 'failed',
       provider: 'claude',
       spawned: false,
+    });
+  });
+
+  test('a worker that ran on an earlier attempt: spawned true, though the last attempt settled before spawning', async () => {
+    // Attempt 1 provisions, spawns, and its smoke is red; attempt 2's setup can
+    // no longer spawn. The cast ran this node's work once, and the line says so.
+    let setups = 0;
+    const h = makeHarness({
+      execScript: (argv) => {
+        if (argv[0] === 'provision') {
+          setups += 1;
+          return setups === 1
+            ? { output: '', exitCode: 0 }
+            : { output: 'Executable not found in $PATH: "provision"', exitCode: 127 };
+        }
+        return argv[0] === 'smokey' ? { output: 'red', exitCode: 1 } : { output: '', exitCode: 0 };
+      },
+    });
+    await runPlan(
+      plan([
+        {
+          id: 'p',
+          setup: 'provision',
+          work: { prompt: 'build p' },
+          accept: { smoke: 'smokey' },
+          policy: { maxAttempts: 2 },
+        },
+      ]),
+      h.deps,
+      OPTS,
+    );
+
+    expect(h.log.count('spawn:build', 'p')).toBe(1);
+    expect(onlyVerdictLine(h, 'p')).toMatchObject({
+      status: 'failed',
+      attempts: 2,
+      provider: 'claude',
+      spawned: true,
     });
   });
 

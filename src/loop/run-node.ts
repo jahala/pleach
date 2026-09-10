@@ -63,6 +63,10 @@ export interface RunNodeOpts {
   // one. Every attempt that isolates lands inside that work, so the worker is
   // told where it came from before it writes over it. Absent for a fresh build.
   resumedFrom?: ResumedFrom;
+  // Called as a build worker spawns (D19) — the cast running this node's work,
+  // never the auditor. The verdict line says whether the cast ever ran, and a
+  // node that throws has no result to say it with, so the fact leaves here.
+  onSpawn?: () => void;
 }
 
 export interface RunNodeResult {
@@ -73,6 +77,8 @@ export interface RunNodeResult {
   // edit files mid-turn, so an unfinished turn is unfinished work, not nothing.
   // Absent only for never-isolated failures.
   iso?: Isolation;
+  // What the index held after the final attempt staged (D19) — the receipt's
+  // count. Absent when that attempt never reached staging.
   stagedFiles?: string[];
   // What the runner saw at an abnormal end (D11) — passed through to the
   // journal verdict, never fabricated.
@@ -275,6 +281,7 @@ export async function runNode(
       // needs no runner at all.
       const worker =
         'command' in node.work ? null : await deps.runner.spawnWorker({ ...cast, cwd });
+      if (worker !== null) opts.onSpawn?.();
       let result: WorkerResult;
       try {
         result = await runWork(node, worker, deps.exec, cwd, {
@@ -432,7 +439,10 @@ export async function runNode(
       // ── scoped staging (ledger C2 — nothing re-stages after this) ────────────
       const stagedFiles = await collectDelivery(deps, node, cwd, result);
       await deps.isolate.stage(cwd, stagedFiles);
-      lastStaged = stagedFiles;
+      // The receipt counts what the index holds (D19): a path the worker named
+      // but never changed was handed to staging and staged nothing.
+      const indexed = await deps.isolate.stagedPaths(cwd);
+      lastStaged = indexed;
 
       // ── hygiene (§E) ─────────────────────────────────────────────────────────
       // Pure scans over the staged diff: empty-diff attribution (agent work
@@ -571,7 +581,7 @@ export async function runNode(
       return {
         verdict,
         iso: liveIso,
-        stagedFiles,
+        stagedFiles: indexed,
         gates,
         ...(smokeStdout !== undefined ? { smokeStdout } : {}),
         ...(handback !== undefined ? { handback } : {}),
@@ -837,9 +847,10 @@ async function collectDelivery(
 // carrying the evidence and the labels the close records, so they retry in the
 // same tree and leave nothing behind.
 //
-// An EMPTY file set is refused, not sealed: a commit of nothing would claim a
-// failing test exists when none was written — the exact lie D13 exists to
-// prevent — and `weeder bite` would check it out and find the state unchanged.
+// An EMPTY seal (nothing collected, or nothing the index took) is refused, not
+// sealed: a commit of nothing would claim a failing test exists when none was
+// written — the exact lie D13 exists to prevent — and `weeder bite` would check
+// it out and find the state unchanged.
 // The refusal is a `red` gate failure carrying the gate's own exit code, so the
 // handleGate → settleRetryable ladder retries it in the same tree, restarting
 // at the red phase with the evidence attached to its prompt.
@@ -855,12 +866,22 @@ async function sealRedPhase(
   const markers = await deps.isolate.scanMarkers(cwd);
   if (markers.length > 0) throw new GateFailedError('marker', markerEvidence(markers), SCAN_EXIT);
   await deps.isolate.stage(cwd, files);
+  // A path the worker named but never changed stages nothing (D19): the index,
+  // not the report, says whether this phase wrote anything to seal.
+  const staged = await deps.isolate.stagedPaths(cwd);
+  if (staged.length === 0) throw new GateFailedError('red', EMPTY_RED_EVIDENCE, exitCode);
   const hygiene = await scanHygiene(deps, node, cwd, files, result.finalMessage);
   if (hygiene !== null) {
     throw new GateFailedError(`hygiene:${hygiene.kind}`, hygiene.evidence, SCAN_EXIT);
   }
   const { sha } = await deps.isolate.commit(cwd, redPhaseMessage(node));
-  await deps.journal.append({ event: 'phase-commit', node: node.id, phase: 'red', sha, files });
+  await deps.journal.append({
+    event: 'phase-commit',
+    node: node.id,
+    phase: 'red',
+    sha,
+    files: staged,
+  });
 }
 
 // The command failing over a tree nothing wrote to is a harness fault — a
