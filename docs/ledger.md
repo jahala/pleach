@@ -284,6 +284,25 @@ checkpoint but have different lifetimes and trust domains.**
   second half). Tests: `test/integration/umbel-abort.test.ts`, `test/loop/abort-settles.test.ts`,
   `test/loop/stop.test.ts`, `test/integration/stop.test.ts`, `test/integration/umbel-idle.test.ts`,
   `test/unit/journal-doc.test.ts`, `test/e2e/teardown.test.ts`.
+- **D17 ⚠ [field] pleach held what a worker produced and let it go.** Five places, all seen in the
+  first conducted week (jahala/pleach#66, #82, #65, #77, #91): the builder's handback — the final
+  message whose dated Tried line the garden's law requires — is read for audit egress only and kept
+  nowhere (umbel's kill removes the session; the line survived only in Claude Code's own transcript);
+  `receipts/<node>.json` is overwritten when a node id runs again, so the earlier close's facts are
+  gone; a `dead` attempt retries on the same provider, so an outage (codex's 404) costs two full
+  timeouts; an auditor's unparseable relay fails a node whose smoke was green with no way to re-run
+  only the audit; and a resume after an abort rebuilds from nothing. **Fix:** the handback is kept
+  beside the receipt as an artifact (`<node>.handback.md`, `gate-artifact` with gate `handback`); the
+  receipt store keeps every close (`<node>.<sha-prefix>.json`, `<node>.json` the latest,
+  `previousReceiptSha256` walks it); a `dead` attempt retries on `--fallback-provider` with diversity
+  re-checked, or settles after one attempt with the reason named; `audit-egress-unparseable` names
+  the expected block and `pleach audit <plan> <node>` re-adjudicates a quarantined node with a green
+  smoke; `pleach run` resumes an unverified node from `quarantine/<id>` (every gate re-run from the
+  marker scan on; `facts.base` records the quarantine sha; `--fresh` opts out). Tests:
+  `test/loop/handback-kept.test.ts`, `test/integration/receipt-history.test.ts`,
+  `test/loop/fallback-provider.test.ts`, `test/e2e/audit-verb.test.ts`,
+  `test/loop/resume-quarantine.test.ts`, `test/unit/journal-doc.test.ts`,
+  `test/e2e/nothing-is-lost.test.ts`.
 
 ### Verified-sound (attacks refuted — do not relitigate)
 

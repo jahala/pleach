@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nothing-is-lost · garden</title>
+<link rel="stylesheet" href="./loop.css">
+<body>
+<noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
+<script type="text/markdown" id="loop">
+# Nothing a worker produced is lost
+
+**Goal.** Every close keeps what the worker handed back, every close keeps its own receipt, a provider outage is paid once, an unparseable audit relay costs one auditor turn, and a re-run can resume from a quarantined tree when the acceptance rules say what that tree proves.
+
+Ledger D17; jahala/pleach#66, #82, #65, #77, #91 — the P1s of the "Nothing is lost" milestone. Each is a place where pleach held something a worker produced and let it go: the handback (its Tried line survives only in Claude Code's own transcript), the earlier receipt when a node id runs again, the second attempt spent on a provider already known dead, a green build failed for an auditor's relay, the tree of an aborted node rebuilt from nothing.
+
+## How
+
+The handback is kept beside the receipt like the SARIF is (D14): settle writes the final attempt's `finalMessage` verbatim as `<node>.handback.md` through `ReceiptStore.writeArtifact` (a third `ArtifactKind`), journals `gate-artifact` with `gate: 'handback'`, and the receipt file names it under `artifacts.handback`. A worker's message is the worker's; nothing in it is interpreted.
+
+A receipt is a record, not a slot. The store keeps every close of a node: `<node>.json` stays the latest, and each write also lands `<node>.<receipt-sha256-prefix>.json`; `previousReceiptSha256` (already on refs) points into that history, so `pleach receipt <node>` can walk it. Artifacts keep the same naming so a kept SARIF is never the wrong close's.
+
+A provider that died does not get the second attempt. When an attempt ends `dead` or `aborted`-by-provider (an idle or a provider error line, once the runner names it), the retry uses the run's fallback provider (`--fallback-provider`, conductor-level — no plan field, no contract change), with the audit diversity rule re-checked against it; without a fallback the node settles after that one attempt with the reason named. A gate failure keeps today's retry — that is the one the work can fix.
+
+An unparseable audit egress names what it expected. The `audit-egress-unparseable` journal line says which block was looked for and shows the tail it got; and `pleach audit <plan> <node>` re-runs only the audit on a quarantined node whose smoke passed, seeding from `quarantine/<id>`, so a relay defect costs one auditor turn rather than a full node.
+
+Resuming from a quarantine is the one with rules. A quarantined tree was never gated, so a retry seeded from it re-runs every gate from the marker scan on, and its receipt records `facts.base: 'quarantine'` with the quarantine's sha, so `pleach receipt` and the umbrella's predicate can tell a resumed close from a fresh one. `pleach run` finds `quarantine/<id>` for an unverified node, isolates from it (dependencies merged as usual), journals `resumed-from-quarantine` {node, sha}, and the first prompt carries the interruption as evidence; `--fresh` skips all of it.
+
+## Tests
+- [ ] (code) Settle keeps the final attempt's handback verbatim as `<node>.handback.md` beside the receipt on both the done and quarantine paths, journals `gate-artifact` with `gate: 'handback'`, the receipt names it under `artifacts.handback`, and a write failure journals `receipt-write-failed` with the close standing · test/loop/handback-kept.test.ts
+- [ ] (code) The receipt store keeps every close: `<node>.json` is the latest and `<node>.<sha256 prefix>.json` is each close's own; artifacts follow the same naming; `pleach receipt <node>` verifies the latest and lists the history through `previousReceiptSha256` · test/integration/receipt-history.test.ts
+- [ ] (code) A `dead` attempt retries on `--fallback-provider` with the audit diversity rule re-checked against it; without a fallback the node settles after one such attempt with `gate.ran: 'wait:dead'` and no second spawn; a smoke-red attempt still retries on the same provider · test/loop/fallback-provider.test.ts
+- [ ] (code) `audit-egress-unparseable` names the expected block and shows the tail; `pleach audit <plan> <node>` re-runs only the audit on a quarantined node whose receipt shows a green smoke, seeding from `quarantine/<id>`, and closes or re-quarantines it with a new receipt · test/e2e/audit-verb.test.ts
+- [ ] (code) `pleach run` resumes an unverified node from `quarantine/<id>` by default: the tree is isolated from the quarantine with dependencies merged, every gate runs from the marker scan on, the receipt records `facts.base` as the quarantine sha, `resumed-from-quarantine` is journaled, and `--fresh` re-isolates instead · test/loop/resume-quarantine.test.ts
+- [ ] (code) docs/journal.md documents `resumed-from-quarantine` and the `handback` artifact; `KINDS` pins the event; the CLI help and README list `pleach audit`, `--fallback-provider` and `--fresh` · test/unit/journal-doc.test.ts
+- [ ] (code) Through the real CLI with real git: an aborted phased node resumes from its quarantine and closes verified with `facts.base` set and its handback kept; the receipt history holds both closes; `pleach audit` re-adjudicates a node whose auditor relayed garbage · test/e2e/nothing-is-lost.test.ts
+
+## Needs
+#teardown-keeps-work #gate-artifacts #conductor-loop
+
+## For
+#operator
+
+## Tried
+- 2026-09-11 shaped from the "Nothing is lost" milestone (jahala/pleach#66, #82, #65, #77, #91), the P1s the triage put first. Design: the handback and the receipt history reuse D14's artifact store (one place things are kept beside a receipt); the fallback provider is conductor-level (`--fallback-provider`), not a plan field — no contract change, and a cast is the operator's call; a resumed close is distinguishable forever (`facts.base`), because a quarantine was never gated and the umbrella's predicate must be able to tell. Rejected: reading the Tried line out of the handback in pleach (agents produce; code decides — pleach keeps the message, the fit loop's later rule classifies it); a per-node `worker.fallback` (a contract change for a policy the run owns).
+</script>
+<script src="./loop.js"></script>
