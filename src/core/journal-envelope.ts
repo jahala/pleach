@@ -123,5 +123,14 @@ export function envelope(event: Record<string, unknown>, now: Date): Record<stri
   for (const scope of MIRRORS[kind]) {
     line[`plotplot.${scope}`] = event[scope] ?? null;
   }
+
+  // Who ran the work, under the profile's names. Driven by the fields the line
+  // carries, not by its event name: today only `verdict` resolves a runner, and
+  // a line that names none stays silent — the profile's "never told us" is an
+  // absent key, not a null one. `gen_ai.provider.name` is never written: the
+  // runner is a CLI name, and the provider behind it (Bedrock, Vertex) is not
+  // observable from pleach.
+  if (typeof event.provider === 'string') line['plotplot.runner'] = event.provider;
+  if (typeof event.model === 'string') line['gen_ai.request.model'] = event.model;
   return line;
 }
