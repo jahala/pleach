@@ -304,6 +304,24 @@ checkpoint but have different lifetimes and trust domains.**
   `test/loop/resume-quarantine.test.ts`, `test/unit/journal-doc.test.ts`,
   `test/e2e/nothing-is-lost.test.ts`.
 
+- **D18 ⚠ [field] Landing is blind to the map and serial behind the run.** jahala/pleach#83, #84
+  (weeder, 2026-09-09). (1) `pleach land` takes the RUN's (repoRoot, source) lock, so a settled node's
+  landing answers "lock held" until every other node's gate has finished — a serial queue nobody
+  asked for, and a refusal that names no holder. (2) The composition gate runs only the sinks' own
+  smokes; a landing that moves a cited evidence file lands green while the garden's stamps on it go
+  stale — fifty-one of them sat stale on weeder's master for three days, and two hid real drift. The
+  signal existed (`tend2 gate --base`) and was not read at the one moment it mattered. **Fix:** land
+  holds its own lock beside the run's (`<lock>.land`), so a landing proceeds while a run is in
+  flight and two landings serialise; a refusal names the holder's pid and what it holds.
+  `pleach land --sinks <id,…>` lands a verified subset (refusing by name when one is unverified);
+  without it, all-or-nothing as before. `--land-gate CMD` (repeatable, `{base}` → the target
+  branch's tip before the merge) runs on the provisioned stack after the sinks' smokes, argv-style
+  with no shell; a non-zero exit refuses the landing as `land-gate-refused` with the output tail on
+  the journal line and on stderr. pleach stays map-agnostic: the garden passes tend2's gate as the
+  command. Tests: `test/integration/land-lock.test.ts`, `test/loop/land-sinks.test.ts`,
+  `test/loop/land-gate-command.test.ts`, `test/unit/journal-doc.test.ts`,
+  `test/e2e/land-honestly.test.ts`.
+
 ### Verified-sound (attacks refuted — do not relitigate)
 
 `--detach` fan-out (two detached worktrees at one commit are legal); the closed-add-then-dispose-inside-
