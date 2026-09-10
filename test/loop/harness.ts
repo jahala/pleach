@@ -1,4 +1,4 @@
-import { IsolateCatastrophicError } from '../../src/core/errors.ts';
+import { IsolateCatastrophicError, LockHeldError, type LockKind } from '../../src/core/errors.ts';
 import type { Node, Verdict } from '../../src/core/plan.ts';
 import { type Receipt, receiptPrefix } from '../../src/core/receipt.ts';
 import type {
@@ -129,6 +129,11 @@ export class InMemoryGit {
     return String(this.shaCounter).padStart(40, '0');
   }
 }
+
+// The branch this world lands on, and git's own answer for "there is no such
+// commit" — a stack built in a world whose target branch has no tip yet.
+const LAND_BRANCH = 'main';
+const NO_COMMIT = '0'.repeat(40);
 
 // ── receipt store naming ─────────────────────────────────────────────────────
 //
@@ -404,12 +409,16 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       log.push('landStack', undefined, cwd);
       return {
         cwd,
+        // The landing target's tip before these merges (D18's `{base}`). This
+        // world lands on 'main'; a world with no tip yet answers git's own
+        // "there is no such commit".
+        baseSha: git.refs.get(LAND_BRANCH) ?? NO_COMMIT,
         publish: async (): Promise<{ branch: string; sha: string }> => {
           log.push('land', undefined, refs.join(','));
           if (opts.landThrows) throw opts.landThrows;
           const sha = git.newSha();
-          git.refs.set('main', sha);
-          return { branch: 'main', sha };
+          git.refs.set(LAND_BRANCH, sha);
+          return { branch: LAND_BRANCH, sha };
         },
         dispose: async (): Promise<void> => {
           log.push('landStack-dispose', undefined, cwd);
@@ -498,14 +507,29 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   // test flips mid-run to land a marker between two closes — and `clearStop`
   // is the run consuming it.
   const stopMarker = { requested: false, cleared: 0 };
+  // Two locks, each with its own flag (D18): the run's guards the run's state,
+  // the landing's the base branch. A landing takes its own while a run holds
+  // the run's, and only its own kind can refuse it.
+  const held: Record<LockKind, boolean> = { run: false, land: false };
+  function take(kind: LockKind, repoRoot: string, source: string): LockHandle {
+    const path = `${repoRoot}/pleach-${source}.lock${kind === 'land' ? '.land' : ''}`;
+    if (held[kind]) throw new LockHeldError(path, process.pid, kind);
+    held[kind] = true;
+    log.push('lock.acquire', undefined, kind);
+    return {
+      async release() {
+        held[kind] = false;
+        log.push('lock.release', undefined, kind);
+      },
+    };
+  }
   const lockImpl = {
-    async acquire(_repoRoot: string, _source: string): Promise<LockHandle> {
-      log.push('lock.acquire');
-      return {
-        async release() {
-          log.push('lock.release');
-        },
-      };
+    async acquire(repoRoot: string, source: string): Promise<LockHandle> {
+      return take('run', repoRoot, source);
+    },
+
+    async acquireLand(repoRoot: string, source: string): Promise<LockHandle> {
+      return take('land', repoRoot, source);
     },
     async stopRequested(_repoRoot: string, _source: string): Promise<boolean> {
       log.push('lock.stopRequested', undefined, String(stopMarker.requested));

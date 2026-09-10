@@ -105,8 +105,32 @@ pleach clean [flags]               Sweep a killed run's leavings: stale locks + 
 ```
 
 Landing is deterministic and fail-closed: it refuses unless **every** plan node is
-verified, builds the merges in a throwaway worktree, and touches your checkout only
-via a final fast-forward — a conflict aborts with the repo untouched.
+verified (with `--sinks`, unless every named one is), builds the merges in a throwaway
+worktree, and touches your checkout only via a final fast-forward — a conflict aborts
+with the repo untouched. It holds a lock of its own beside the run's, so it never queues
+behind gates it has no stake in: settled work lands while the run is still building the
+rest, two landings serialise, and a refusal names the pid that holds the lock and which
+of the two locks it is.
+
+**Land a subset, and land it behind your own check.** `--sinks a,b` makes those verified
+node ids the landing's sinks instead of the plan's own; a node named there that is not
+verified refuses the landing by name before anything is built, and the composition gate
+and the publish then cover exactly that subset. `--land-gate CMD` (repeatable, run in
+order) runs on the composed stack after the sinks' smokes and before the publish,
+argv-style with no shell. `{base}` is replaced by the target branch's tip as it stood
+before the merges, so the gate can ask what this landing changes — which is what makes a
+map's staleness check runnable at the one moment it matters. This repo's own garden lands
+behind tend2's gate:
+
+```sh
+pleach land plan.json \
+  --land-gate "tend2 gate docs/tend2 --base {base} --runner 'bun test {evidence}'"
+```
+
+A non-zero exit refuses the landing as `land-gate-refused` with the command's output tail
+on stderr and the repository untouched, so a landing that would leave a stamped claim
+unproven is refused instead of landed green. Both flags shape `pleach run --land` too — the
+landing a run performs is the same landing.
 
 **An auditor's bad relay never costs the node.** When the auditor's reply carries no readable
 result — or the auditor dies — the node is quarantined with its build's gates green, and

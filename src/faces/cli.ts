@@ -17,7 +17,7 @@ import { planJsonSchema } from '../core/schema-json.ts';
 import { nodeSummaries, planWarnings, validatePlan } from '../core/validate.ts';
 import { auditNode } from '../loop/audit-node.ts';
 import type { RunSummary } from '../loop/deps.ts';
-import { landPlan } from '../loop/land.ts';
+import { type LandOpts, landPlan } from '../loop/land.ts';
 import { verifyReceipt } from '../loop/receipt-verify.ts';
 import { runPlan } from '../loop/run-plan.ts';
 import { sweepOrphanWorktrees, sweepStaleLocks } from '../seams/clean.ts';
@@ -89,10 +89,26 @@ Flags (run):
                           cross-provider audit). Rides claude (any mode) and codex
                           (bypassPermissions only); umbel gives an explicit mode precedence.
   --land                  After a fully-verified close, land the plan (see below); the run
-                          summary gains a "land" object. A red run never lands.
+                          summary gains a "land" object. A red run never lands. The landing
+                          flags below shape that landing exactly as they shape \`pleach land\`.
   --quiet                 Suppress the per-event narration on stderr (one plain line per
                           node event; a worker blocked on you is shouted). The JSONL
                           journal records everything regardless.
+
+Flags (land):
+  --repo-root PATH        Git repo whose checked-out branch receives the merge (default: cwd)
+  --sinks a,b             Land only these verified node ids (comma-separated) as the landing's
+                          sinks, instead of the plan's own. A named node that is not verified
+                          refuses the landing by name before anything is built; the composition
+                          gate and the publish cover exactly the subset. Without it every plan
+                          node must be verified.
+  --land-gate CMD         Run CMD on the composed stack after the sinks' smokes and before the
+                          publish; a non-zero exit refuses the landing with the output tail on
+                          stderr, the repository untouched. Repeatable, run in order. \`{base}\`
+                          is replaced by the target branch's tip as it was before the merges,
+                          so a gate can ask what this landing changes — e.g. a garden's
+                          staleness check: --land-gate 'tend2 gate docs --base {base}'. Exec'd
+                          argv-style with no shell (wrap shell features: bash -lc '<command>').
 
 Flags (stop):
   --repo-root PATH        Git repo whose run is drained (default: cwd)
@@ -101,8 +117,9 @@ Flags (stop):
 
 Landing: verified work is published as node/<id> branches; \`pleach land\` merges
 the plan's sinks onto the branch checked out in --repo-root. It refuses unless
-EVERY plan node is verified, and a merge conflict or non-fast-forward aborts
-with the repo untouched — resolve those by hand (git merge node/<id>).
+EVERY plan node is verified (with --sinks, unless every named one is), and a
+merge conflict or non-fast-forward aborts with the repo untouched — resolve
+those by hand (git merge node/<id>).
 
 Resuming is automatic: re-running a plan skips nodes already verified in the
 ledger (their node/<id> branch exists) — only unbuilt or previously-failed
@@ -153,6 +170,8 @@ interface Flags {
   config?: string;
   fresh: boolean;
   land: boolean;
+  sinks?: string[];
+  landGates: string[];
   now: boolean;
   quiet: boolean;
   runnerKind?: 'umbel' | 'direct-cli';
@@ -176,6 +195,7 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
     umbelBin: process.env.PLEACH_UMBEL_BIN ?? 'umbel',
     fresh: false,
     land: false,
+    landGates: [],
     now: false,
     quiet: false,
   };
@@ -241,6 +261,20 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         break;
       case '--permission-mode':
         flags.permissionMode = takeValue(arg, next);
+        i += 1;
+        break;
+      case '--sinks': {
+        const ids = takeValue(arg, next)
+          .split(',')
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0);
+        if (ids.length === 0) throw new UsageError('--sinks requires at least one node id');
+        flags.sinks = ids;
+        i += 1;
+        break;
+      }
+      case '--land-gate':
+        flags.landGates.push(takeValue(arg, next));
         i += 1;
         break;
       case '--fresh':
@@ -398,7 +432,7 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
   // --land: a fully-verified close lands in the same invocation; a red run
   // never lands (the summary alone says why).
   if (flags.land && code === 0) {
-    const land = await landPlan(plan, deps, { repoRoot: flags.repoRoot });
+    const land = await landPlan(plan, deps, landOpts(flags));
     process.stdout.write(`${JSON.stringify({ ...summary, land })}\n`);
     return 0;
   }
@@ -469,10 +503,19 @@ async function verbAudit(
   return result.status === 'closed' ? 0 : 1;
 }
 
+// Every control a landing has, read in ONE place: `pleach land` and `run
+// --land` perform the same landing, so they take the same options. Built from
+// the flags rather than spelled out at each call site — a control one path
+// reads and the other silently drops is a landing that says one thing and does
+// another, which is the failure D18 exists to end.
+function landOpts(flags: Flags): LandOpts {
+  return { repoRoot: flags.repoRoot, sinks: flags.sinks, landGates: flags.landGates };
+}
+
 async function verbLand(planPath: string, flags: Flags): Promise<number> {
   const plan = await readPlan(planPath);
   const deps = await depsFromFlags(flags);
-  const land = await landPlan(plan, deps, { repoRoot: flags.repoRoot });
+  const land = await landPlan(plan, deps, landOpts(flags));
   process.stderr.write(`pleach: landed ${land.landed.join(', ')} on '${land.branch}'\n`);
   process.stdout.write(`${JSON.stringify(land)}\n`);
   return 0;

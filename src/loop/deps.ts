@@ -35,6 +35,9 @@ export interface Isolation {
 // a clean tree after a gate).
 export interface LandStack {
   cwd: string;
+  // The target branch's tip as it was BEFORE these merges — the one fact an
+  // operator's land gate cannot know from inside the stack (D18: `{base}`).
+  baseSha: string;
   publish(): Promise<{ branch: string; sha: string }>;
   dispose(): Promise<void>;
 }
@@ -153,6 +156,12 @@ export interface LockSeam {
   // O_EXCL pid lockfile per (repoRoot, source). Throws LockHeldError when a
   // live process holds it; takes over a stale lock (ledger B4).
   acquire(repoRoot: string, source: string): Promise<LockHandle>;
+  // The landing's own lock, beside the run's (ledger D18). A landing writes
+  // the base branch and a run writes its own state — they never write the same
+  // thing, so a landing must not queue behind the run's lock: a settled node
+  // lands while the run is still gating the others. Only another landing
+  // refuses it, and the refusal names which lock and whose pid.
+  acquireLand(repoRoot: string, source: string): Promise<LockHandle>;
   // Is a drain outstanding for this run (ledger D16)? The stop marker lives
   // beside the lock because that is where the (repoRoot, source) path is
   // known. It is a marker and not a signal because a signal cannot be made
