@@ -1,4 +1,9 @@
-import { auditGateTampering, buildAuditPrompt, extractAuditJson } from '../core/audit-egress.ts';
+import {
+  auditGateTampering,
+  buildAuditPrompt,
+  EXPECTED_EGRESS,
+  extractAuditJson,
+} from '../core/audit-egress.ts';
 import { classify } from '../core/classify.ts';
 import { partitionDelivery } from '../core/delivery.ts';
 import {
@@ -26,6 +31,20 @@ import { guardedExec, runWork } from './run-work.ts';
 // run-node does NOT commit or emit — it returns the live isolation and the
 // staged file set so run-plan can commit-before-emit then dispose (B2).
 
+// The quarantined tree an attempt stands on (D17): the sha it was taken at,
+// and the stat of what it holds when the seam could show one. run-plan resolves
+// it; run-node hands it to the worker that picks the work up.
+export interface ResumedFrom {
+  sha: string;
+  stat?: string;
+  // The red phase index that tree already carries a seal for (D13), when the
+  // close that kept it recorded one. The resumed attempt re-enters the phase
+  // ladder after it: a tree holding the failing test cannot demonstrate it
+  // failing again, and re-running that phase would seal a lie — or, over a tree
+  // nothing changed in, nothing at all.
+  redSealedAt?: number;
+}
+
 export interface RunNodeOpts {
   defaultTimeoutMs: number;
   // Teardown signal (D12) — interrupts worker waits; everything else settles.
@@ -34,6 +53,14 @@ export interface RunNodeOpts {
   // makes, the build worker's and the auditor's alike: a wedged worker of
   // either kind ends here rather than at the attempt clock.
   idleMs?: number;
+  // The run's second cast (D17): who takes over when an attempt comes back
+  // `dead`. Conductor-level, never a plan field — which provider stands in for
+  // a dead one is the operator's call for this run, not a fact about the node.
+  fallbackProvider?: string;
+  // The quarantined tree baseRefs[0] checks out (D17), when this node resumed
+  // one. Every attempt that isolates lands inside that work, so the worker is
+  // told where it came from before it writes over it. Absent for a fresh build.
+  resumedFrom?: ResumedFrom;
 }
 
 export interface RunNodeResult {
@@ -63,6 +90,22 @@ export interface RunNodeResult {
   // carried so settle can keep them beside the receipt before the tree goes.
   // Journal/settle material only; the Verdict contract is untouched.
   smokeStdout?: string;
+  // The final attempt's hand-back: the message the work ended with, verbatim
+  // (ledger D17). Read by nobody here — settle keeps it beside the receipt and
+  // the session it came from is killed moments later. Journal/settle material
+  // only, like smokeStdout; absent when the attempt never got a result.
+  handback?: string;
+  // The red phase index the tree this attempt hands back has sealed (D13),
+  // when it sealed one. Journal/settle material like `handback`: the receipt
+  // records it, so an attempt later seeded from that tree re-enters the phase
+  // ladder where the tree actually left off instead of where a build starts.
+  redSealedAt?: number;
+  // Why the node settled where it did, when the reason is a scheduling
+  // decision rather than a gate (D17): an attempt left unspent because the
+  // provider that would have run it is the one already known dead, or a
+  // fallback refused for breaking audit diversity. Rides the verdict's journal
+  // line as `detail`; the Verdict contract is untouched.
+  verdictDetail?: string;
 }
 
 const REAUDIT_BUDGET = 2;
@@ -102,6 +145,8 @@ export async function runNode(
       ...result,
       gates,
       ...(smokeStdout !== undefined ? { smokeStdout } : {}),
+      ...(handback !== undefined ? { handback } : {}),
+      ...(redSealedAt !== undefined ? { redSealedAt } : {}),
       ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
       ...(result.stagedFiles === undefined && lastStaged !== undefined
         ? { stagedFiles: lastStaged }
@@ -111,12 +156,16 @@ export async function runNode(
   }
 
   // Resolved-provider diversity preflight (binding prose) — before any spawn.
-  const buildProvider = node.worker.provider ?? DEFAULT_WORKER_PROVIDER;
-  if (node.accept.audit && node.accept.audit.provider === buildProvider) {
-    throw new PlanInvalidError([
-      `node '${node.id}': resolved audit provider '${node.accept.audit.provider}' must differ from build provider '${buildProvider}'`,
-    ]);
-  }
+  const preflight = auditDiversityRefusal(node, node.worker.provider ?? DEFAULT_WORKER_PROVIDER);
+  if (preflight !== undefined) throw new PlanInvalidError([preflight]);
+
+  // Who is cast for the next attempt. The plan's cast until a `dead` attempt
+  // hands the node to the run's fallback (D17) — and a model pin names a model
+  // of the provider that died, so it goes with it.
+  let cast: { provider?: string; model?: string } = {
+    provider: node.worker.provider,
+    model: node.worker.model,
+  };
 
   const timeoutMs = node.policy.timeoutMs ?? opts.defaultTimeoutMs;
   const maxAttempts = node.policy.maxAttempts;
@@ -128,8 +177,9 @@ export async function runNode(
   let iso: Isolation | null = null;
   // The phase the CURRENT tree has sealed a red commit for (D13), if any. It
   // belongs to the tree, not to the node: a retry that reuses the tree re-enters
-  // after that phase, and a re-isolated tree (dead+resume) has sealed nothing
-  // and earns a fresh red.
+  // after that phase, and a re-isolated tree (dead+resume) earns whatever its
+  // base carries — nothing for a build from its dependencies, and for a tree
+  // checked out of a quarantine (D17) the seal that tree already holds.
   let redSealedAt: number | undefined;
   // Evidence threaded into the next attempt's re-prompt (A3). undefined on the
   // first attempt.
@@ -142,6 +192,10 @@ export async function runNode(
   let lastStaged: string[] | undefined;
   // The smoke gate's findings log, when this attempt's gate wrote one (D14).
   let smokeStdout: string | undefined;
+  // What this attempt's work handed back (D17) — the builder's final message,
+  // never the auditor's, which is egress the loop parses rather than work a
+  // worker produced.
+  let handback: string | undefined;
 
   try {
     for (;;) {
@@ -150,10 +204,18 @@ export async function runNode(
       auditRecords = undefined;
       lastStaged = undefined;
       smokeStdout = undefined;
+      handback = undefined;
 
       // ── isolate (or reuse the tree for a retryable retry) ───────────────────
+      // Whether THIS attempt built its tree: a retryable retry reuses the one
+      // the last attempt worked in, and a worker already inside a resumed tree
+      // does not need telling where it came from again.
+      let isolated = false;
       if (iso === null) {
-        redSealedAt = undefined;
+        // Every isolation of this node checks out the same baseRefs, so a
+        // resumed node's fresh tree carries the quarantine's seal again.
+        redSealedAt = opts.resumedFrom?.redSealedAt;
+        isolated = true;
         try {
           iso = await deps.isolate.isolate(node, baseRefs);
         } catch (err) {
@@ -174,7 +236,10 @@ export async function runNode(
         attempts === 1 && iso.conflictFiles.length > 0
           ? `Resolve merge conflicts in: ${iso.conflictFiles.join(', ')}`
           : undefined;
-      const promptEvidence = mergeEvidence(evidence, firstPromptExtra);
+      const promptEvidence = mergeEvidence(
+        evidence,
+        mergeEvidence(isolated ? resumeEvidence(opts.resumedFrom) : undefined, firstPromptExtra),
+      );
 
       // ── setup ───────────────────────────────────────────────────────────────
       if (node.setup) {
@@ -202,13 +267,7 @@ export async function runNode(
       // {prompt}/{phases} node spawns a build worker — so a command-only plan
       // needs no runner at all.
       const worker =
-        'command' in node.work
-          ? null
-          : await deps.runner.spawnWorker({
-              provider: node.worker.provider,
-              model: node.worker.model,
-              cwd,
-            });
+        'command' in node.work ? null : await deps.runner.spawnWorker({ ...cast, cwd });
       let result: WorkerResult;
       try {
         result = await runWork(node, worker, deps.exec, cwd, {
@@ -233,6 +292,7 @@ export async function runNode(
         throw err;
       }
       await worker?.kill();
+      handback = result.finalMessage;
 
       // ── non-stop reasons ──────────────────────────────────────────────────
       if (result.reason !== 'stop') {
@@ -262,11 +322,39 @@ export async function runNode(
           });
         }
         if (klass === 'dead') {
+          // A dead attempt says the provider is gone, not that the work is
+          // wrong (D17) — so the next attempt only happens on a DIFFERENT
+          // provider. The run's fallback is that second cast; with no usable
+          // one, the attempt that would have re-run the same outage is not
+          // spent at all, and the verdict's journal line says so.
+          let unspent: string | undefined;
           if (node.policy.onDead === 'resume' && attempts < maxAttempts) {
-            await disposeQuiet(iso);
-            iso = null; // force re-isolate (fresh tree)
-            evidence = undefined;
-            continue;
+            const resolved = cast.provider ?? DEFAULT_WORKER_PROVIDER;
+            const fallback = opts.fallbackProvider;
+            if (fallback === undefined) {
+              unspent = NO_FALLBACK;
+            } else if (fallback === resolved) {
+              unspent = `fallback provider '${fallback}' is the same dead provider`;
+            } else {
+              // The diversity rule is the gate's whole worth: a fallback that
+              // is the auditor would leave one provider grading its own work,
+              // green and meaningless. Refuse the cast, keep the tree.
+              const refusal = auditDiversityRefusal(node, fallback);
+              if (refusal !== undefined) {
+                return handBack({
+                  verdict: failedVerdict(node, attempts, {
+                    gate: { ran: `fallback provider '${fallback}': ${refusal}`, exitCode: -1 },
+                  }),
+                  verdictDetail: refusal,
+                  ...detail,
+                });
+              }
+              cast = { provider: fallback };
+              await disposeQuiet(iso);
+              iso = null; // force re-isolate (fresh tree)
+              evidence = undefined;
+              continue;
+            }
           }
           const base = baseVerdict(node, attempts);
           return handBack({
@@ -277,6 +365,7 @@ export async function runNode(
               // reproduction to diagnose.
               evidence: { ...base.evidence, gate: { ran: 'wait:dead', exitCode: -1 } },
             },
+            ...(unspent !== undefined ? { verdictDetail: unspent } : {}),
             ...detail,
           });
         }
@@ -388,22 +477,13 @@ export async function runNode(
       // ── audit ────────────────────────────────────────────────────────────────
       let output: AuditResult | undefined;
       if (node.accept.audit) {
-        // SEC4a — refuse to run a gate the builder rewrote. A repo-local audit
-        // script the worker touched is not the plan's gate anymore; retry with
-        // revert evidence (an honest formatter-touch is recoverable), terminal
-        // at maxAttempts. Checked against this attempt's staged set, so a
-        // reverted file (clean vs HEAD) passes on the retry.
-        // v1.1.5 selfIntegrity: the audit command carries its own
-        // fitness-function pin (scoreboard-normalized) and an out-of-tree
-        // binary — the phase-2 hub collision's fix. Declared → the token rule
-        // stands down; the audit itself refuses real tampering ("base is
-        // stale"). Undeclared commands keep the strict rule.
-        const tampered = node.accept.audit.selfIntegrity
-          ? []
-          : auditGateTampering(node.accept.audit.command, stagedFiles);
-        if (tampered.length > 0) {
+        const ladder = await runAuditLadder(node, cwd, stagedFiles, deps, timeoutMs, {
+          signal: opts.signal,
+          idleMs: opts.idleMs,
+        });
+        if (ladder.kind === 'tampered') {
           gates.push({ gate: 'audit-tamper', exitCode: -1 });
-          const tamperMsg = `${node.accept.audit.command} (gate tampered: ${tampered.join(', ')})`;
+          const tamperMsg = `${node.accept.audit.command} (gate tampered: ${ladder.files.join(', ')})`;
           const settle = settleRetryable(
             node,
             attempts,
@@ -418,71 +498,34 @@ export async function runNode(
           );
           if (settle) return handBack(settle);
           evidence =
-            `You modified the audit gate file(s): ${tampered.join(', ')}. ` +
+            `You modified the audit gate file(s): ${ladder.files.join(', ')}. ` +
             "Revert them to their original content — the audit must run the plan's " +
             'pristine gate, not yours.';
           continue; // retryable — SAME tree; the builder can restore the gate
         }
-
-        const auditOutcome = await runAudit(node, cwd, deps, timeoutMs, {
-          signal: opts.signal,
-          idleMs: opts.idleMs,
-        });
-        if (auditOutcome.kind === 'parse-exhausted') {
-          // Never adjudicated — the receipt records skip, not fail (§D).
-          auditRecords = [
-            {
-              check: '(audit)',
-              verdict: 'skip',
-              reasons: ['audit egress unparseable after reaudit budget — never adjudicated'],
-            },
-          ];
-          return handBack({
-            verdict: failedVerdict(node, attempts, {
-              // node.accept.audit is defined inside this block.
-              gate: { ran: `${node.accept.audit.command} (egress unparseable)`, exitCode: -1 },
-            }),
-          });
-        }
-        if (auditOutcome.kind === 'worker-fault') {
-          // The auditor died / timed out / blocked — it never returned a verdict.
-          // Distinct from a fail verdict; record the reason for the journal.
-          auditRecords = [
-            {
-              check: '(audit)',
-              verdict: 'skip',
-              reasons: [`auditor ${auditOutcome.reason} — never adjudicated`],
-            },
-          ];
+        auditRecords = ladder.records;
+        if (ladder.kind === 'unadjudicated') {
           const base = baseVerdict(node, attempts);
           return handBack({
             verdict: {
               ...base,
               // An auditor the run's own signal cut off is an abort, not a
               // failed audit (D16) — the build's work rides back either way.
-              status: auditOutcome.reason === 'aborted' ? 'aborted' : 'failed',
+              status: ladder.aborted ? 'aborted' : 'failed',
               evidence: {
                 ...base.evidence,
-                gate: {
-                  ran: `${node.accept.audit.command} (auditor ${auditOutcome.reason})`,
-                  exitCode: -1,
-                },
+                gate: { ran: ladder.gateRan, exitCode: -1 },
               },
             },
           });
         }
-        auditRecords = auditOutcome.result.verdicts.map((v) => ({
-          check: v.check,
-          verdict: v.verdict,
-          reasons: v.reasons,
-        }));
-        if (auditOutcome.kind === 'fail') {
+        if (ladder.kind === 'fail') {
           const settle = settleRetryable(node, attempts, maxAttempts, {});
           if (settle) return handBack(settle);
-          evidence = auditOutcome.evidence;
+          evidence = ladder.evidence;
           continue; // audit-fail → re-prompt a FRESH build worker, SAME tree
         }
-        output = auditOutcome.result;
+        output = ladder.result;
       }
 
       // ── all gates passed → done ──────────────────────────────────────────────
@@ -506,6 +549,8 @@ export async function runNode(
         stagedFiles,
         gates,
         ...(smokeStdout !== undefined ? { smokeStdout } : {}),
+        ...(handback !== undefined ? { handback } : {}),
+        ...(redSealedAt !== undefined ? { redSealedAt } : {}),
         ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
       };
     }
@@ -516,6 +561,80 @@ export async function runNode(
 }
 
 // ── audit ──────────────────────────────────────────────────────────────────
+
+// The audit ladder: the SEC4a gate-integrity rule, then the auditor itself
+// bounded by the reaudit budget. The node ladder runs it as its last gate and
+// `pleach audit` runs it alone over a quarantined tree (D17) — one ladder, two
+// callers, so a re-adjudication is judged by exactly what the run judged it by.
+// What the callers differ on is what to DO with the answer: run-node retries
+// what a retry can fix, the verb closes or re-quarantines what it was handed.
+export type AuditLadderOutcome =
+  // The gate names a file this attempt delivered: the plan's check is not the
+  // plan's anymore, so no auditor is spawned at all.
+  | { kind: 'tampered'; files: string[] }
+  | { kind: 'pass'; result: AuditResult; records: AuditRecord[] }
+  | { kind: 'fail'; evidence: string; records: AuditRecord[] }
+  // The auditor never adjudicated: its egress never parsed within the budget,
+  // or it died, timed out, or was cut off mid-wait. `gateRan` names which for
+  // the verdict's gate record; `aborted` marks the run's own signal (D16).
+  | { kind: 'unadjudicated'; records: AuditRecord[]; gateRan: string; aborted: boolean };
+
+export async function runAuditLadder(
+  node: Node,
+  cwd: string,
+  stagedFiles: readonly string[],
+  deps: ConductorDeps,
+  timeoutMs: number,
+  wait: { signal?: AbortSignal; idleMs?: number },
+): Promise<AuditLadderOutcome> {
+  // node.accept.audit is defined by the caller's guard.
+  const audit = node.accept.audit as NonNullable<Node['accept']['audit']>;
+
+  // SEC4a — refuse to run a gate the builder rewrote. A repo-local audit
+  // script the worker touched is not the plan's gate anymore. Checked against
+  // this attempt's staged set, so a reverted file (clean vs HEAD) passes on the
+  // retry — and a caller that staged nothing (the re-audit of a tree an auditor
+  // was already admitted to) flags nothing, because nothing was delivered here.
+  // v1.1.5 selfIntegrity: the audit command carries its own fitness-function
+  // pin (scoreboard-normalized) and an out-of-tree binary — the phase-2 hub
+  // collision's fix. Declared → the token rule stands down; the audit itself
+  // refuses real tampering ("base is stale"). Undeclared commands keep the
+  // strict rule.
+  const tampered = audit.selfIntegrity ? [] : auditGateTampering(audit.command, stagedFiles);
+  if (tampered.length > 0) return { kind: 'tampered', files: tampered };
+
+  const outcome = await runAudit(node, cwd, deps, timeoutMs, wait);
+  // Never adjudicated — the receipt records skip, not fail (§D).
+  if (outcome.kind === 'parse-exhausted') {
+    return {
+      kind: 'unadjudicated',
+      records: [neverAdjudicated('audit egress unparseable after reaudit budget')],
+      gateRan: `${audit.command} (egress unparseable)`,
+      aborted: false,
+    };
+  }
+  // The auditor died / timed out / was held at a prompt — it never returned a
+  // verdict. Distinct from a fail verdict; the reason is recorded as such.
+  if (outcome.kind === 'worker-fault') {
+    return {
+      kind: 'unadjudicated',
+      records: [neverAdjudicated(`auditor ${outcome.reason}`)],
+      gateRan: `${audit.command} (auditor ${outcome.reason})`,
+      aborted: outcome.reason === 'aborted',
+    };
+  }
+  const records: AuditRecord[] = outcome.result.verdicts.map((v) => ({
+    check: v.check,
+    verdict: v.verdict,
+    reasons: v.reasons,
+  }));
+  if (outcome.kind === 'fail') return { kind: 'fail', evidence: outcome.evidence, records };
+  return { kind: 'pass', result: outcome.result, records };
+}
+
+function neverAdjudicated(why: string): AuditRecord {
+  return { check: '(audit)', verdict: 'skip', reasons: [`${why} — never adjudicated`] };
+}
 
 type AuditOutcome =
   | { kind: 'pass'; result: AuditResult }
@@ -569,6 +688,7 @@ async function runAudit(
           event: 'audit-egress-unparseable',
           node: node.id,
           reaudit,
+          expected: EXPECTED_EGRESS,
           egress: res.finalMessage.slice(-2000),
         });
         continue;
@@ -594,7 +714,7 @@ async function runAudit(
 // to fix a failure that wasn't its fault "fixes" something that isn't broken,
 // and good work ages in quarantine. Deterministic scans (marker, hygiene)
 // never flake and get no retry; the audit has its own reaudit budget.
-async function execGateWithRetry(
+export async function execGateWithRetry(
   deps: ConductorDeps,
   nodeId: string,
   gate: 'setup' | 'smoke',
@@ -816,6 +936,30 @@ function auditFailEvidence(failing: AuditResult['verdicts']): string {
 function mergeEvidence(a: string | undefined, b: string | undefined): string | undefined {
   if (a && b) return `${a}\n\n${b}`;
   return a ?? b;
+}
+
+// What the tree already holds, for the worker that just landed in it (D17).
+// The work is a worker's own, interrupted before any gate ran over it, and the
+// next one is about to continue inside it — so it is told where the tree came
+// from and what is in it. A quarantine the seam could show no stat for says
+// only where it came from; nothing here is invented.
+function resumeEvidence(resumed: ResumedFrom | undefined): string | undefined {
+  if (resumed === undefined) return undefined;
+  const from = `resuming work interrupted at ${resumed.sha}`;
+  return resumed.stat === undefined ? from : `${from}:\n${resumed.stat}`;
+}
+
+// Why an attempt was left unspent when the run named no second cast (D17).
+const NO_FALLBACK =
+  'no fallback provider; the second attempt would have spent the same dead provider';
+
+// The audit diversity rule (binding prose), against the provider that will
+// actually build: an auditor may never be the builder. Checked before the first
+// spawn and again before a fallback re-cast — the rule is about who ran, not
+// about what the plan said. Returns the refusal, or undefined when it holds.
+function auditDiversityRefusal(node: Node, provider: string): string | undefined {
+  if (!node.accept.audit || node.accept.audit.provider !== provider) return undefined;
+  return `node '${node.id}': resolved audit provider '${node.accept.audit.provider}' must differ from build provider '${provider}'`;
 }
 
 function baseVerdict(node: Node, attempts: number): Verdict {

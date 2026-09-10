@@ -15,14 +15,20 @@
 // and the sealed envelope is untouched.
 import { describe, expect, test } from 'bun:test';
 import { PlanSchema } from '../../src/core/plan.ts';
-import { canonicalJson, type Receipt, rehash, sha256Hex } from '../../src/core/receipt.ts';
+import {
+  canonicalJson,
+  type Receipt,
+  receiptPrefix,
+  rehash,
+  sha256Hex,
+} from '../../src/core/receipt.ts';
 import type { RunSummary } from '../../src/loop/deps.ts';
 import { runPlan } from '../../src/loop/run-plan.ts';
 import { type Harness, type HarnessOpts, makeHarness } from './harness.ts';
 
 const OPTS = { repoRoot: '/r', pleachVersion: '0.0.1-test' };
 const SMOKE = 'weeder check --strict --format sarif';
-const FRICTION_PATH = '/r/.git/pleach/receipts/x.friction.jsonl';
+const RECEIPTS = '/r/.git/pleach/receipts';
 
 // Two months of journal, plus the ledger's own bookkeeping beside them: only
 // the month files are the journal, and only in name order.
@@ -79,12 +85,26 @@ function receiptOf(h: Harness): Receipt {
   return r;
 }
 
+// Where this close's files went (D17): a node id runs again, so what a close
+// kept is filed under that close's own receipt hash — the un-prefixed name is
+// only whatever closed last.
+function keptPath(h: Harness, suffix: string): string {
+  return `${RECEIPTS}/x.${receiptPrefix(receiptOf(h).sha256)}${suffix}`;
+}
+
+function frictionPath(h: Harness): string {
+  return keptPath(h, '.friction.jsonl');
+}
+
 function keptPaths(h: Harness): { sarif?: string; friction?: string } {
   return receiptOf(h).artifacts ?? {};
 }
 
-function gateArtifactEvents(h: Harness): Record<string, unknown>[] {
-  return h.journal.filter((e) => e.event === 'gate-artifact');
+// Every close also keeps the worker's handback (D17), so a settle's events are
+// read by kind: the claim here is the tree's own journal. The handback's own
+// claim is test/loop/handback-kept.test.ts.
+function gateArtifactEvents(h: Harness, gate = 'friction'): Record<string, unknown>[] {
+  return h.journal.filter((e) => e.event === 'gate-artifact' && e.gate === gate);
 }
 
 describe('gate artifacts — the worktree friction journal at settle (D14)', () => {
@@ -99,10 +119,10 @@ describe('gate artifacts — the worktree friction journal at settle (D14)', () 
     expect(written).toBeGreaterThan(-1);
     expect(written).toBeLessThan(h.log.first('dispose-start', 'x'));
 
-    expect(keptPaths(h).friction).toBe(FRICTION_PATH);
+    expect(keptPaths(h).friction).toBe(frictionPath(h));
     // The month files concatenated in name order, verbatim: the ledger's own
     // state and hotspots are not the journal, and nothing is re-serialized.
-    expect(h.artifacts.get(FRICTION_PATH)).toBe(KEPT);
+    expect(h.artifacts.get(frictionPath(h))).toBe(KEPT);
   });
 
   test('the journal carries its own gate-artifact event, hashed over the kept bytes', async () => {
@@ -114,7 +134,7 @@ describe('gate artifacts — the worktree friction journal at settle (D14)', () 
         event: 'gate-artifact',
         node: 'x',
         gate: 'friction',
-        path: FRICTION_PATH,
+        path: frictionPath(h),
         sha256: sha256Hex(KEPT),
       },
     ]);
@@ -125,7 +145,7 @@ describe('gate artifacts — the worktree friction journal at settle (D14)', () 
     await run(h);
     const receipt = receiptOf(h);
 
-    expect(keptPaths(h).friction).toBe(FRICTION_PATH);
+    expect(keptPaths(h).friction).toBe(frictionPath(h));
     expect(rehash(receipt)).toBe(true);
     // A settled fact, like refs: the journal is read after the freeze, so a
     // claim about it inside the hashed envelope could never have been made.
@@ -152,7 +172,7 @@ describe('gate artifacts — the worktree friction journal at settle (D14)', () 
     for (const staged of h.log.of('stage')) {
       expect(staged.detail).not.toContain('.plotplot/friction');
     }
-    expect(h.artifacts.get(FRICTION_PATH)).toBe(KEPT);
+    expect(h.artifacts.get(frictionPath(h))).toBe(KEPT);
   });
 
   test('a findings log and a friction journal are kept side by side, one event each', async () => {
@@ -162,14 +182,14 @@ describe('gate artifacts — the worktree friction journal at settle (D14)', () 
     });
     await run(h);
 
-    expect(h.artifacts.get('/r/.git/pleach/receipts/x.sarif')).toBe(SARIF);
-    expect(h.artifacts.get(FRICTION_PATH)).toBe(KEPT);
-    expect(keptPaths(h)).toEqual({
-      sarif: '/r/.git/pleach/receipts/x.sarif',
-      friction: FRICTION_PATH,
-    });
-    expect(gateArtifactEvents(h).map((e) => [e.gate, e.sha256])).toEqual([
+    expect(h.artifacts.get(keptPath(h, '.sarif'))).toBe(SARIF);
+    expect(h.artifacts.get(frictionPath(h))).toBe(KEPT);
+    expect(keptPaths(h).sarif).toBe(keptPath(h, '.sarif'));
+    expect(keptPaths(h).friction).toBe(frictionPath(h));
+    expect(gateArtifactEvents(h, 'smoke').map((e) => [e.gate, e.sha256])).toEqual([
       ['smoke', sha256Hex(SARIF)],
+    ]);
+    expect(gateArtifactEvents(h).map((e) => [e.gate, e.sha256])).toEqual([
       ['friction', sha256Hex(KEPT)],
     ]);
   });
@@ -183,8 +203,8 @@ describe('gate artifacts — the worktree friction journal at settle (D14)', () 
     expect(summary.failed).toEqual(['x']);
 
     expect(h.log.first('receipt.artifact', 'x')).toBeLessThan(h.log.first('dispose-start', 'x'));
-    expect(h.artifacts.get(FRICTION_PATH)).toBe(KEPT);
-    expect(keptPaths(h).friction).toBe(FRICTION_PATH);
+    expect(h.artifacts.get(frictionPath(h))).toBe(KEPT);
+    expect(keptPaths(h).friction).toBe(frictionPath(h));
     // The kept path joins the quarantine refs; neither write clobbers the other.
     expect(receiptOf(h).refs?.quarantineBranch).toBe('quarantine/x');
   });
@@ -198,9 +218,9 @@ describe('gate artifacts — the worktree friction journal at settle (D14)', () 
       const h = makeHarness(plotplot === undefined ? {} : { plotplotByNode: { x: plotplot } });
       const summary = await run(h);
       expect(summary.closed).toEqual(['x']);
-      expect(h.artifacts.size).toBe(0);
+      expect(h.artifacts.has(frictionPath(h))).toBe(false);
       expect(gateArtifactEvents(h)).toEqual([]);
-      expect(keptPaths(h)).toEqual({});
+      expect(keptPaths(h).friction).toBeUndefined();
     }
   });
 
@@ -214,10 +234,15 @@ describe('gate artifacts — the worktree friction journal at settle (D14)', () 
     expect(summary.closed).toEqual(['x']);
     expect(h.git.refs.get('node/x')).toBeDefined();
     expect(gateArtifactEvents(h)).toEqual([]);
-    expect(keptPaths(h)).toEqual({});
+    expect(h.artifacts.size).toBe(0);
+    expect(keptPaths(h).friction).toBeUndefined();
+    // One line per artifact this close would have kept (the tree's journal,
+    // and the worker's handback): a failure of one never hides the other.
     const failures = h.journal.filter((e) => e.event === 'receipt-write-failed');
-    expect(failures).toHaveLength(1);
-    expect(failures[0]?.node).toBe('x');
-    expect(String(failures[0]?.detail)).toContain('read-only file system (test)');
+    expect(failures).toHaveLength(2);
+    for (const failure of failures) {
+      expect(failure.node).toBe('x');
+      expect(String(failure.detail)).toContain('read-only file system (test)');
+    }
   });
 });

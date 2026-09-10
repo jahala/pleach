@@ -53,6 +53,25 @@ export interface ReceiptFacts {
   model?: string;
   gates: GateRecord[]; // final attempt, ladder order
   audit?: AuditRecord[]; // absent when the audit never dispatched
+  // The tree this close was seeded from instead of building its own (D17): the
+  // quarantined tree a re-adjudication judged or a resumed run continued, at
+  // the sha it was taken at, so a close that stood on work an earlier attempt
+  // left behind stays distinguishable from a fresh one forever. Sealed
+  // INSIDE the envelope, because what was judged is a fact of the close and not
+  // a ref settled after the freeze; `canonicalJson` drops undefined, so a
+  // receipt that built its own tree hashes exactly as it did before the field.
+  base?: { kind: 'quarantine'; sha: string };
+  // How far the tree this close held got through a phased work list (D13): the
+  // index of the red phase whose seal is IN that tree's history. A later
+  // attempt standing on that tree — a resumed quarantine, a re-adjudication
+  // (D17) — re-enters the ladder after it, because a tree that already carries
+  // the failing test can never honestly seal it again. Absent for work with no
+  // phases and for a tree that never got a red through. Sealed INSIDE the
+  // envelope for the same reason `base` is: it is a fact of what the close
+  // held, and an index edited afterwards would skip a red phase. `canonicalJson`
+  // drops undefined, so a receipt without it hashes exactly as it did before
+  // the field existed.
+  redSealedAt?: number;
   // The node's acceptance AS RUN — the evolution-invalidation record. A later
   // run whose plan carries different strings must not skip-trust this close.
   acceptance: { smoke?: string; audit?: string };
@@ -89,6 +108,8 @@ export interface Receipt {
   artifacts?: {
     sarif?: string;
     friction?: string;
+    // The message the worker handed the work back with (D17), verbatim.
+    handback?: string;
   };
 }
 
@@ -116,6 +137,18 @@ function normalize(value: unknown): unknown {
 
 export function sha256Hex(text: string): string {
   return createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
+// How much of a receipt's hash names its close (D17). A node id runs more than
+// once — a retry, an acceptance-evolution re-dispatch, a resumed quarantine —
+// and each of those closes is a record of its own, so the store files every one
+// under its own hash beside the latest. Twelve hex digits is what the CLI and
+// the journal already print: short enough to read, long enough that a node's
+// own closes never collide.
+const PREFIX_LENGTH = 12;
+
+export function receiptPrefix(sha256: string): string {
+  return sha256.slice(0, PREFIX_LENGTH);
 }
 
 // What the facts imply, recomputable by anyone holding them. 'partial' audit

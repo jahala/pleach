@@ -85,6 +85,11 @@ export interface IsolateSeam {
   // Full commit message (subject + body) of `ref`; null when it doesn't
   // resolve. The receipt verb reads the receipt-sha256 trailer from it (§D).
   commitMessageOf(cwd: string, ref: string): Promise<string | null>;
+  // The `--stat` summary of the change `ref` introduced; null when the ref
+  // doesn't resolve or introduced nothing. A resumed node's first prompt names
+  // what the interrupted attempt was holding when its tree was quarantined
+  // (D17) — the worker is about to continue inside that work.
+  commitStat(cwd: string, ref: string): Promise<string | null>;
   // Land verified refs onto the branch checked out in repoRoot (ledger B3).
   // Builds the merges in a throwaway detached worktree; the checkout is only
   // ever touched by a final `merge --ff-only`, so a conflict (LandConflictError),
@@ -169,20 +174,35 @@ export interface JournalSeam {
 // <git-dir>/pleach/receipts/. read() returns null for missing OR unreadable —
 // the callers' honest degradations (no invalidation without a record; the
 // receipt verb reports UNDERIVABLE).
-// What can be kept beside a receipt (D14): a gate's findings log, or the
-// worktree's friction journal. The store owns the filenames — a caller asks
-// for a kind and is told where the bytes went.
-export type ArtifactKind = 'sarif' | 'friction';
+// What can be kept beside a receipt: a gate's findings log, the worktree's
+// friction journal (D14), or the message the worker handed the work back with
+// (D17). The store owns the filenames — a caller asks for a kind and is told
+// where the bytes went.
+export type ArtifactKind = 'sarif' | 'friction' | 'handback';
 
 export interface ReceiptStore {
+  // Keeps the close under its own hash AND as the node's latest (D17): a node
+  // id runs again and the second close must not erase the first.
   write(node: string, receipt: Receipt): Promise<void>;
+  // The node's latest close.
   read(node: string): Promise<Receipt | null>;
-  // Returns the path it wrote — what the journal records and the receipt file
-  // names. Write errors propagate; run-plan owns the never-fail-a-close rule.
-  writeArtifact(node: string, kind: ArtifactKind, bytes: string): Promise<string>;
-  // Forget any artifact of this kind for this node. Nothing to forget is an
-  // answer, not a failure; other errors propagate like writeArtifact's.
-  discardArtifact(node: string, kind: ArtifactKind): Promise<void>;
+  // One named close — how `previousReceiptSha256` is followed back through a
+  // node's history. Missing or unreadable is null, exactly like read().
+  readAt(node: string, receiptSha256: string): Promise<Receipt | null>;
+  // The receipt this artifact belongs to, so the store can keep it under that
+  // close's own name. Returns the path it wrote — what the journal records and
+  // the receipt file names. Write errors propagate; run-plan owns the
+  // never-fail-a-close rule.
+  writeArtifact(
+    node: string,
+    kind: ArtifactKind,
+    bytes: string,
+    receiptSha256: string,
+  ): Promise<string>;
+  // Forget this close's artifact of this kind, and the node's latest copy of it
+  // — never an earlier close's, which its own receipt seals. Nothing to forget
+  // is an answer, not a failure; other errors propagate like writeArtifact's.
+  discardArtifact(node: string, kind: ArtifactKind, receiptSha256: string): Promise<void>;
 }
 
 export interface ConductorDeps {

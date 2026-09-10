@@ -238,7 +238,12 @@ describe('phase commit (D13) — a retry after a sealed red resumes at impl', ()
           : { output: 'ok 1 widget', exitCode: 0 };
       },
     });
-    const summary = await runPlan(plan([phasedNode('n4', 2)]), h.deps, OPTS);
+    // A dead provider is re-cast, not re-run (D17): the fresh tree is the
+    // fallback's, which changes who builds and nothing about the seal.
+    const summary = await runPlan(plan([phasedNode('n4', 2)]), h.deps, {
+      ...OPTS,
+      fallbackProvider: 'gemini',
+    });
     expect(summary.closed).toEqual(['n4']);
 
     // ── two trees, two red phases, two seals with distinct shas.

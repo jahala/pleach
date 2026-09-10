@@ -133,7 +133,13 @@ describe('runNode — non-stop reasons', () => {
       id: 'n',
       policy: { maxAttempts: 2, onDead: 'resume', reauditWhen: ['compacted'] },
     });
-    const r = await runNode(node, ['base'], h.deps, { defaultTimeoutMs: DEF });
+    // The second attempt needs a provider that is not the dead one (D17,
+    // test/loop/fallback-provider.test.ts) — the tree lifecycle this test is
+    // about is unchanged by which provider gets cast.
+    const r = await runNode(node, ['base'], h.deps, {
+      defaultTimeoutMs: DEF,
+      fallbackProvider: 'gemini',
+    });
     expect(r.verdict.status).toBe('done');
     expect(h.log.count('isolate', 'n')).toBe(2); // re-isolated
     expect(h.log.count('dispose', 'n')).toBe(1); // first iso disposed before re-isolate
