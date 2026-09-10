@@ -381,3 +381,95 @@ describe('operator surfaces — the controls over kept work (D17)', () => {
     expect(KEEPING_CONTROLS.filter((control) => !readme.includes(control))).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// ledger: D18 — a landing has controls of its own now: `--sinks` names the
+// verified subset to land, and `--land-gate` runs the operator's own check on
+// the composed stack, refusing the landing when it goes red. A refusal is only
+// actionable if the row names what the line carries, and a control exists for
+// an operator only where an operator looks. So the rows D18 wrote are pinned
+// to the appends that really write them, the refusal to its kind, and the two
+// flags to the flags the CLI really parses, to `pleach --help`, and to the
+// README — including the one token a gate's command substitutes, read from the
+// loop's own constant. A gate that refuses in silence is a landing nobody can
+// explain; a flag documented nowhere is a landing nobody can shape.
+// ---------------------------------------------------------------------------
+const LAND_SRC = new URL('../../src/loop/land.ts', import.meta.url).pathname;
+
+// The rows D18 wrote: the refusal it added, and the start line it gave a new
+// field. Their fields are read from the source, never listed here.
+const LANDING_ROWS = ['land-start', 'land-gate-refused'];
+
+// The controls a landing has that a run does not.
+const LANDING_CONTROLS = ['--sinks', '--land-gate'];
+
+/** Every field a `journal.append` literal really carries, as `event -> fields`. */
+function appendedFields(path: string): Map<string, Set<string>> {
+  const src = readFileSync(path, 'utf8');
+  const fields = new Map<string, Set<string>>();
+  for (const [, body] of src.matchAll(/journal\.append\(\{([\s\S]*?)\}\)/g)) {
+    const event = body.match(/event:\s*'([a-z0-9-]+)'/)?.[1];
+    if (event === undefined) continue;
+    const seen = fields.get(event) ?? new Set<string>();
+    // Both spellings a key can take in the literal: `name: value` and shorthand.
+    for (const [, key] of body.matchAll(/(?:^|[{,])\s*([A-Za-z][A-Za-z0-9]*)\s*(?=[:,]|\s*$)/g)) {
+      if (key !== 'event') seen.add(key);
+    }
+    fields.set(event, seen);
+  }
+  return fields;
+}
+
+/** The one token a `--land-gate` command substitutes, as the loop declares it. */
+function baseToken(): string {
+  const src = readFileSync(LAND_SRC, 'utf8');
+  const token = src.match(/^const BASE_TOKEN = '([^']+)';$/m)?.[1];
+  if (token === undefined) throw new Error('No BASE_TOKEN constant in src/loop/land.ts');
+  return token;
+}
+
+describe('journal doc — the landing rows (D18)', () => {
+  const documented = documentedEvents(readFileSync(JOURNAL_DOC, 'utf8'));
+  const appended = appendedFields(LAND_SRC);
+
+  test('the landing appends are read, not vacuously empty', () => {
+    expect(appended.size).toBeGreaterThan(8);
+    for (const event of LANDING_ROWS) {
+      expect(appended.get(event)?.size ?? 0).toBeGreaterThan(1);
+    }
+  });
+
+  test('each row names every field the landing really appends under it', () => {
+    const unnamed = LANDING_ROWS.flatMap((event) => {
+      const row = documented.get(event) ?? '';
+      return [...(appended.get(event) ?? [])]
+        .filter((field) => !row.includes(`\`${field}\``) && !row.includes(`\`${field}[]\``))
+        .map((field) => `${event}.${field}`);
+    }).sort();
+    expect(unnamed).toEqual([]);
+  });
+
+  test('the kinds table pins a refused land gate as a gate result', () => {
+    expect(KINDS['land-gate-refused']).toBe('gate.result');
+  });
+});
+
+describe('operator surfaces — the landing controls (D18)', () => {
+  const help = helpText();
+  const readme = readFileSync(README, 'utf8');
+
+  test('every control named here is one the CLI really parses', () => {
+    const phantom = LANDING_CONTROLS.filter((flag) => !parsedFlags().includes(flag)).sort();
+    expect(phantom).toEqual([]);
+  });
+
+  test('the help names every landing control, and the token a gate substitutes', () => {
+    expect(LANDING_CONTROLS.filter((control) => !help.includes(control))).toEqual([]);
+    expect(help).toContain(baseToken());
+  });
+
+  test('the README names every landing control, and the token a gate substitutes', () => {
+    expect(LANDING_CONTROLS.filter((control) => !readme.includes(control))).toEqual([]);
+    expect(readme).toContain(baseToken());
+  });
+});
