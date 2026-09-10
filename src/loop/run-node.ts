@@ -35,10 +35,10 @@ export interface RunNodeOpts {
 export interface RunNodeResult {
   verdict: Verdict;
   // The live isolation, handed to run-plan for the commit-then-dispose
-  // (done) or quarantine-then-dispose (terminal failed/dead/blocked) sequence.
-  // Blocked hands its tree back too (D11) — workers edit files mid-turn, so
-  // an unfinished turn is unfinished work, not nothing. Absent only for
-  // never-isolated failures.
+  // (done) or quarantine-then-dispose (terminal failed/dead/blocked/aborted)
+  // sequence. Blocked and aborted hand their tree back too (D11, D16) — workers
+  // edit files mid-turn, so an unfinished turn is unfinished work, not nothing.
+  // Absent only for never-isolated failures.
   iso?: Isolation;
   stagedFiles?: string[];
   // What the runner saw at an abnormal end (D11) — passed through to the
@@ -85,9 +85,10 @@ export async function runNode(
     }
   }
 
-  // Every terminal verdict (failed/dead/blocked) hands the live tree back so
-  // run-plan can quarantine the evidence before disposing — blocked included
-  // since D11: workers edit files mid-turn, so an unfinished turn holds work.
+  // Every terminal verdict (failed/dead/blocked/aborted) hands the live tree
+  // back so run-plan can quarantine the evidence before disposing — blocked
+  // since D11 and aborted since D16: workers edit files mid-turn, so an
+  // unfinished turn holds work, and a halted run must not throw it away.
   // Every hand-back carries the final attempt's gate ladder + audit records +
   // staged set so run-plan can mint the receipt from frozen facts (§D).
   function handBack(result: RunNodeResult): RunNodeResult {
@@ -117,8 +118,9 @@ export async function runNode(
   const maxAttempts = node.policy.maxAttempts;
 
   // Tree lifecycle across attempts: retryable reuses `iso`; dead+resume
-  // disposes and re-isolates. A terminal/done verdict hands `iso` to the caller
-  // (done) or disposes it here (failed/dead/blocked).
+  // disposes and re-isolates. Every verdict that settles hands `iso` to the
+  // caller — done for the commit, the rest for the quarantine — so the `finally`
+  // below only ever disposes a tree an early or thrown path still holds.
   let iso: Isolation | null = null;
   // The phase the CURRENT tree has sealed a red commit for (D13), if any. It
   // belongs to the tree, not to the node: a retry that reuses the tree re-enters
@@ -229,7 +231,10 @@ export async function runNode(
 
       // ── non-stop reasons ──────────────────────────────────────────────────
       if (result.reason !== 'stop') {
-        const klass = classify({ kind: 'worker', reason: result.reason ?? 'aborted' });
+        // A runner that named nothing ended abnormally without saying how —
+        // classify has always read that as an abort; the gate string says so too.
+        const reason = result.reason ?? 'aborted';
+        const klass = classify({ kind: 'worker', reason });
         // What the runner saw at the abnormal end, when it could see anything
         // (D11) — rides every terminal hand-back below, never fabricated.
         const runnerDetail = {
@@ -270,14 +275,30 @@ export async function runNode(
             ...detail,
           });
         }
+        if (reason === 'aborted') {
+          // The run's own signal ended this wait: the node did not lose, the
+          // run stopped holding it (D16). The hand-back is every other
+          // terminal reason's — live tree, so settle quarantines the work and
+          // writes the receipt — and only the status differs, which is what
+          // keeps a halted node out of the failed bucket.
+          const base = baseVerdict(node, attempts);
+          return handBack({
+            verdict: {
+              ...base,
+              status: 'aborted',
+              evidence: { ...base.evidence, gate: { ran: 'wait:aborted', exitCode: -1 } },
+            },
+            ...detail,
+          });
+        }
         // timeout → retryable (reuse tree); anything else terminal.
         if (klass === 'retryable' && attempts < maxAttempts) {
-          evidence = `previous attempt ended: ${result.reason}`;
+          evidence = `previous attempt ended: ${reason}`;
           continue;
         }
         return handBack({
           verdict: failedVerdict(node, attempts, {
-            gate: { ran: `wait:${result.reason}`, exitCode: -1 },
+            gate: { ran: `wait:${reason}`, exitCode: -1 },
           }),
           ...detail,
         });
@@ -425,13 +446,21 @@ export async function runNode(
               reasons: [`auditor ${auditOutcome.reason} — never adjudicated`],
             },
           ];
+          const base = baseVerdict(node, attempts);
           return handBack({
-            verdict: failedVerdict(node, attempts, {
-              gate: {
-                ran: `${node.accept.audit.command} (auditor ${auditOutcome.reason})`,
-                exitCode: -1,
+            verdict: {
+              ...base,
+              // An auditor the run's own signal cut off is an abort, not a
+              // failed audit (D16) — the build's work rides back either way.
+              status: auditOutcome.reason === 'aborted' ? 'aborted' : 'failed',
+              evidence: {
+                ...base.evidence,
+                gate: {
+                  ran: `${node.accept.audit.command} (auditor ${auditOutcome.reason})`,
+                  exitCode: -1,
+                },
               },
-            }),
+            },
           });
         }
         auditRecords = auditOutcome.result.verdicts.map((v) => ({
