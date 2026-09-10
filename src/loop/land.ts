@@ -12,7 +12,8 @@ import { guardedExec } from './run-work.ts';
 // must be verified-closed, sinks resolve through the B1/C5 baseRef chain — and
 // the git mechanics live in the isolate seam's land(), which builds the merges
 // in a throwaway worktree and only ever touches the checkout via --ff-only.
-// Composes injected seams only; holds the (repo, source) conductor lock.
+// Composes injected seams only; holds the (repo, source) LAND lock — never the
+// run's (D18), so a landing proceeds while the run is still gating other nodes.
 
 export interface LandOpts {
   repoRoot: string;
@@ -31,7 +32,7 @@ export async function landPlan(
 ): Promise<LandSummary> {
   validatePlan(plan); // throws PlanInvalidError — the face maps exit 2.
 
-  const lock = await deps.lock.acquire(opts.repoRoot, plan.source);
+  const lock = await deps.lock.acquireLand(opts.repoRoot, plan.source);
   try {
     await deps.journal.append({ event: 'land-start', goal: plan.goal });
 

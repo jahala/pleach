@@ -20,15 +20,23 @@ export class ArgvParseError extends Error {
   }
 }
 
+// ledger: D18 — which of the two locks a refusal is about. The run's guards the
+// run's own state; the landing's guards the base branch. They are separate
+// files and refuse only their own kind, so a refusal that does not say which
+// one it is leaves the operator with nothing to act on.
+export type LockKind = 'run' | 'land';
+
 export class LockHeldError extends Error {
   readonly name = 'LockHeldError';
   readonly path: string;
   readonly pid: number;
+  readonly lock: LockKind;
 
-  constructor(path: string, pid: number) {
-    super(`lock held at ${path} by pid ${pid}`);
+  constructor(path: string, pid: number, lock: LockKind) {
+    super(`${lock} lock held by pid ${pid} at ${path}`);
     this.path = path;
     this.pid = pid;
+    this.lock = lock;
   }
 }
 
