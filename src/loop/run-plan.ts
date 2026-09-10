@@ -579,6 +579,13 @@ async function runUnderLock(
     while (inflight.size < opts.maxConcurrency && opts.signal?.aborted !== true) {
       const next = ready().find((n) => !inflight.has(n.id));
       if (!next) break;
+      // The drain (D16) is decided HERE, in the same tick as the close that
+      // made this node ready — read fresh per launch, never cached at the top
+      // of the run, because that tick is exactly where an operator's `pleach
+      // stop` used to lose the race and spawn a worker only to kill it (#67).
+      // It gates the launch and nothing else: what is already in flight is
+      // carried to its own close.
+      if (await deps.lock.stopRequested(opts.repoRoot, plan.source)) break;
       const promise = runOne(next).finally(() => inflight.delete(next.id));
       inflight.set(next.id, promise);
     }
@@ -587,6 +594,13 @@ async function runUnderLock(
   }
   if (opts.signal?.aborted === true) {
     await deps.journal.append({ event: 'run-aborted' });
+  }
+  // One authoritative read at the end, so a stop that landed after the last
+  // launch decision — with nothing left to gate — is still recorded and still
+  // consumed. An unconsumed marker would drain the NEXT run before it started.
+  if (await deps.lock.stopRequested(opts.repoRoot, plan.source)) {
+    await deps.journal.append({ event: 'run-stopped' });
+    await deps.lock.clearStop(opts.repoRoot, plan.source);
   }
 
   const skipped = plan.nodes

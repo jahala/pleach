@@ -143,6 +143,17 @@ export interface LockSeam {
   // O_EXCL pid lockfile per (repoRoot, source). Throws LockHeldError when a
   // live process holds it; takes over a stale lock (ledger B4).
   acquire(repoRoot: string, source: string): Promise<LockHandle>;
+  // Is a drain outstanding for this run (ledger D16)? The stop marker lives
+  // beside the lock because that is where the (repoRoot, source) path is
+  // known. It is a marker and not a signal because a signal cannot be made
+  // race-free against a scheduler that launches in the same tick as a close:
+  // the scheduler asks this as part of every launch decision, so a stop
+  // written at any moment is seen by the very next launch. Presence is the
+  // whole request — there is nothing else to read.
+  stopRequested(repoRoot: string, source: string): Promise<boolean>;
+  // Consume the marker, so the run that drained does not leave the next one
+  // stopped before it starts. Nothing to consume is an answer, not a failure.
+  clearStop(repoRoot: string, source: string): Promise<void>;
 }
 
 export interface JournalSeam {

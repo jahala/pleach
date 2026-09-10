@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { open, readFile, unlink } from 'node:fs/promises';
+import { open, readFile, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { LockHeldError } from '../core/errors.ts';
 import type { LockHandle, LockSeam } from '../loop/deps.ts';
@@ -23,6 +23,14 @@ import { resolveGitDir } from './gitdir.ts';
 function lockPath(repoRoot: string, source: string): string {
   const sha = createHash('sha1').update(source).digest('hex').slice(0, 12);
   return join(resolveGitDir(repoRoot), `pleach-${sha}.lock`);
+}
+
+// ledger: D16 — the drain marker, beside the lock of the run it drains, so the
+// two are named by the same (repoRoot, source) and cannot drift apart. Nothing
+// reads the file's bytes: its presence IS the request, which is what makes the
+// scheduler's per-launch read a single cheap stat.
+export function stopPath(repoRoot: string, source: string): string {
+  return `${lockPath(repoRoot, source)}.stop`;
 }
 
 // Returns true on success, false on EEXIST; re-throws other errors.
@@ -95,6 +103,29 @@ export function createLockSeam(): LockSeam {
       // Lost the race after stale takeover: read the new holder
       const newPid = await readPid(path);
       throw new LockHeldError(path, newPid ?? 0);
+    },
+
+    async stopRequested(repoRoot: string, source: string): Promise<boolean> {
+      try {
+        await stat(stopPath(repoRoot, source));
+        return true;
+      } catch (err) {
+        // Absent is the answer "no drain". Anything else — an unreadable git
+        // dir, a permission refusal — is not an answer, and a run must not
+        // read it as one: it would keep launching through an operator's stop.
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
+        throw err;
+      }
+    },
+
+    async clearStop(repoRoot: string, source: string): Promise<void> {
+      try {
+        await unlink(stopPath(repoRoot, source));
+      } catch (err) {
+        // Idempotent, like the lock's own release: nothing to consume means
+        // the drain is already consumed.
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+      }
     },
   };
 }
