@@ -116,6 +116,13 @@ publishes `node/<id>`; anything else writes a new quarantine receipt, and the re
 before it is still on file. It refuses a node whose latest close is not a quarantine with a green
 smoke — an audit verdict over an unproven build proves nothing.
 
+**A provider outage is paid once.** An attempt that comes back `dead` never got a working
+session at all — an outage, not a red gate — so re-running it on the same provider buys the
+same outage twice. `--fallback-provider NAME` re-casts the node on another provider instead,
+with the cross-provider audit's diversity rule re-checked against it. Without a usable
+fallback the node settles after the one attempt with its remaining attempts unspent, and the
+verdict's `detail` names why.
+
 **Halting a run never loses a node's work.** `pleach stop plan.json` drains: the scheduler reads
 the stop marker in the same tick as its next launch decision, so nothing further starts and the
 in-flight nodes settle normally. `--now` adds the hard abort — an interrupted node settles
