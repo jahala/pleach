@@ -5,6 +5,7 @@ import {
   LandBlockedError,
   LandConflictError,
   LockHeldError,
+  NoRunError,
   PlanInvalidError,
   RebuildRequiredError,
   TendTransportError,
@@ -18,6 +19,7 @@ import { verifyReceipt } from '../loop/receipt-verify.ts';
 import { runPlan } from '../loop/run-plan.ts';
 import { sweepOrphanWorktrees, sweepStaleLocks } from '../seams/clean.ts';
 import { exec } from '../seams/exec.ts';
+import { requestStop, signalRun } from '../seams/lock.ts';
 import { buildDeps, receiptDeps, resolveSeams } from './config.ts';
 import { narrateEvent } from './narrate.ts';
 
@@ -38,6 +40,8 @@ const HELP = `pleach — deterministic conductor for DAGs of verified agent work
 Usage:
   pleach run <plan.json> [flags]     Execute a plan
   pleach land <plan.json> [flags]    Merge a verified plan's sinks onto the checked-out branch
+  pleach stop <plan.json> [flags]    Drain a running plan: no new nodes launch, in-flight nodes
+                                     settle; --now aborts them (SIGINT to the run)
   pleach validate <plan.json>        Parse + validate a plan; print the topo order
   pleach schema                      Emit the plan contract as JSON Schema (for planners / codegen)
   pleach receipt <node> [flags]      Verify a settled node's close receipt (--repo-root applies)
@@ -73,6 +77,11 @@ Flags (run):
                           node event; a worker blocked on you is shouted). The JSONL
                           journal records everything regardless.
 
+Flags (stop):
+  --repo-root PATH        Git repo whose run is drained (default: cwd)
+  --now                   Abort the in-flight nodes too: SIGINT to the run's process. Their
+                          trees are quarantined as they stand and their receipts written.
+
 Landing: verified work is published as node/<id> branches; \`pleach land\` merges
 the plan's sinks onto the branch checked out in --repo-root. It refuses unless
 EVERY plan node is verified, and a merge conflict or non-fast-forward aborts
@@ -92,7 +101,7 @@ Exit codes:
   0  every plan node closed (verified)
   1  one or more nodes failed / partial / blocked / skipped (summary on stdout says which)
   2  usage error, unreadable or invalid plan
-  3  another conductor holds the lock for this (repo, source)
+  3  lock: another conductor holds this (repo, source) — or, for \`stop\`, no run holds it
 
 Receipts: every close and quarantine mints a sealed receipt (facts frozen at
 classify time, sha256 pinned as a receipt-sha256 trailer in the node's commit,
@@ -113,6 +122,7 @@ interface Flags {
   permissionMode?: string;
   config?: string;
   land: boolean;
+  now: boolean;
   quiet: boolean;
   runnerKind?: 'umbel' | 'direct-cli';
 }
@@ -127,6 +137,7 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
     repoRoot: process.cwd(),
     umbelBin: process.env.PLEACH_UMBEL_BIN ?? 'umbel',
     land: false,
+    now: false,
     quiet: false,
   };
   if (process.env.PLEACH_TEND_MODULE !== undefined) {
@@ -187,6 +198,9 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         break;
       case '--land':
         flags.land = true;
+        break;
+      case '--now':
+        flags.now = true;
         break;
       case '--quiet':
         flags.quiet = true;
@@ -373,6 +387,24 @@ async function verbLand(planPath: string, flags: Flags): Promise<number> {
   return 0;
 }
 
+// D16: drain a running plan. The marker goes beside the run's lock — through the
+// seam, which owns that path and the pid it names — so the run's very next
+// launch decision sees it: nothing more starts, in-flight nodes settle. --now
+// adds the hard abort on top, which is the aborted path (receipt + quarantine),
+// not a kill. The face never signals by itself.
+async function verbStop(planPath: string, flags: Flags): Promise<number> {
+  const { source } = await readPlan(planPath);
+  const pid = await requestStop(flags.repoRoot, source);
+  process.stdout.write(
+    `stop requested for '${source}' — run pid ${pid} launches no more nodes; in-flight nodes settle\n`,
+  );
+  if (flags.now) {
+    await signalRun(flags.repoRoot, source, 'SIGINT');
+    process.stdout.write(`SIGINT sent to run pid ${pid} — in-flight nodes abort\n`);
+  }
+  return 0;
+}
+
 // D12 (bandung P5): sweep a killed run's leavings. Stale locks always clear;
 // the worktree sweep refuses while any LIVE lock exists — a run may be in
 // flight, and cleaning under it would be the tmux-kill-server lesson replayed.
@@ -430,6 +462,8 @@ export async function runCli(argv: readonly string[]): Promise<number> {
         return await verbRun(planPath, flags);
       case 'land':
         return await verbLand(planPath, flags);
+      case 'stop':
+        return await verbStop(planPath, flags);
       case 'validate':
         return await verbValidate(planPath);
       default:
@@ -445,7 +479,7 @@ export async function runCli(argv: readonly string[]): Promise<number> {
       process.stderr.write(`pleach: ${detail}\n`);
       return 2;
     }
-    if (err instanceof LockHeldError) {
+    if (err instanceof LockHeldError || err instanceof NoRunError) {
       process.stderr.write(`pleach: ${err.message}\n`);
       return 3;
     }
