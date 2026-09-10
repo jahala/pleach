@@ -1,6 +1,6 @@
 import { IsolateCatastrophicError } from '../../src/core/errors.ts';
 import type { Node, Verdict } from '../../src/core/plan.ts';
-import type { Receipt } from '../../src/core/receipt.ts';
+import { type Receipt, receiptPrefix } from '../../src/core/receipt.ts';
 import type {
   ArtifactKind,
   ConductorDeps,
@@ -134,6 +134,12 @@ const ARTIFACT_SUFFIX: Record<ArtifactKind, string> = {
   friction: '.friction.jsonl',
   handback: '.handback.md',
 };
+
+// A close's own name in the store (D17): the node id, then its receipt's hash
+// prefix. The un-prefixed name is whatever closed last.
+function ownName(node: string, receiptSha256: string): string {
+  return `${node}.${receiptPrefix(receiptSha256)}`;
+}
 
 // ── harness construction ─────────────────────────────────────────────────────
 
@@ -496,25 +502,44 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
 
   // ── receipts ────────────────────────────────────────────────────────────────
   const receiptsStore = new Map<string, Receipt>(Object.entries(opts.receiptsSeed ?? {}));
+  // Every close under its own name too (D17) — the real store's second file,
+  // keyed the way it names it.
+  const closeStore = new Map<string, Receipt>();
+  for (const [node, seeded] of receiptsStore) closeStore.set(ownName(node, seeded.sha256), seeded);
   const artifactStore = new Map<string, string>();
   const receipts = {
-    async writeArtifact(node: string, kind: ArtifactKind, bytes: string): Promise<string> {
+    async writeArtifact(
+      node: string,
+      kind: ArtifactKind,
+      bytes: string,
+      receiptSha256: string,
+    ): Promise<string> {
       if (opts.writeArtifactThrows) throw opts.writeArtifactThrows;
-      const path = `${RECEIPT_DIR}/${node}${ARTIFACT_SUFFIX[kind]}`;
+      const path = `${RECEIPT_DIR}/${ownName(node, receiptSha256)}${ARTIFACT_SUFFIX[kind]}`;
       artifactStore.set(path, bytes);
+      artifactStore.set(`${RECEIPT_DIR}/${node}${ARTIFACT_SUFFIX[kind]}`, bytes);
       log.push('receipt.artifact', node, path);
       return path;
     },
-    async discardArtifact(node: string, kind: ArtifactKind): Promise<void> {
-      const path = `${RECEIPT_DIR}/${node}${ARTIFACT_SUFFIX[kind]}`;
-      if (artifactStore.delete(path)) log.push('receipt.artifact-discard', node, path);
+    async discardArtifact(node: string, kind: ArtifactKind, receiptSha256: string): Promise<void> {
+      const own = `${RECEIPT_DIR}/${ownName(node, receiptSha256)}${ARTIFACT_SUFFIX[kind]}`;
+      // The name that mattered: the node's latest of this kind, which this
+      // close must not be read as keeping. An earlier close's own file stays.
+      const latest = `${RECEIPT_DIR}/${node}${ARTIFACT_SUFFIX[kind]}`;
+      const forgotten = [artifactStore.delete(own), artifactStore.delete(latest)];
+      if (forgotten.some(Boolean)) log.push('receipt.artifact-discard', node, latest);
     },
     async write(node: string, receipt: Receipt): Promise<void> {
       log.push('receipt.write', node, receipt.sha256);
-      receiptsStore.set(node, JSON.parse(JSON.stringify(receipt)) as Receipt);
+      const kept = JSON.parse(JSON.stringify(receipt)) as Receipt;
+      closeStore.set(ownName(node, receipt.sha256), kept);
+      receiptsStore.set(node, kept);
     },
     async read(node: string): Promise<Receipt | null> {
       return receiptsStore.get(node) ?? null;
+    },
+    async readAt(node: string, receiptSha256: string): Promise<Receipt | null> {
+      return closeStore.get(ownName(node, receiptSha256)) ?? null;
     },
   };
 

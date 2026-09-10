@@ -11,6 +11,7 @@ import {
   TendTransportError,
 } from '../core/errors.ts';
 import { type Plan, PlanSchema } from '../core/plan.ts';
+import { receiptPrefix } from '../core/receipt.ts';
 import { planJsonSchema } from '../core/schema-json.ts';
 import { nodeSummaries, planWarnings, validatePlan } from '../core/validate.ts';
 import type { RunSummary } from '../loop/deps.ts';
@@ -108,8 +109,10 @@ Exit codes:
 
 Receipts: every close and quarantine mints a sealed receipt (facts frozen at
 classify time, sha256 pinned as a receipt-sha256 trailer in the node's commit,
-file under <git-dir>/pleach/receipts/). \`pleach receipt <node>\` re-hashes the
-file, re-derives the status from its facts, and checks the trailer:
+files under <git-dir>/pleach/receipts/ — <node>.<sha256 prefix>.json is that
+close's own and <node>.json is whatever closed last, so a node that runs again
+keeps both). \`pleach receipt <node>\` re-hashes the latest file, re-derives the
+status from its facts, checks the trailer, and lists every close behind it:
 PASS (exit 0) · TAMPERED (exit 1) · UNDERIVABLE (exit 2 — nothing proved
 either way: no receipt, foreign contract version, or unresolvable ref).
 `;
@@ -372,12 +375,21 @@ async function verbReceipt(nodeId: string, flags: Flags): Promise<number> {
 
   if (check.outcome === 'pass' && receipt !== undefined) {
     process.stderr.write(
-      `pleach: receipt PASS — ${nodeId} ${receipt.derived} (receipt-sha256 ${receipt.sha256.slice(0, 12)}…)\n`,
+      `pleach: receipt PASS — ${nodeId} ${receipt.derived} (receipt-sha256 ${receiptPrefix(receipt.sha256)}…)\n`,
     );
     for (const d of degraded) process.stderr.write(`pleach:   degraded: ${d}\n`);
   } else if (check.outcome !== 'pass') {
     process.stderr.write(
       `pleach: receipt ${check.outcome.toUpperCase()} — ${nodeId}: ${check.detail}\n`,
+    );
+  }
+  // Every close before this one (D17), newest first — the verdict above is the
+  // latest close's; these are what the node closed as on the way there.
+  for (const prior of check.history) {
+    process.stderr.write(
+      'missing' in prior
+        ? `pleach:   previous ${receiptPrefix(prior.sha256)}… — no receipt file for it in the store\n`
+        : `pleach:   previous ${receiptPrefix(prior.sha256)}… ${prior.status} ${prior.derived}\n`,
     );
   }
 
@@ -388,6 +400,7 @@ async function verbReceipt(nodeId: string, flags: Flags): Promise<number> {
       ...(receipt !== undefined
         ? { derived: receipt.derived, sha256: receipt.sha256, degraded }
         : {}),
+      history: check.history,
       ...(check.outcome !== 'pass' ? { detail: check.detail } : {}),
     })}\n`,
   );

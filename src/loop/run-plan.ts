@@ -278,14 +278,14 @@ async function runUnderLock(
     // answered by the file.
     const sealed = receipt.facts.gates.find((g) => g.gate === 'smoke')?.artifactSha;
     const stdout = outcome.smokeStdout;
-    const sarif = await keepOrJournal(node, 'smoke', 'sarif', async () =>
+    const sarif = await keepOrJournal(node, 'smoke', 'sarif', receipt.sha256, async () =>
       stdout === undefined || sealed === undefined ? null : { bytes: stdout, sha256: sealed },
     );
     // The tree's own record (D14): no gate produced it, so nothing sealed it —
     // it is read here, the last moment the worktree exists, and hashed over
     // the bytes kept. Collection has already set the directory aside, so what
     // is kept is exactly what no commit carries.
-    const friction = await keepOrJournal(node, 'friction', 'friction', async () => {
+    const friction = await keepOrJournal(node, 'friction', 'friction', receipt.sha256, async () => {
       const text = iso === undefined ? null : await deps.isolate.readFriction(iso.cwd);
       return text === null ? null : { bytes: text, sha256: sha256Hex(text) };
     });
@@ -294,7 +294,7 @@ async function runUnderLock(
     // survived only in the provider's own transcript. Kept verbatim and read
     // by nobody: agents produce, code decides. A worker that said nothing
     // hands back nothing to keep.
-    const handback = await keepOrJournal(node, 'handback', 'handback', async () => {
+    const handback = await keepOrJournal(node, 'handback', 'handback', receipt.sha256, async () => {
       const text = outcome.handback;
       return text === undefined || text === '' ? null : { bytes: text, sha256: sha256Hex(text) };
     });
@@ -313,22 +313,23 @@ async function runUnderLock(
     node: Node,
     gate: 'smoke' | 'friction' | 'handback',
     kind: ArtifactKind,
+    receiptSha256: string,
     read: () => Promise<{ bytes: string; sha256: string } | null>,
   ): Promise<string | undefined> {
     try {
       const artifact = await read();
-      // Nothing to keep, so nothing of this kind may sit beside the receipt.
-      // A node closes more than once — §D acceptance evolution re-dispatches
-      // one whose gate changed, which is exactly when a gate that printed a
-      // findings log is replaced by one that prints none — and the artifact
-      // name is the node's, not the close's. Left alone, the earlier close's
-      // log would outlive the receipt that sealed it and be read as this
-      // close's by whoever counts its findings.
+      // Nothing to keep, so nothing of this kind may sit beside the receipt
+      // as the node's latest. A node closes more than once — §D acceptance
+      // evolution re-dispatches one whose gate changed, which is exactly when
+      // a gate that printed a findings log is replaced by one that prints none.
+      // Left alone, the earlier close's log would be read as this close's by
+      // whoever counts its findings. It keeps its own name (D17); what it
+      // loses is the claim to be current.
       if (artifact === null) {
-        await deps.receipts.discardArtifact(node.id, kind);
+        await deps.receipts.discardArtifact(node.id, kind, receiptSha256);
         return undefined;
       }
-      const path = await deps.receipts.writeArtifact(node.id, kind, artifact.bytes);
+      const path = await deps.receipts.writeArtifact(node.id, kind, artifact.bytes, receiptSha256);
       await deps.journal.append({
         event: 'gate-artifact',
         node: node.id,

@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Receipt } from '../../src/core/receipt.ts';
+import { type Receipt, receiptPrefix } from '../../src/core/receipt.ts';
 import { createRepo } from '../support/git-repo.ts';
 import { ownFields } from '../support/journal.ts';
 
@@ -118,7 +118,9 @@ describe('gate artifacts — e2e', () => {
     const sealed = smokeGate(receipt).artifactSha;
     expect(sealed).toMatch(/^[0-9a-f]{64}$/);
 
-    const artifact = join(receiptsDir(repo), 'findings.sarif');
+    // What a close kept is filed under that close's own receipt hash (D17);
+    // `<node>.sarif` is the same bytes under the name of whatever closed last.
+    const artifact = join(receiptsDir(repo), `findings.${receiptPrefix(receipt.sha256)}.sarif`);
     const bytes = await readFile(artifact);
     expect(sealed).toBe(sha256(bytes));
 
@@ -126,6 +128,9 @@ describe('gate artifacts — e2e', () => {
     // what remains is the log the smoke printed, verbatim and still parseable.
     expect(bytes.toString('utf8')).not.toContain('judging the staged diff');
     expect(bytes.toString('utf8')).toBe(await readFile(SARIF_FIXTURE, 'utf8'));
+    expect(await readFile(join(receiptsDir(repo), 'findings.sarif'), 'utf8')).toBe(
+      bytes.toString('utf8'),
+    );
     expect((JSON.parse(bytes.toString('utf8')) as { version: string }).version).toBe('2.1.0');
 
     // The receipt names the file outside its envelope, and still verifies.
@@ -151,11 +156,12 @@ describe('gate artifacts — e2e', () => {
 
   // A node is re-dispatched when its acceptance changes (§D acceptance
   // evolution) — which is precisely when the gate that produced a findings log
-  // is replaced by one that produces none. The receipts dir is keyed by node
-  // id alone, so the second close overwrites the receipt and, left to itself,
-  // leaves the first close's files under the same names: a findings log and a
-  // friction journal that no receipt seals, read as this close's by whoever
-  // counts suppressions. What sits beside a receipt is what THAT close kept.
+  // is replaced by one that produces none. Left to itself, the first close's
+  // files would stay under the node's un-prefixed names: a findings log and a
+  // friction journal that this receipt does not seal, read as this close's by
+  // whoever counts suppressions. What sits beside a receipt under the node's
+  // own name is what THAT close kept. (The earlier close keeps its files under
+  // its own hash — D17; losing them is not what this forgets.)
   test('a re-closed node keeps only what its own close sealed', async () => {
     const first = await run(
       repo,
@@ -193,7 +199,7 @@ describe('gate artifacts — e2e', () => {
       const sealed = smokeGate(receipt).artifactSha;
       expect(sealed).toMatch(/^[0-9a-f]{64}$/);
 
-      const artifact = join(receiptsDir(repo), 'weeded.sarif');
+      const artifact = join(receiptsDir(repo), `weeded.${receiptPrefix(receipt.sha256)}.sarif`);
       const bytes = await readFile(artifact);
       expect(sealed).toBe(sha256(bytes));
       expect((JSON.parse(bytes.toString('utf8')) as { version: string }).version).toBe('2.1.0');
@@ -225,9 +231,12 @@ describe('gate artifacts — e2e', () => {
     expect(r.code).toBe(0);
     expect(r.closed).toEqual(['big']);
 
-    const bytes = await readFile(join(receiptsDir(repo), 'big.sarif'));
+    const receipt = await readReceipt(repo, 'big');
+    const bytes = await readFile(
+      join(receiptsDir(repo), `big.${receiptPrefix(receipt.sha256)}.sarif`),
+    );
     expect(bytes.toString('utf8')).toBe(source);
-    expect(smokeGate(await readReceipt(repo, 'big')).artifactSha).toBe(sha256(bytes));
+    expect(smokeGate(receipt).artifactSha).toBe(sha256(bytes));
   }, 120_000);
 });
 

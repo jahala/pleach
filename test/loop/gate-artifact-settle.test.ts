@@ -13,14 +13,20 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { PlanSchema } from '../../src/core/plan.ts';
-import { canonicalJson, type Receipt, rehash, sha256Hex } from '../../src/core/receipt.ts';
+import {
+  canonicalJson,
+  type Receipt,
+  receiptPrefix,
+  rehash,
+  sha256Hex,
+} from '../../src/core/receipt.ts';
 import type { RunSummary } from '../../src/loop/deps.ts';
 import { runPlan } from '../../src/loop/run-plan.ts';
 import { type Harness, type HarnessOpts, makeHarness } from './harness.ts';
 
 const OPTS = { repoRoot: '/r', pleachVersion: '0.0.1-test' };
 const SMOKE = 'weeder check --strict --format sarif';
-const SARIF_PATH = '/r/.git/pleach/receipts/x.sarif';
+const RECEIPTS = '/r/.git/pleach/receipts';
 
 // A findings log as a real gate prints it — pretty-printed, trailing newline.
 // The kept bytes are these, verbatim: never a re-serialization of the parse.
@@ -85,6 +91,13 @@ function receiptOf(h: Harness): Receipt {
   return r;
 }
 
+// Where this close's log went (D17): a node id runs again, so what a close
+// kept is filed under that close's own receipt hash — `<node>.sarif` is only
+// whatever closed last.
+function sarifPath(h: Harness): string {
+  return `${RECEIPTS}/x.${receiptPrefix(receiptOf(h).sha256)}.sarif`;
+}
+
 // The receipt file's settled sidecar: the paths settle kept, beside `refs` and
 // outside the hashed envelope.
 function keptPaths(h: Harness): { sarif?: string } {
@@ -104,7 +117,7 @@ function gateArtifactEvents(h: Harness, gate = 'smoke'): Record<string, unknown>
 
 // Whether the log was kept, by the path the store returns for it.
 function keptSarif(h: Harness): string | undefined {
-  return h.artifacts.get(SARIF_PATH);
+  return h.artifacts.get(sarifPath(h));
 }
 
 describe('gate artifacts — the kept log at settle (D14)', () => {
@@ -120,7 +133,7 @@ describe('gate artifacts — the kept log at settle (D14)', () => {
     expect(written).toBeLessThan(h.log.first('dispose-start', 'x'));
 
     const path = keptPaths(h).sarif;
-    expect(path).toBe(SARIF_PATH);
+    expect(path).toBe(sarifPath(h));
     const bytes = h.artifacts.get(path ?? '');
     expect(bytes).toBe(LOG);
     // One hash, two carriers: the seal cites the file, the file answers to it.
@@ -151,7 +164,7 @@ describe('gate artifacts — the kept log at settle (D14)', () => {
         event: 'gate-artifact',
         node: 'x',
         gate: 'smoke',
-        path: '/r/.git/pleach/receipts/x.sarif',
+        path: sarifPath(h),
         sha256: sha256Hex(LOG),
       },
     ]);
@@ -164,11 +177,11 @@ describe('gate artifacts — the kept log at settle (D14)', () => {
 
     expect(h.log.first('receipt.artifact', 'x')).toBeGreaterThan(-1);
     expect(h.log.first('receipt.artifact', 'x')).toBeLessThan(h.log.first('dispose-start', 'x'));
-    expect(h.artifacts.get('/r/.git/pleach/receipts/x.sarif')).toBe(LOG);
+    expect(h.artifacts.get(sarifPath(h))).toBe(LOG);
     expect(gateArtifactEvents(h)).toHaveLength(1);
     // The kept path joins the quarantine refs; neither write clobbers the other.
     const receipt = receiptOf(h);
-    expect(keptPaths(h).sarif).toBe('/r/.git/pleach/receipts/x.sarif');
+    expect(keptPaths(h).sarif).toBe(sarifPath(h));
     expect(receipt.refs?.quarantineBranch).toBe('quarantine/x');
     expect(sha256Hex(LOG)).toBe(sealedArtifactSha(h) as string);
   });
@@ -190,7 +203,7 @@ describe('gate artifacts — the kept log at settle (D14)', () => {
     expect(smokeRuns).toBe(2);
 
     expect(gateArtifactEvents(h)).toHaveLength(1);
-    expect(h.artifacts.get('/r/.git/pleach/receipts/x.sarif')).toBe(last);
+    expect(h.artifacts.get(sarifPath(h))).toBe(last);
     expect(sealedArtifactSha(h)).toBe(sha256Hex(last));
   });
 
@@ -201,7 +214,7 @@ describe('gate artifacts — the kept log at settle (D14)', () => {
       expect(keptSarif(h)).toBeUndefined();
       expect(gateArtifactEvents(h)).toEqual([]);
       expect(keptPaths(h).sarif).toBeUndefined();
-      expect(h.log.events.some((e) => e.detail === SARIF_PATH)).toBe(false);
+      expect(h.log.events.some((e) => e.detail === sarifPath(h))).toBe(false);
     }
   });
 

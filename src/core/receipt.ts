@@ -120,6 +120,18 @@ export function sha256Hex(text: string): string {
   return createHash('sha256').update(text, 'utf8').digest('hex');
 }
 
+// How much of a receipt's hash names its close (D17). A node id runs more than
+// once — a retry, an acceptance-evolution re-dispatch, a resumed quarantine —
+// and each of those closes is a record of its own, so the store files every one
+// under its own hash beside the latest. Twelve hex digits is what the CLI and
+// the journal already print: short enough to read, long enough that a node's
+// own closes never collide.
+const PREFIX_LENGTH = 12;
+
+export function receiptPrefix(sha256: string): string {
+  return sha256.slice(0, PREFIX_LENGTH);
+}
+
 // What the facts imply, recomputable by anyone holding them. 'partial' audit
 // verdicts do NOT block — the auditor relays them and tend adjudicates (the
 // dual close); 'fail' and 'skip' both block, because "never adjudicated" must
