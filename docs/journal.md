@@ -53,6 +53,41 @@ tolerate unknown events and unknown fields.
 | `land-conflict` | `ref`, `files` | merge conflict — repository left untouched |
 | `landed` | landing result fields | verified sinks merged onto the checked-out branch |
 
+## The envelope
+
+Every line carries the garden's one event envelope beside its own fields, so
+tend2 reads this journal, the friction journal and mull's spend log with one
+loader (ledger D15). The envelope is `contracts/friction-profile.md` at
+jahala/plotplot (v1.1.0), which is also where the kinds below are pinned.
+
+| key | value |
+|---|---|
+| `time` | when the line was written — RFC 3339 UTC, ending in `Z` |
+| `event.name` | the event's name, source-namespaced: `pleach.` + the name in the table above. The line keeps its own `event` field too |
+| `plotplot.kind` | one of four pinned kinds (below) |
+| `plotplot.count` | `1` — pleach writes one line per event and never batches |
+| `plotplot.harness` | `null` on every pleach line: pleach observes a runner's process, not a harness turn |
+| `gen_ai.conversation.id` | `null` on every pleach line: a run is not one conversation |
+
+The four kinds, and the scope each mirrors under the profile's names:
+
+| kind | lines | mirrors |
+|---|---|---|
+| `run.lifecycle` | the run and the landing, beginning to end | — |
+| `node.lifecycle` | one node's passage, and every record kept or refused along the way | `plotplot.node` |
+| `gate.result` | a gate said yes or no | `plotplot.gate`, `plotplot.node` (`null` on land-level lines, which belong to no node) |
+| `gate.retry` | an exec gate's one same-tree re-run | `plotplot.node`, `plotplot.gate` |
+
+Terminal-verdict lines add who ran the work: `plotplot.runner` is the runner's
+CLI name, verbatim from the line's `provider` field, and `gen_ai.request.model`
+is the model where the plan pinned one (absent otherwise — "never told us" is a
+missing key, not a `null`). `gen_ai.provider.name` is never written: a runner
+can be routed through Bedrock or Vertex, and pleach cannot see which.
+
+The envelope is additive. Every event name and field documented above means
+what it always meant, and consumers that ignore the envelope keys read the
+journal exactly as before.
+
 ## Reading it
 
 - **Liveness**: the file is append-only during a run; tail it. A `blocked` event

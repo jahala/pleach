@@ -15,6 +15,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Receipt } from '../../src/core/receipt.ts';
 import { createRepo } from '../support/git-repo.ts';
+import { ownFields } from '../support/journal.ts';
 
 const MAIN = join(import.meta.dir, '../../src/main.ts');
 const SARIF_SMOKE = join(import.meta.dir, '../fixtures/sarif-smoke.sh');
@@ -133,8 +134,9 @@ describe('gate artifacts — e2e', () => {
     expect(verify.code).toBe(0);
     expect((JSON.parse(verify.stdout.trim()) as { outcome: string }).outcome).toBe('pass');
 
-    // One journal line says what was kept and where.
-    expect(await gateArtifactEvents(repo)).toEqual([
+    // One journal line says what was kept and where (beside the envelope every
+    // line carries, which is pinned in the envelope's own tests).
+    expect((await gateArtifactEvents(repo)).map(ownFields)).toEqual([
       { event: 'gate-artifact', node: 'findings', gate: 'smoke', path: artifact, sha256: sealed },
     ]);
 
