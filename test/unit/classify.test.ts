@@ -85,7 +85,7 @@ describe('classify — errors', () => {
   });
 
   test('LockHeldError → "terminal"', () => {
-    expect(classify(errorInput(new LockHeldError('/tmp/x', 42)))).toBe('terminal');
+    expect(classify(errorInput(new LockHeldError('/tmp/x', 42, 'run')))).toBe('terminal');
   });
 
   test('PlanInvalidError → "terminal"', () => {

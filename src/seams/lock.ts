@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { open, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { LockHeldError, NoRunError } from '../core/errors.ts';
+import { LockHeldError, type LockKind, NoRunError } from '../core/errors.ts';
 import type { LockHandle, LockSeam } from '../loop/deps.ts';
 import { resolveGitDir } from './gitdir.ts';
 
@@ -23,6 +23,15 @@ import { resolveGitDir } from './gitdir.ts';
 function lockPath(repoRoot: string, source: string): string {
   const sha = createHash('sha1').update(source).digest('hex').slice(0, 12);
   return join(resolveGitDir(repoRoot), `pleach-${sha}.lock`);
+}
+
+// ledger: D18 — the landing's lock, beside the run's and named from it, so the
+// pair is found together and cannot drift apart. Two locks because they guard
+// different things: the run's state is the run's, the base branch is the
+// landing's, and neither writes the other's — a landing that queued behind the
+// run's lock would wait on gates it has no stake in.
+function landLockPath(repoRoot: string, source: string): string {
+  return `${lockPath(repoRoot, source)}.land`;
 }
 
 // ledger: D16 — the drain marker, beside the lock of the run it drains, so the
@@ -102,39 +111,48 @@ export function isAlive(pid: number): boolean {
   }
 }
 
+// The acquire ladder, walked the same way for both locks: O_EXCL, then the
+// holder's liveness, then one stale takeover. `lock` only names the refusal —
+// the rules do not differ, and a second ladder would be a second set of races.
+async function acquireAt(path: string, lock: LockKind): Promise<LockHandle> {
+  // First attempt — fast path
+  if (await tryAcquireExcl(path)) {
+    return makeHandle(path);
+  }
+
+  // File exists — inspect the holder
+  const pid = await readPid(path);
+
+  if (pid !== null && isAlive(pid)) {
+    throw new LockHeldError(path, pid, lock);
+  }
+
+  // Stale lock: unlink and retry once
+  try {
+    await unlink(path);
+  } catch (err) {
+    // Another process may have raced us to the unlink — that's fine
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+  }
+
+  // Retry wx after clearing the stale file
+  if (await tryAcquireExcl(path)) {
+    return makeHandle(path);
+  }
+
+  // Lost the race after stale takeover: read the new holder
+  const newPid = await readPid(path);
+  throw new LockHeldError(path, newPid ?? 0, lock);
+}
+
 export function createLockSeam(): LockSeam {
   return {
     async acquire(repoRoot: string, source: string): Promise<LockHandle> {
-      const path = lockPath(repoRoot, source);
+      return await acquireAt(lockPath(repoRoot, source), 'run');
+    },
 
-      // First attempt — fast path
-      if (await tryAcquireExcl(path)) {
-        return makeHandle(path);
-      }
-
-      // File exists — inspect the holder
-      const pid = await readPid(path);
-
-      if (pid !== null && isAlive(pid)) {
-        throw new LockHeldError(path, pid);
-      }
-
-      // Stale lock: unlink and retry once
-      try {
-        await unlink(path);
-      } catch (err) {
-        // Another process may have raced us to the unlink — that's fine
-        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
-      }
-
-      // Retry wx after clearing the stale file
-      if (await tryAcquireExcl(path)) {
-        return makeHandle(path);
-      }
-
-      // Lost the race after stale takeover: read the new holder
-      const newPid = await readPid(path);
-      throw new LockHeldError(path, newPid ?? 0);
+    async acquireLand(repoRoot: string, source: string): Promise<LockHandle> {
+      return await acquireAt(landLockPath(repoRoot, source), 'land');
     },
 
     async stopRequested(repoRoot: string, source: string): Promise<boolean> {

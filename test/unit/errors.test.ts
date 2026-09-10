@@ -24,12 +24,17 @@ describe('PlanInvalidError', () => {
 
 describe('LockHeldError', () => {
   test('instanceof + fields', () => {
-    const e = new LockHeldError('/tmp/pleach.lock', 1234);
+    const e = new LockHeldError('/tmp/pleach.lock', 1234, 'run');
     expect(e).toBeInstanceOf(LockHeldError);
     expect(e).toBeInstanceOf(Error);
     expect(e.name).toBe('LockHeldError');
     expect(e.path).toBe('/tmp/pleach.lock');
     expect(e.pid).toBe(1234);
+    expect(e.lock).toBe('run');
+    // D18: which lock and whose pid — what the face prints at exit 3.
+    expect(new LockHeldError('/tmp/pleach.lock.land', 7, 'land').message).toContain(
+      'land lock held by pid 7',
+    );
   });
 });
 
