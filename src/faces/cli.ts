@@ -101,6 +101,13 @@ Flags (land):
                           refuses the landing by name before anything is built; the composition
                           gate and the publish cover exactly the subset. Without it every plan
                           node must be verified.
+  --land-gate CMD         Run CMD on the composed stack after the sinks' smokes and before the
+                          publish; a non-zero exit refuses the landing with the output tail on
+                          stderr, the repository untouched. Repeatable, run in order. \`{base}\`
+                          is replaced by the target branch's tip as it was before the merges,
+                          so a gate can ask what this landing changes — e.g. a garden's
+                          staleness check: --land-gate 'tend2 gate docs --base {base}'. Exec'd
+                          argv-style with no shell (wrap shell features: bash -lc '<command>').
 
 Flags (stop):
   --repo-root PATH        Git repo whose run is drained (default: cwd)
@@ -163,6 +170,7 @@ interface Flags {
   fresh: boolean;
   land: boolean;
   sinks?: string[];
+  landGates: string[];
   now: boolean;
   quiet: boolean;
   runnerKind?: 'umbel' | 'direct-cli';
@@ -186,6 +194,7 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
     umbelBin: process.env.PLEACH_UMBEL_BIN ?? 'umbel',
     fresh: false,
     land: false,
+    landGates: [],
     now: false,
     quiet: false,
   };
@@ -263,6 +272,10 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         i += 1;
         break;
       }
+      case '--land-gate':
+        flags.landGates.push(takeValue(arg, next));
+        i += 1;
+        break;
       case '--fresh':
         flags.fresh = true;
         break;
@@ -418,7 +431,10 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
   // --land: a fully-verified close lands in the same invocation; a red run
   // never lands (the summary alone says why).
   if (flags.land && code === 0) {
-    const land = await landPlan(plan, deps, { repoRoot: flags.repoRoot });
+    const land = await landPlan(plan, deps, {
+      repoRoot: flags.repoRoot,
+      landGates: flags.landGates,
+    });
     process.stdout.write(`${JSON.stringify({ ...summary, land })}\n`);
     return 0;
   }
@@ -492,7 +508,11 @@ async function verbAudit(
 async function verbLand(planPath: string, flags: Flags): Promise<number> {
   const plan = await readPlan(planPath);
   const deps = await depsFromFlags(flags);
-  const land = await landPlan(plan, deps, { repoRoot: flags.repoRoot, sinks: flags.sinks });
+  const land = await landPlan(plan, deps, {
+    repoRoot: flags.repoRoot,
+    sinks: flags.sinks,
+    landGates: flags.landGates,
+  });
   process.stderr.write(`pleach: landed ${land.landed.join(', ')} on '${land.branch}'\n`);
   process.stdout.write(`${JSON.stringify(land)}\n`);
   return 0;

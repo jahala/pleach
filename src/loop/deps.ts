@@ -35,6 +35,9 @@ export interface Isolation {
 // a clean tree after a gate).
 export interface LandStack {
   cwd: string;
+  // The target branch's tip as it was BEFORE these merges — the one fact an
+  // operator's land gate cannot know from inside the stack (D18: `{base}`).
+  baseSha: string;
   publish(): Promise<{ branch: string; sha: string }>;
   dispose(): Promise<void>;
 }

@@ -12,20 +12,26 @@ export async function guardedExec(
   command: string,
   opts: { cwd: string; timeoutMs: number; signal?: AbortSignal },
 ): Promise<ExecResult> {
-  const tokens = toArgv(command);
-  const ops = shellOperatorTokens(tokens);
-  if (ops.length > 0) {
+  const refusal = shellGuardRefusal(command);
+  if (refusal !== null) {
     // No child ran, so there is no stdout — pleach's own finding, on `output`.
-    return {
-      output:
-        `command contains bare shell operator(s): ${ops.join(' ')} — pleach execs ` +
-        `without a shell (arg-array; contract exec semantics). For shell features, ` +
-        `wrap the command: bash -lc '<command>'`,
-      stdout: '',
-      exitCode: -1,
-    };
+    return { output: refusal, stdout: '', exitCode: -1 };
   }
-  return exec(tokens, opts);
+  return exec(toArgv(command), opts);
+}
+
+// The guard as a question, askable without running anything: why `command`
+// cannot be exec'd, or null when it can. A caller that knows a command is
+// unrunnable before it provisions anything (a land gate, D18) refuses there
+// instead of paying for a worktree first.
+export function shellGuardRefusal(command: string): string | null {
+  const ops = shellOperatorTokens(toArgv(command));
+  if (ops.length === 0) return null;
+  return (
+    `command contains bare shell operator(s): ${ops.join(' ')} — pleach execs ` +
+    `without a shell (arg-array; contract exec semantics). For shell features, ` +
+    `wrap the command: bash -lc '<command>'`
+  );
 }
 
 // runWork drives one attempt of a node's Work through its worker + exec gates.

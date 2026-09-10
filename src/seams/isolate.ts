@@ -458,6 +458,10 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     };
 
     try {
+      // The tip the stack is built on, read before the first merge: what a
+      // land gate's `{base}` resolves to, and the only moment it is knowable.
+      const baseSha = await gitMust(exec, worktreePath, 'rev-parse', 'HEAD');
+
       for (const ref of refs) {
         const verify = await git(
           exec,
@@ -490,6 +494,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
       // changes overlap; fail closed, explain.
       return {
         cwd: worktreePath,
+        baseSha,
         publish: async (): Promise<{ branch: string; sha: string }> => {
           const tip = await gitMust(exec, worktreePath, 'rev-parse', 'HEAD');
           const ff = await git(exec, landRepoRoot, 'merge', '--ff-only', tip);
