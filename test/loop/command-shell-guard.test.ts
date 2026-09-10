@@ -6,7 +6,7 @@
 // required a wrapper script to see verify's output — that gap cost a human
 // debugging detour on day one of real usage).
 import { describe, expect, test } from 'bun:test';
-import { GateFailedError, PlanInvalidError } from '../../src/core/errors.ts';
+import { GateCannotRunError, PlanInvalidError } from '../../src/core/errors.ts';
 import { type Node, PlanSchema } from '../../src/core/plan.ts';
 import { runPlan } from '../../src/loop/run-plan.ts';
 import { runWork } from '../../src/loop/run-work.ts';
@@ -48,10 +48,12 @@ describe('command shell guard + gate output in journal', () => {
       (e: unknown) => e,
     );
 
-    expect(err).toBeInstanceOf(GateFailedError);
-    expect((err as GateFailedError).exitCode).toBe(-1);
-    expect((err as GateFailedError).evidence).toContain('&&');
-    expect((err as GateFailedError).evidence).toContain('bash -lc');
+    // A refusal is no red the work can fix: the plan's fault, not a retry (D19).
+    expect(err).toBeInstanceOf(GateCannotRunError);
+    expect((err as GateCannotRunError).fault).toBe('plan');
+    expect((err as GateCannotRunError).exitCode).toBe(-1);
+    expect((err as GateCannotRunError).output).toContain('&&');
+    expect((err as GateCannotRunError).output).toContain('bash -lc');
     expect(h.log.of('exec').some((e) => e.detail?.startsWith('mkdir'))).toBe(false);
   });
 
