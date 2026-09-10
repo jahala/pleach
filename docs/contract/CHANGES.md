@@ -67,3 +67,15 @@
   bump, drift guards unaffected. A runner that cannot detect idleness ignores the field and
   behaves exactly as before. The `idle` reason it produces is the one `WorkerResult.reason` has
   always carried, and its mapping (blocked, prompt text as `blockedReason`) is unchanged.
+
+- **Receipt, not schema (2026-09-10)** — the receipt store keeps every close of a node instead of one
+  per node id (ledger D17). Each write lands `<git-dir>/pleach/receipts/<node>.<sha256 prefix>.json`,
+  the close's own record, beside `<node>.json`, whatever closed last; `refs.previousReceiptSha256`
+  already linked one close to the next, and `pleach receipt <node>` now verifies the latest and lists
+  the history it walks. Kept artifacts follow the same two names, so `artifacts.sarif` (and
+  `.friction.jsonl`, `.handback.md`) is the path of THAT close's file — the un-prefixed name holds the
+  same bytes for the latest close only. Additive, and outside the contract: `@agent-contract/plan` is
+  untouched — no schema-block change, no version bump, drift guards unaffected, nothing for tend or
+  umbel to re-vendor. The hashed envelope is untouched too, so every receipt already on disk still
+  verifies. Recorded here because the umbrella's predicate (`predicate.weeder.sarif.sha256`) reads the
+  artifact path out of a receipt: read it from the receipt, never by guessing the node's name.

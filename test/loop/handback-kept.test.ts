@@ -13,13 +13,19 @@
 // seal is already pinned in the commit trailer.
 import { describe, expect, test } from 'bun:test';
 import { PlanSchema } from '../../src/core/plan.ts';
-import { canonicalJson, type Receipt, rehash, sha256Hex } from '../../src/core/receipt.ts';
+import {
+  canonicalJson,
+  type Receipt,
+  receiptPrefix,
+  rehash,
+  sha256Hex,
+} from '../../src/core/receipt.ts';
 import type { RunSummary } from '../../src/loop/deps.ts';
 import { runPlan } from '../../src/loop/run-plan.ts';
 import { type Harness, type HarnessOpts, makeHarness, stop } from './harness.ts';
 
 const OPTS = { repoRoot: '/r', pleachVersion: '0.0.1-test' };
-const HANDBACK_PATH = '/r/.git/pleach/receipts/x.handback.md';
+const RECEIPTS = '/r/.git/pleach/receipts';
 const SMOKE = 'weeder check --strict --format sarif';
 
 // A handback as a builder really writes one: prose, a fenced run of the tests,
@@ -99,6 +105,17 @@ function receiptOf(h: Harness): Receipt {
   return r;
 }
 
+// Where this close's files went (D17): a node id runs again, so what a close
+// kept is filed under that close's own receipt hash — `<node>.handback.md` is
+// only whatever closed last.
+function keptPath(h: Harness, suffix: string): string {
+  return `${RECEIPTS}/x.${receiptPrefix(receiptOf(h).sha256)}${suffix}`;
+}
+
+function handbackPath(h: Harness): string {
+  return keptPath(h, '.handback.md');
+}
+
 // The paths settle kept, beside `refs` and outside the hashed envelope. The
 // handback is the third kind; the cast is the test asking for what the claim
 // says the receipt must name.
@@ -129,14 +146,14 @@ describe('the handback is kept beside the receipt (D17)', () => {
     const summary = await run(h);
     expect(summary.closed).toEqual(['x']);
 
-    expect(keptPaths(h).handback).toBe(HANDBACK_PATH);
+    expect(keptPaths(h).handback).toBe(handbackPath(h));
     // Byte-for-byte: the fences, the blank lines and the Tried line as written.
-    expect(h.artifacts.get(HANDBACK_PATH)).toBe(HANDBACK);
+    expect(h.artifacts.get(handbackPath(h))).toBe(HANDBACK);
     // Kept before the receipt that names it — a path on a receipt whose file
     // was never written is a claim about nothing.
-    expect(keptAt(h, HANDBACK_PATH)).toBeGreaterThan(-1);
-    expect(keptAt(h, HANDBACK_PATH)).toBeLessThan(h.log.first('receipt.write', 'x'));
-    expect(keptAt(h, HANDBACK_PATH)).toBeLessThan(h.log.first('dispose-start', 'x'));
+    expect(keptAt(h, handbackPath(h))).toBeGreaterThan(-1);
+    expect(keptAt(h, handbackPath(h))).toBeLessThan(h.log.first('receipt.write', 'x'));
+    expect(keptAt(h, handbackPath(h))).toBeLessThan(h.log.first('dispose-start', 'x'));
   });
 
   test('the journal records one gate-artifact {node, gate: handback, path, sha256}', async () => {
@@ -148,7 +165,7 @@ describe('the handback is kept beside the receipt (D17)', () => {
         event: 'gate-artifact',
         node: 'x',
         gate: 'handback',
-        path: HANDBACK_PATH,
+        path: handbackPath(h),
         sha256: sha256Hex(HANDBACK),
       },
     ]);
@@ -159,7 +176,7 @@ describe('the handback is kept beside the receipt (D17)', () => {
     await run(h);
     const receipt = receiptOf(h);
 
-    expect(keptPaths(h).handback).toBe(HANDBACK_PATH);
+    expect(keptPaths(h).handback).toBe(handbackPath(h));
     expect(rehash(receipt)).toBe(true);
     // A settled fact, like refs: the file lands after the freeze. And nothing
     // in the message is interpreted — the envelope holds no word of it.
@@ -180,10 +197,10 @@ describe('the handback is kept beside the receipt (D17)', () => {
     const summary = await run(h, { smoke: SMOKE });
     expect(summary.failed).toEqual(['x']);
 
-    expect(h.artifacts.get(HANDBACK_PATH)).toBe(HANDBACK);
-    expect(keptPaths(h).handback).toBe(HANDBACK_PATH);
+    expect(h.artifacts.get(handbackPath(h))).toBe(HANDBACK);
+    expect(keptPaths(h).handback).toBe(handbackPath(h));
     expect(handbackEvents(h)).toHaveLength(1);
-    expect(keptAt(h, HANDBACK_PATH)).toBeLessThan(h.log.first('dispose-start', 'x'));
+    expect(keptAt(h, handbackPath(h))).toBeLessThan(h.log.first('dispose-start', 'x'));
     // The kept path joins the quarantine refs; neither write clobbers the other.
     expect(receiptOf(h).refs?.quarantineBranch).toBe('quarantine/x');
   });
@@ -210,8 +227,8 @@ describe('the handback is kept beside the receipt (D17)', () => {
     );
     expect(summary.aborted).toEqual(['x']);
 
-    expect(h.artifacts.get(HANDBACK_PATH)).toBe(partial);
-    expect(keptPaths(h).handback).toBe(HANDBACK_PATH);
+    expect(h.artifacts.get(handbackPath(h))).toBe(partial);
+    expect(keptPaths(h).handback).toBe(handbackPath(h));
     expect(receiptOf(h).refs?.quarantineBranch).toBe('quarantine/x');
   });
 
@@ -238,7 +255,7 @@ describe('the handback is kept beside the receipt (D17)', () => {
     expect(h.log.count('spawn:build', 'x')).toBe(2);
 
     expect(handbackEvents(h)).toHaveLength(1);
-    expect(h.artifacts.get(HANDBACK_PATH)).toBe(last);
+    expect(h.artifacts.get(handbackPath(h))).toBe(last);
     expect(handbackEvents(h)[0]?.sha256).toBe(sha256Hex(last));
   });
 
@@ -248,8 +265,8 @@ describe('the handback is kept beside the receipt (D17)', () => {
     expect(summary.closed).toEqual(['x']);
 
     expect(h.log.count('spawn:audit', 'x')).toBe(1);
-    expect(h.artifacts.get(HANDBACK_PATH)).toBe(HANDBACK);
-    expect(h.artifacts.get(HANDBACK_PATH)).not.toContain('tend-audit-result');
+    expect(h.artifacts.get(handbackPath(h))).toBe(HANDBACK);
+    expect(h.artifacts.get(handbackPath(h))).not.toContain('tend-audit-result');
   });
 
   test('kept beside the other two, one event each, no collision', async () => {
@@ -261,13 +278,13 @@ describe('the handback is kept beside the receipt (D17)', () => {
     await run(h, { smoke: SMOKE });
 
     expect(keptPaths(h)).toEqual({
-      sarif: '/r/.git/pleach/receipts/x.sarif',
-      friction: '/r/.git/pleach/receipts/x.friction.jsonl',
-      handback: HANDBACK_PATH,
+      sarif: keptPath(h, '.sarif'),
+      friction: keptPath(h, '.friction.jsonl'),
+      handback: handbackPath(h),
     });
-    expect(h.artifacts.get('/r/.git/pleach/receipts/x.sarif')).toBe(SARIF);
-    expect(h.artifacts.get('/r/.git/pleach/receipts/x.friction.jsonl')).toBe(FRICTION_MONTH);
-    expect(h.artifacts.get(HANDBACK_PATH)).toBe(HANDBACK);
+    expect(h.artifacts.get(keptPath(h, '.sarif'))).toBe(SARIF);
+    expect(h.artifacts.get(keptPath(h, '.friction.jsonl'))).toBe(FRICTION_MONTH);
+    expect(h.artifacts.get(handbackPath(h))).toBe(HANDBACK);
     expect(
       gateArtifactEvents(h)
         .map((e) => e.gate)
@@ -286,12 +303,12 @@ describe('the handback is kept beside the receipt (D17)', () => {
     });
 
     expect((await run(h)).closed).toEqual(['x']);
-    expect(h.artifacts.get(HANDBACK_PATH)).toBe(HANDBACK);
+    expect(h.artifacts.get(handbackPath(h))).toBe(HANDBACK);
 
     expect((await run(h)).closed).toEqual(['x']);
     // The artifact name is the node's, not the close's: left alone, the first
     // close's message would be read as this one's.
-    expect(h.artifacts.has(HANDBACK_PATH)).toBe(false);
+    expect(h.artifacts.has(handbackPath(h))).toBe(false);
     expect(keptPaths(h).handback).toBeUndefined();
     expect(handbackEvents(h)).toHaveLength(1);
   });
