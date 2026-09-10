@@ -279,3 +279,105 @@ describe('operator surfaces — the CLI help and the README (D16)', () => {
     expect(readme).toContain('--idle-ms');
   });
 });
+
+// ---------------------------------------------------------------------------
+// ledger: D17 — nothing a worker produced is lost, and every part of that
+// promise has an operator surface: the journal row that names what was kept
+// beside a receipt, the row that names a tree a run resumed from, and the two
+// places (`pleach --help`, the README) where the controls that keep or refuse
+// that work are found. Each is pinned to its own source — the artifact row's
+// gates to the calls that really keep an artifact, the filenames to the store
+// that really writes them, the controls to the verbs and flags the CLI really
+// dispatches and parses. A kind kept in code and absent from the doc is bytes
+// on disk nobody knows to read; a control named nowhere an operator looks is a
+// control nobody can find. None of these lists is hand-kept.
+// ---------------------------------------------------------------------------
+const RUN_PLAN_SRC = new URL('../../src/loop/run-plan.ts', import.meta.url).pathname;
+const RECEIPTS_SRC = new URL('../../src/seams/receipts.ts', import.meta.url).pathname;
+
+/** Every artifact a close really keeps, as `gate name -> ArtifactKind`. */
+function keptArtifacts(): Map<string, string> {
+  const src = readFileSync(RUN_PLAN_SRC, 'utf8');
+  const calls = src.matchAll(/keepOrJournal\(\s*node,\s*'([a-z-]+)',\s*'([a-z-]+)'/g);
+  return new Map([...calls].map(([, gate, kind]) => [gate, kind]));
+}
+
+/** The file suffix the receipt store gives each kind, as `kind -> suffix`. */
+function artifactExtensions(): Map<string, string> {
+  const src = readFileSync(RECEIPTS_SRC, 'utf8');
+  const start = src.indexOf('const ARTIFACT_EXTENSION: Record<ArtifactKind, string> = {');
+  if (start === -1) throw new Error('No ARTIFACT_EXTENSION table in src/seams/receipts.ts');
+  const body = src.slice(start, src.indexOf('\n};', start));
+  return new Map([...body.matchAll(/^ {2}([a-z]+): '([^']+)',$/gm)].map(([, k, ext]) => [k, ext]));
+}
+
+/** The `ArtifactKind` union's members, as the store's own type declares them. */
+function artifactKinds(): string[] {
+  const src = readFileSync(DEPS_SRC, 'utf8');
+  const decl = src.match(/export type ArtifactKind =([^;]+);/)?.[1];
+  if (decl === undefined) throw new Error('No ArtifactKind union in src/loop/deps.ts');
+  return [...decl.matchAll(/'([a-z-]+)'/g)].map(([, kind]) => kind).sort();
+}
+
+describe('journal doc — what a close keeps beside its receipt (D17)', () => {
+  const documented = documentedEvents(readFileSync(JOURNAL_DOC, 'utf8'));
+  const kept = keptArtifacts();
+  const extensions = artifactExtensions();
+
+  test('the artifact surfaces are read, not vacuously empty', () => {
+    expect(kept.size).toBeGreaterThan(1);
+    expect([...kept.values()].sort()).toEqual(artifactKinds());
+    expect([...extensions.keys()].sort()).toEqual(artifactKinds());
+  });
+
+  test('the `gate-artifact` row states every gate a close keeps something under', () => {
+    const row = documented.get('gate-artifact');
+    expect(row).toBeDefined();
+    expect(statedVocabulary(row ?? '', 'gate')).toEqual([...kept.keys()].sort());
+  });
+
+  test('the `gate-artifact` row names the file each kind is kept as', () => {
+    const row = documented.get('gate-artifact') ?? '';
+    const unnamed = [...kept.values()]
+      .map((kind) => extensions.get(kind) ?? kind)
+      .filter((suffix) => !row.includes(`\`${suffix}\``))
+      .sort();
+    expect(unnamed).toEqual([]);
+  });
+
+  test('the `resumed-from-quarantine` row names the fields the resume appends', () => {
+    const row = documented.get('resumed-from-quarantine');
+    expect(row).toBeDefined();
+    for (const field of ['node', 'sha']) expect(row).toContain(`\`${field}\``);
+  });
+
+  test('the kinds table pins the events that record a resume', () => {
+    for (const name of ['resumed-from-quarantine', 'resume-refused', 'gate-artifact']) {
+      expect(KINDS[name]).toBe('node.lifecycle');
+    }
+  });
+});
+
+// The controls that decide what happens to work a worker already produced: the
+// verb that re-adjudicates a quarantined build, the flag that re-casts a dead
+// attempt somewhere else, and the flag that refuses a resume.
+const KEEPING_CONTROLS = ['pleach audit', '--fallback-provider', '--fresh'];
+
+describe('operator surfaces — the controls over kept work (D17)', () => {
+  const help = helpText();
+  const readme = readFileSync(README, 'utf8');
+
+  test('every control named here is one the CLI really has', () => {
+    const real = [...dispatchedVerbs().map((verb) => `pleach ${verb}`), ...parsedFlags()];
+    const phantom = KEEPING_CONTROLS.filter((control) => !real.includes(control)).sort();
+    expect(phantom).toEqual([]);
+  });
+
+  test('the help names every control over kept work', () => {
+    expect(KEEPING_CONTROLS.filter((control) => !help.includes(control))).toEqual([]);
+  });
+
+  test('the README names every control over kept work', () => {
+    expect(KEEPING_CONTROLS.filter((control) => !readme.includes(control))).toEqual([]);
+  });
+});

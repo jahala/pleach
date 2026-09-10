@@ -96,7 +96,7 @@ recorded in `docs/contract/CHANGES.md` for the other two repos.
 
 | Source | kind | Action |
 |---|---|---|
-| worker `reason: 'dead'` | `dead` | `onDead:'resume'` → dispose + re-isolate + fresh worker, else fail |
+| worker `reason: 'dead'` | `dead` | `onDead:'resume'` + a fallback provider that is not the dead one → dispose + re-isolate + fresh worker **on the fallback** (audit diversity re-checked against it); no usable fallback → settle dead with the attempt unspent (D17), else fail |
 | worker `reason: 'timeout'` / exec timeout | `retryable` | retry ≤ `maxAttempts`, **reuse tree, re-prompt with evidence** |
 | worker `reason: 'input' \| 'idle'` | `blocked` | kill worker + dispose tree; Verdict `status:'blocked'`, prompt text in `blockedReason`; no auto-retry — fix the permission mode / allowlist and re-run |
 | smoke / command non-zero, marker-gate hit | `retryable` | retry ≤ `maxAttempts`, reuse tree, evidence in re-prompt |

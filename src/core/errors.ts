@@ -172,6 +172,37 @@ export class LandBlockedError extends Error {
   }
 }
 
+// #12 — every quarantine ref for a node is checked out in some worktree, so
+// there is nowhere to commit its evidence. Caught by the quarantine path
+// itself, which journals it as `quarantine-failed` and never masks the real
+// verdict with it.
+export class QuarantineBusyError extends Error {
+  readonly name = 'QuarantineBusyError';
+  readonly branch: string;
+
+  constructor(branch: string) {
+    super(`all quarantine refs for ${branch} are busy`);
+    this.branch = branch;
+  }
+}
+
+// ledger: D17 — `pleach audit` was asked to re-adjudicate a node it cannot
+// stand behind: no close on file, a close that was never quarantined, a build
+// whose own gates went red, or a quarantined tree that is gone or has moved.
+// Nothing is written when this throws: a re-audit that cannot name the tree it
+// judged would be a verdict about nothing.
+export class AuditRefusedError extends Error {
+  readonly name = 'AuditRefusedError';
+  readonly nodeId: string;
+  readonly reason: string;
+
+  constructor(nodeId: string, reason: string) {
+    super(`cannot re-audit '${nodeId}': ${reason}`);
+    this.nodeId = nodeId;
+    this.reason = reason;
+  }
+}
+
 export class ConfigError extends Error {
   readonly name = 'ConfigError';
   readonly path: string;

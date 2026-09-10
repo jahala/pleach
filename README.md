@@ -94,6 +94,8 @@ own: [`docs/adapters.md`](docs/adapters.md).
 ```
 pleach run <plan.json> [flags]     Execute a plan (--land to land a fully-verified close)
 pleach land <plan.json> [flags]    Merge a verified plan's sinks onto the checked-out branch
+pleach audit <plan.json> <node>    Re-run only the audit on a quarantined node whose build
+                                   was green — a bad relay costs one auditor turn, not the node
 pleach stop <plan.json> [flags]    Drain a running plan: nothing new launches, in-flight nodes
                                    settle (--now aborts them instead)
 pleach validate <plan.json>        Parse + validate a plan; print the topo order
@@ -106,12 +108,35 @@ Landing is deterministic and fail-closed: it refuses unless **every** plan node 
 verified, builds the merges in a throwaway worktree, and touches your checkout only
 via a final fast-forward — a conflict aborts with the repo untouched.
 
+**An auditor's bad relay never costs the node.** When the auditor's reply carries no readable
+result — or the auditor dies — the node is quarantined with its build's gates green, and
+`pleach audit plan.json <node>` re-adjudicates it: the quarantined tree is checked out again with
+its dependencies merged as a run merges them, setup provisions it, and only the audit runs. A pass
+publishes `node/<id>`; anything else writes a new quarantine receipt, and the receipt of every close
+before it is still on file. It refuses a node whose latest close is not a quarantine with a green
+smoke — an audit verdict over an unproven build proves nothing.
+
+**A provider outage is paid once.** An attempt that comes back `dead` never got a working
+session at all — an outage, not a red gate — so re-running it on the same provider buys the
+same outage twice. `--fallback-provider NAME` re-casts the node on another provider instead,
+with the cross-provider audit's diversity rule re-checked against it. Without a usable
+fallback the node settles after the one attempt with its remaining attempts unspent, and the
+verdict's `detail` names why.
+
 **Halting a run never loses a node's work.** `pleach stop plan.json` drains: the scheduler reads
 the stop marker in the same tick as its next launch decision, so nothing further starts and the
 in-flight nodes settle normally. `--now` adds the hard abort — an interrupted node settles
 `aborted`, its receipt written and its worktree kept on `quarantine/<id>`, never counted as a
 failure. A wedged worker never rides the attempt clock either: `--idle-ms` (default 10m) ends a
 wait that has gone quiet, and the node settles blocked with its tree kept the same way.
+
+**The next run picks that work up.** A pending node whose `quarantine/<id>` still resolves is
+isolated from it — the quarantine is the checkout base, its dependencies merge onto it as they
+always do — and the worker's first prompt names the sha it is resuming and what the tree holds.
+Nothing about that tree is trusted: it was never gated, so the whole ladder runs over it, from the
+marker scan through smoke and the cross-provider audit, and the close records `facts.base` so a
+resumed close stays distinguishable from a fresh one forever. `--fresh` refuses the seed and builds
+every pending node from its dependencies alone.
 
 Two operational facts worth knowing before your first run:
 
