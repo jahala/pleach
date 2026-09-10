@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { open, readFile, stat, unlink } from 'node:fs/promises';
+import { open, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { LockHeldError } from '../core/errors.ts';
+import { LockHeldError, NoRunError } from '../core/errors.ts';
 import type { LockHandle, LockSeam } from '../loop/deps.ts';
 import { resolveGitDir } from './gitdir.ts';
 
@@ -31,6 +31,38 @@ function lockPath(repoRoot: string, source: string): string {
 // scheduler's per-launch read a single cheap stat.
 export function stopPath(repoRoot: string, source: string): string {
   return `${lockPath(repoRoot, source)}.stop`;
+}
+
+// The pid of the run that holds this (repoRoot, source), or NoRunError. A dead
+// pid is not a run: a stale lockfile outlives the process that wrote it (B4),
+// and draining it would leave a marker for a run that will never read it.
+async function liveHolder(repoRoot: string, source: string): Promise<number> {
+  const pid = await readPid(lockPath(repoRoot, source));
+  if (pid === null || !isAlive(pid)) throw new NoRunError(source);
+  return pid;
+}
+
+// ledger: D16 — write the drain marker for a live run and answer whose it is.
+// The bytes are nothing; the file's presence is the whole request, which is what
+// lets the scheduler ask for it with a single stat per launch decision.
+export async function requestStop(repoRoot: string, source: string): Promise<number> {
+  const pid = await liveHolder(repoRoot, source);
+  await writeFile(stopPath(repoRoot, source), '', 'utf8');
+  return pid;
+}
+
+// ledger: D16 — the hard abort (`stop --now`), sent to the pid the lock names.
+// Signalling lives here and not in the face for the same reason the marker does:
+// the (repoRoot, source) → holder mapping is the lock's, and nothing above the
+// seams touches a process.
+export async function signalRun(
+  repoRoot: string,
+  source: string,
+  signal: NodeJS.Signals,
+): Promise<number> {
+  const pid = await liveHolder(repoRoot, source);
+  process.kill(pid, signal);
+  return pid;
 }
 
 // Returns true on success, false on EEXIST; re-throws other errors.
