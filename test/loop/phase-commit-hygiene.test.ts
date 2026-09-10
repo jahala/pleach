@@ -53,13 +53,14 @@ const redFails = (argv: readonly string[]) =>
     ? { output: 'FAIL widget: not implemented', exitCode: 1 }
     : { output: '', exitCode: 0 };
 
-// AWS's documented example key, assembled at runtime from its two halves: the
+// A live-shaped AWS key id, assembled at runtime from its two halves: the
 // detector matches `AKIA` + 16 upper/digits, and this repo gates its own diffs
 // with this battery — a literal fixture here is an added line the gate reads as
-// a leak, so the file that proves the gate would fail it.
+// a leak, so the file that proves the gate would fail it. Not AWS's documented
+// example: that one is allowlisted (D19, test/unit/hygiene-allowlist.test.ts).
 const AWS_KEY_PREFIX = 'AKIA';
-const AWS_EXAMPLE_BODY = 'IOSFODNN7EXAMPLE';
-const SECRET_DIFF = `+++ b/test/auth.test.ts\n+const k = "${AWS_KEY_PREFIX}${AWS_EXAMPLE_BODY}";\n`;
+const AWS_KEY_BODY = 'Q3VZ7K2MXW9RT4LB';
+const SECRET_DIFF = `+++ b/test/auth.test.ts\n+const k = "${AWS_KEY_PREFIX}${AWS_KEY_BODY}";\n`;
 
 // Every build prompt the node sent, in order, as the harness recorded them
 // (`build:<text>`).
