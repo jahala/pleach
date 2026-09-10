@@ -94,13 +94,24 @@ own: [`docs/adapters.md`](docs/adapters.md).
 ```
 pleach run <plan.json> [flags]     Execute a plan (--land to land a fully-verified close)
 pleach land <plan.json> [flags]    Merge a verified plan's sinks onto the checked-out branch
+pleach stop <plan.json> [flags]    Drain a running plan: nothing new launches, in-flight nodes
+                                   settle (--now aborts them instead)
 pleach validate <plan.json>        Parse + validate a plan; print the topo order
 pleach schema                      Emit the plan contract as JSON Schema (for planners / codegen)
+pleach receipt <node> [flags]      Verify a settled node's close receipt
+pleach clean [flags]               Sweep a killed run's leavings: stale locks + orphaned worktrees
 ```
 
 Landing is deterministic and fail-closed: it refuses unless **every** plan node is
 verified, builds the merges in a throwaway worktree, and touches your checkout only
 via a final fast-forward — a conflict aborts with the repo untouched.
+
+**Halting a run never loses a node's work.** `pleach stop plan.json` drains: the scheduler reads
+the stop marker in the same tick as its next launch decision, so nothing further starts and the
+in-flight nodes settle normally. `--now` adds the hard abort — an interrupted node settles
+`aborted`, its receipt written and its worktree kept on `quarantine/<id>`, never counted as a
+failure. A wedged worker never rides the attempt clock either: `--idle-ms` (default 10m) ends a
+wait that has gone quiet, and the node settles blocked with its tree kept the same way.
 
 Two operational facts worth knowing before your first run:
 
