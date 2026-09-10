@@ -10,8 +10,11 @@ import type { ExecFn } from '../loop/deps.ts';
 import { resolveGitDir } from './gitdir.ts';
 import { isAlive, readPid } from './lock.ts';
 
-// <git-dir>/pleach-<12 hex>.lock — dead holder → unlink; live holder →
-// reported, never touched (a live lock means a run may be in flight).
+// <git-dir>/pleach-<12 hex>.lock and its landing twin `.lock.land` (D18) —
+// dead holder → unlink; live holder → reported, never touched (a live lock
+// means a run or a landing may be in flight). The drain marker `.lock.stop`
+// is not a lock: it holds no pid, and sweeping it would silently cancel an
+// operator's stop.
 export async function sweepStaleLocks(
   repoRoot: string,
 ): Promise<{ removed: string[]; live: string[] }> {
@@ -21,7 +24,7 @@ export async function sweepStaleLocks(
   // Total: a non-repo (no git dir) simply has nothing to sweep.
   const entries = await readdir(gitDir).catch(() => [] as string[]);
   for (const name of entries) {
-    if (!/^pleach-[0-9a-f]{12}\.lock$/.test(name)) continue;
+    if (!/^pleach-[0-9a-f]{12}\.lock(\.land)?$/.test(name)) continue;
     const path = join(gitDir, name);
     const pid = await readPid(path);
     if (pid !== null && isAlive(pid)) {

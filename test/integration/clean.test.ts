@@ -51,6 +51,31 @@ test('sweepStaleLocks removes dead-pid locks, keeps live ones, and reports the l
   }
 });
 
+// ledger: D18 — the landing's lock is a lock too. A killed landing leaves
+// `<lock>.land` behind and `pleach clean` must heal it the same way; a live one
+// is reported, never touched. The drain marker beside them is not a lock and
+// carries no pid — a sweep that ate it would stop the next run before it began.
+test("sweepStaleLocks heals a dead landing's lock and leaves the drain marker", async () => {
+  const { path: repo, cleanup } = await createRepo();
+  try {
+    const gitDir = resolveGitDir(repo);
+    const stale = join(gitDir, 'pleach-aaaaaaaaaaaa.lock.land');
+    const live = join(gitDir, 'pleach-bbbbbbbbbbbb.lock.land');
+    const marker = join(gitDir, 'pleach-aaaaaaaaaaaa.lock.stop');
+    await writeFile(stale, '999999', 'utf8'); // beyond macOS pid_max — provably dead
+    await writeFile(live, String(process.pid), 'utf8'); // this test process — provably live
+    await writeFile(marker, '', 'utf8');
+
+    const result = await sweepStaleLocks(repo);
+
+    expect(result.removed).toEqual([stale]);
+    expect(result.live).toEqual([live]);
+    expect(await readFile(marker, 'utf8')).toBe('');
+  } finally {
+    await cleanup();
+  }
+});
+
 test('sweepOrphanWorktrees disposes pleach-owned worktrees and prunes vanished entries', async () => {
   const { path: repo, cleanup } = await createRepo();
   try {

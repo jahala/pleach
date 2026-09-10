@@ -94,6 +94,8 @@ describe('landPlan', () => {
     const events = h.journal.map((e) => e.event);
     expect(events).toContain('land-start');
     expect(events).toContain('landed');
+    // The LAND lock, never the run's (D18) — a landing waits on other landings.
+    expect(h.log.of('lock.acquire')[0]?.detail).toBe('land');
     expect(h.log.first('lock.acquire')).toBeLessThan(h.log.first('land'));
     expect(h.log.first('land')).toBeLessThan(h.log.first('lock.release'));
   });
