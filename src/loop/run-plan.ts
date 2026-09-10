@@ -39,6 +39,10 @@ export interface RunPlanOpts {
   // Teardown signal (D12): stop launching, interrupt in-flight waits, settle
   // what's live (workers killed, trees quarantined/disposed), journal why.
   signal?: AbortSignal;
+  // The conductor's idle timeout (D16), handed to every worker wait in the
+  // run. The face owns the default; a runner that cannot detect idleness
+  // ignores it. Absent leaves the attempt clock as the only bound.
+  idleMs?: number;
 }
 
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes (binding prose).
@@ -66,6 +70,7 @@ export async function runPlan(
       maxConcurrency,
       pleachVersion: opts.pleachVersion ?? '0.0.0-dev',
       ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+      ...(opts.idleMs !== undefined ? { idleMs: opts.idleMs } : {}),
     });
   } finally {
     await lock.release();
@@ -78,6 +83,7 @@ interface ResolvedOpts {
   maxConcurrency: number;
   pleachVersion: string;
   signal?: AbortSignal;
+  idleMs?: number;
 }
 
 async function runUnderLock(
@@ -196,6 +202,7 @@ async function runUnderLock(
       outcome = await runNode(node, baseRefs, deps, {
         defaultTimeoutMs: opts.defaultTimeoutMs,
         signal: opts.signal,
+        idleMs: opts.idleMs,
       });
     } catch (err) {
       // A node promise must never reject — map a surprise to a failed verdict.

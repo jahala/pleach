@@ -120,7 +120,12 @@ export interface Worker {
   send(text: string): Promise<void>;
   // signal (D12): the conductor is tearing down — end the wait promptly (the
   // session is killed by the caller as usual; only the WAIT is interrupted).
-  wait(opts?: { timeoutMs?: number; signal?: AbortSignal }): Promise<WorkerResult>;
+  // idleMs (D16): end the wait when the worker has been quiet that long — the
+  // conductor's idle policy, passed down so a wedged worker (an auditor idle
+  // on a 404) ends here instead of riding the attempt clock with the operator
+  // as the idle detector. A runner that cannot detect idleness ignores it and
+  // the attempt clock still bounds the wait.
+  wait(opts?: { timeoutMs?: number; signal?: AbortSignal; idleMs?: number }): Promise<WorkerResult>;
   kill(): Promise<void>;
 }
 

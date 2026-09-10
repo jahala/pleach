@@ -30,6 +30,10 @@ export interface RunNodeOpts {
   defaultTimeoutMs: number;
   // Teardown signal (D12) — interrupts worker waits; everything else settles.
   signal?: AbortSignal;
+  // The conductor's idle timeout (D16) — carried into every wait this node
+  // makes, the build worker's and the auditor's alike: a wedged worker of
+  // either kind ends here rather than at the attempt clock.
+  idleMs?: number;
 }
 
 export interface RunNodeResult {
@@ -211,6 +215,7 @@ export async function runNode(
           timeoutMs,
           evidence: promptEvidence,
           signal: opts.signal,
+          idleMs: opts.idleMs,
           redSealedAt,
           sealRed: async (red, exitCode, phaseIndex) => {
             await sealRedPhase(node, cwd, deps, red, exitCode);
@@ -419,7 +424,10 @@ export async function runNode(
           continue; // retryable — SAME tree; the builder can restore the gate
         }
 
-        const auditOutcome = await runAudit(node, cwd, deps, timeoutMs, opts.signal);
+        const auditOutcome = await runAudit(node, cwd, deps, timeoutMs, {
+          signal: opts.signal,
+          idleMs: opts.idleMs,
+        });
         if (auditOutcome.kind === 'parse-exhausted') {
           // Never adjudicated — the receipt records skip, not fail (§D).
           auditRecords = [
@@ -521,7 +529,7 @@ async function runAudit(
   cwd: string,
   deps: ConductorDeps,
   timeoutMs: number,
-  signal?: AbortSignal,
+  wait: { signal?: AbortSignal; idleMs?: number },
 ): Promise<AuditOutcome> {
   // node.accept.audit is defined by the caller's guard.
   const audit = node.accept.audit as NonNullable<Node['accept']['audit']>;
@@ -535,7 +543,7 @@ async function runAudit(
     let res: WorkerResult;
     try {
       await worker.send(buildAuditPrompt(audit.command));
-      res = await worker.wait({ timeoutMs, signal });
+      res = await worker.wait({ timeoutMs, signal: wait.signal, idleMs: wait.idleMs });
     } finally {
       await worker.kill();
     }
