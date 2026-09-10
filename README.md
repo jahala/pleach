@@ -129,7 +129,8 @@ pleach land plan.json \
 
 A non-zero exit refuses the landing as `land-gate-refused` with the command's output tail
 on stderr and the repository untouched, so a landing that would leave a stamped claim
-unproven is refused instead of landed green.
+unproven is refused instead of landed green. Both flags shape `pleach run --land` too — the
+landing a run performs is the same landing.
 
 **An auditor's bad relay never costs the node.** When the auditor's reply carries no readable
 result — or the auditor dies — the node is quarantined with its build's gates green, and

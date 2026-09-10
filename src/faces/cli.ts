@@ -17,7 +17,7 @@ import { planJsonSchema } from '../core/schema-json.ts';
 import { nodeSummaries, planWarnings, validatePlan } from '../core/validate.ts';
 import { auditNode } from '../loop/audit-node.ts';
 import type { RunSummary } from '../loop/deps.ts';
-import { landPlan } from '../loop/land.ts';
+import { type LandOpts, landPlan } from '../loop/land.ts';
 import { verifyReceipt } from '../loop/receipt-verify.ts';
 import { runPlan } from '../loop/run-plan.ts';
 import { sweepOrphanWorktrees, sweepStaleLocks } from '../seams/clean.ts';
@@ -89,7 +89,8 @@ Flags (run):
                           cross-provider audit). Rides claude (any mode) and codex
                           (bypassPermissions only); umbel gives an explicit mode precedence.
   --land                  After a fully-verified close, land the plan (see below); the run
-                          summary gains a "land" object. A red run never lands.
+                          summary gains a "land" object. A red run never lands. The landing
+                          flags below shape that landing exactly as they shape \`pleach land\`.
   --quiet                 Suppress the per-event narration on stderr (one plain line per
                           node event; a worker blocked on you is shouted). The JSONL
                           journal records everything regardless.
@@ -431,10 +432,7 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
   // --land: a fully-verified close lands in the same invocation; a red run
   // never lands (the summary alone says why).
   if (flags.land && code === 0) {
-    const land = await landPlan(plan, deps, {
-      repoRoot: flags.repoRoot,
-      landGates: flags.landGates,
-    });
+    const land = await landPlan(plan, deps, landOpts(flags));
     process.stdout.write(`${JSON.stringify({ ...summary, land })}\n`);
     return 0;
   }
@@ -505,14 +503,19 @@ async function verbAudit(
   return result.status === 'closed' ? 0 : 1;
 }
 
+// Every control a landing has, read in ONE place: `pleach land` and `run
+// --land` perform the same landing, so they take the same options. Built from
+// the flags rather than spelled out at each call site — a control one path
+// reads and the other silently drops is a landing that says one thing and does
+// another, which is the failure D18 exists to end.
+function landOpts(flags: Flags): LandOpts {
+  return { repoRoot: flags.repoRoot, sinks: flags.sinks, landGates: flags.landGates };
+}
+
 async function verbLand(planPath: string, flags: Flags): Promise<number> {
   const plan = await readPlan(planPath);
   const deps = await depsFromFlags(flags);
-  const land = await landPlan(plan, deps, {
-    repoRoot: flags.repoRoot,
-    sinks: flags.sinks,
-    landGates: flags.landGates,
-  });
+  const land = await landPlan(plan, deps, landOpts(flags));
   process.stderr.write(`pleach: landed ${land.landed.join(', ')} on '${land.branch}'\n`);
   process.stdout.write(`${JSON.stringify(land)}\n`);
   return 0;
