@@ -3,14 +3,15 @@ import { readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createJournal } from '../../src/seams/journal.ts';
+import { ownFields } from '../support/journal.ts';
 
 describe('journal seam', () => {
   test('two appends produce two parseable lines in order', async () => {
     const journalPath = join(tmpdir(), `pleach-journal-test-${Date.now()}.jsonl`);
     try {
       const journal = createJournal(journalPath);
-      await journal.append({ type: 'start', ts: 1 });
-      await journal.append({ type: 'stop', ts: 2 });
+      await journal.append({ event: 'run-start', goal: 'two lines', nodes: 1 });
+      await journal.append({ event: 'run-end', closed: 1 });
 
       const raw = await readFile(journalPath, 'utf8');
       const lines = raw.trim().split('\n');
@@ -18,8 +19,10 @@ describe('journal seam', () => {
 
       const first = JSON.parse(lines[0]);
       const second = JSON.parse(lines[1]);
-      expect(first).toEqual({ type: 'start', ts: 1 });
-      expect(second).toEqual({ type: 'stop', ts: 2 });
+      // The events' own fields, in the order they were appended (each line
+      // also carries the envelope — pinned in journal-envelope.test.ts).
+      expect(ownFields(first)).toEqual({ event: 'run-start', goal: 'two lines', nodes: 1 });
+      expect(ownFields(second)).toEqual({ event: 'run-end', closed: 1 });
     } finally {
       await rm(journalPath, { force: true });
     }
@@ -30,11 +33,11 @@ describe('journal seam', () => {
     const journalPath = join(dir, 'run.jsonl');
     try {
       const journal = createJournal(journalPath);
-      await journal.append({ type: 'init' });
+      await journal.append({ event: 'run-start', goal: 'a nested journal', nodes: 1 });
 
       const raw = await readFile(journalPath, 'utf8');
       const parsed = JSON.parse(raw.trim());
-      expect(parsed).toEqual({ type: 'init' });
+      expect(ownFields(parsed)).toEqual({ event: 'run-start', goal: 'a nested journal', nodes: 1 });
     } finally {
       // Clean up the created parent dirs
       const topDir = join(tmpdir(), journalPath.split(tmpdir())[1].split('/')[1]);
