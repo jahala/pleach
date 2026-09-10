@@ -69,14 +69,15 @@ jahala/plotplot (v1.1.0), which is also where the kinds below are pinned.
 | `plotplot.harness` | `null` on every pleach line: pleach observes a runner's process, not a harness turn |
 | `gen_ai.conversation.id` | `null` on every pleach line: a run is not one conversation |
 
-The four kinds, and the scope each mirrors under the profile's names:
+The four kinds, the lines each covers, and the scope each mirrors under the
+profile's names:
 
 | kind | lines | mirrors |
 |---|---|---|
-| `run.lifecycle` | the run and the landing, beginning to end | — |
-| `node.lifecycle` | one node's passage, and every record kept or refused along the way | `plotplot.node` |
-| `gate.result` | a gate said yes or no | `plotplot.gate`, `plotplot.node` (`null` on land-level lines, which belong to no node) |
-| `gate.retry` | an exec gate's one same-tree re-run | `plotplot.node`, `plotplot.gate` |
+| `run.lifecycle` | the run and the landing, beginning to end: `run-start`, `run-end`, `run-aborted`, `land-start`, `land-setup`, `land-bisect`, `land-culprit`, `land-integrity-failed`, `land-blocked`, `land-conflict`, `landed` | — |
+| `node.lifecycle` | one node's passage, and every record kept or refused along the way: `node-start`, `blocked`, `phase-commit`, `set-aside`, `audit-egress-unparseable`, `verdict`, `closed`, `not-closed`, `quarantined`, `quarantine-failed`, `receipt`, `gate-artifact`, `receipt-write-failed`, `acceptance-changed`, `acceptance-cascade`, `rebuild-required`, `sha-mismatch`, `dispose-failed` | `plotplot.node` |
+| `gate.result` | a gate said yes or no: `gate-fail`, `gate-flaky`, `land-gate`, `land-gate-retry`, `land-setup-failed` | `plotplot.gate`, `plotplot.node` (`null` on land-level lines, which belong to no node) |
+| `gate.retry` | an exec gate's one same-tree re-run: `gate-retry` | `plotplot.node`, `plotplot.gate` |
 
 Terminal-verdict lines add who ran the work: `plotplot.runner` is the runner's
 CLI name, verbatim from the line's `provider` field, and `gen_ai.request.model`
