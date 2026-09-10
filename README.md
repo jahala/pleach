@@ -147,6 +147,19 @@ with the cross-provider audit's diversity rule re-checked against it. Without a 
 fallback the node settles after the one attempt with its remaining attempts unspent, and the
 verdict's `detail` names why.
 
+**A fault in the plan is refused before a worker costs anything.** pleach execs every
+command string argv-style with no shell, so `pleach validate` refuses (exit 2) a plan whose
+`work.command`, `work.test`, `setup` or `accept.smoke` holds a bare shell operator such as
+`&&`, `|` or `>`, naming the node, the field and the escape hatch: `bash -lc '<command>'`.
+`pleach run` refuses the same plan before it takes the lock.
+
+**A gate that cannot run fails its node once.** A gate whose command never started is a
+fault of the plan or the environment, never of the work: the no-shell guard's refusal is the
+plan's, a command the environment cannot spawn (a missing binary, exit 127) is the
+environment's. The node settles on that attempt with the verdict's `detail` naming which; no
+further attempt is spent and no worker is re-prompted. A gate that ran and failed still
+retries the worker with its output.
+
 **Halting a run never loses a node's work.** `pleach stop plan.json` drains: the scheduler reads
 the stop marker in the same tick as its next launch decision, so nothing further starts and the
 in-flight nodes settle normally. `--now` adds the hard abort — an interrupted node settles

@@ -47,7 +47,11 @@ Usage:
                                      node whose build was green (--repo-root applies)
   pleach stop <plan.json> [flags]    Drain a running plan: no new nodes launch, in-flight nodes
                                      settle; --now aborts them (SIGINT to the run)
-  pleach validate <plan.json>        Parse + validate a plan; print the topo order
+  pleach validate <plan.json>        Parse + validate a plan; print the topo order. Refuses
+                                     (exit 2) a command string holding a bare shell operator
+                                     (&&, |, >, ;): pleach execs without a shell — wrap shell
+                                     features: bash -lc '<command>'. \`pleach run\` refuses the
+                                     same plan before it takes the lock.
   pleach schema                      Emit the plan contract as JSON Schema (for planners / codegen)
   pleach receipt <node> [flags]      Verify a settled node's close receipt (--repo-root applies)
   pleach clean [flags]               Sweep a killed run's leavings: stale locks + orphaned pleach
@@ -130,6 +134,12 @@ session is terminated (nothing to attach to); the prompt text is recorded in
 the journal as blockedReason. Fix --permission-mode / --allowed-tools and
 re-run. A failed node's uncommitted work is preserved on quarantine/<id> for
 inspection (summary field "quarantined"); it is never treated as verified.
+
+A gate that cannot run at all fails its node once, on that attempt: a command
+the no-shell guard refuses is the plan's fault, one the environment cannot
+spawn (a missing binary, exit 127) is the environment's. No further attempt is
+spent and no worker is re-prompted for it; the verdict's detail names which. A
+gate that ran and failed still retries the worker with its output.
 
 An auditor's bad relay costs one auditor turn, not the node: when the egress
 never parses (or the auditor dies), the node is quarantined with its build's
