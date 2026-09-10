@@ -80,6 +80,13 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       return `✗ land refused: '${s(e.command)}' failed provisioning the stack — environment, not composition; no culprit`;
     case 'land-gate':
       return `land gate: ${len(e.commands)} check(s) on the merged stack`;
+    case 'land-gate-refused': {
+      // The tail rides the line: an operator who reads only stderr must see
+      // WHY the gate said no, not just that it did.
+      const why = s(e.outputTail).trim();
+      const head = `✗ land refused by '${s(e.command)}' (exit ${n(e.exitCode)}) — nothing lands`;
+      return why === '' ? head : `${head}\n${why}`;
+    }
     case 'land-gate-retry':
       return `land gate red once — retrying ${s(e.command)} (flaky screen)`;
     case 'land-bisect':

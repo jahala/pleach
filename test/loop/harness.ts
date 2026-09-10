@@ -130,6 +130,11 @@ export class InMemoryGit {
   }
 }
 
+// The branch this world lands on, and git's own answer for "there is no such
+// commit" — a stack built in a world whose target branch has no tip yet.
+const LAND_BRANCH = 'main';
+const NO_COMMIT = '0'.repeat(40);
+
 // ── receipt store naming ─────────────────────────────────────────────────────
 //
 // The real store (src/seams/receipts.ts) owns the directory and the filenames;
@@ -404,12 +409,16 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       log.push('landStack', undefined, cwd);
       return {
         cwd,
+        // The landing target's tip before these merges (D18's `{base}`). This
+        // world lands on 'main'; a world with no tip yet answers git's own
+        // "there is no such commit".
+        baseSha: git.refs.get(LAND_BRANCH) ?? NO_COMMIT,
         publish: async (): Promise<{ branch: string; sha: string }> => {
           log.push('land', undefined, refs.join(','));
           if (opts.landThrows) throw opts.landThrows;
           const sha = git.newSha();
-          git.refs.set('main', sha);
-          return { branch: 'main', sha };
+          git.refs.set(LAND_BRANCH, sha);
+          return { branch: LAND_BRANCH, sha };
         },
         dispose: async (): Promise<void> => {
           log.push('landStack-dispose', undefined, cwd);

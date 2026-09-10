@@ -73,6 +73,7 @@ export const KINDS: Record<string, Kind> = {
   'gate-flaky': 'gate.result',
   'land-gate': 'gate.result',
   'land-gate-retry': 'gate.result',
+  'land-gate-refused': 'gate.result',
   'land-setup-failed': 'gate.result',
 };
 

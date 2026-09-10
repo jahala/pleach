@@ -8,7 +8,7 @@ import type { Plan } from '../core/plan.ts';
 import { sinkIds, validatePlan } from '../core/validate.ts';
 import type { ConductorDeps, LandStack } from './deps.ts';
 import { resolveBaseRef, seedClosure } from './run-plan.ts';
-import { guardedExec } from './run-work.ts';
+import { guardedExec, shellGuardRefusal } from './run-work.ts';
 
 // ── land: the last mile (ledger B3) ──────────────────────────────────────────
 //
@@ -26,6 +26,10 @@ export interface LandOpts {
   // The operator's subset (D18): land exactly these verified ids as the
   // landing's sinks. Absent = the plan's own sinks, all-or-nothing.
   sinks?: string[];
+  // The operator's own gates (D18), in order: commands run on the composed
+  // stack after the sinks' smokes, with `{base}` substituted. pleach knows
+  // nothing about what they check — only what they exit.
+  landGates?: string[];
 }
 
 export interface LandSummary {
@@ -45,9 +49,18 @@ export async function landPlan(
   // lock is taken or any ledger read.
   const sinks = landingSinks(plan, opts.sinks);
 
+  const landGates = opts.landGates ?? [];
+
   const lock = await deps.lock.acquireLand(opts.repoRoot, plan.source);
   try {
     await deps.journal.append({ event: 'land-start', goal: plan.goal, sinks });
+
+    // An unrunnable gate is knowable before anything is built or run: the
+    // no-shell guard reads the command string alone (SEC1), and `{base}`
+    // becomes a sha — one word, which cannot change that answer. Refuse here
+    // rather than after a stack has been merged and provisioned for a command
+    // that was never going to run.
+    await refuseUnrunnableGates(deps, landGates);
 
     // Defensive copy (M3), then the same implied-ancestor closure as runPlan.
     const closed = new Map<string, string | null>(await deps.ledger.readClosed(plan.source));
@@ -80,7 +93,7 @@ export async function landPlan(
 
     let landed: { branch: string; sha: string };
     try {
-      landed = await gateAndPublish(plan, deps, opts.repoRoot, sinks, refs);
+      landed = await gateAndPublish(plan, deps, opts.repoRoot, sinks, refs, landGates);
     } catch (err) {
       // A refused land must be explainable from the journal alone.
       if (err instanceof LandConflictError) {
@@ -208,6 +221,71 @@ async function provisionOrRefuse(
   }
 }
 
+// ── the operator's gates (D18) ───────────────────────────────────────────────
+//
+// A landing composes verified work that no sink's smoke has ever seen
+// together, and the question that matters most on a live garden — are the
+// stamps on the evidence this landing moves still earned? — lives outside the
+// plan entirely. `--land-gate CMD` is that question in pleach's own
+// vocabulary: a command, run on the composed stack after every sink's smoke
+// has passed on it, argv-style with no shell like any other plan-authored
+// command. pleach knows nothing about what it checks; it reads the exit code.
+//
+// `{base}` is the one fact the command cannot learn from inside the stack —
+// the target branch's tip before these merges, so a gate can ask what this
+// landing changes. It is substituted everywhere it appears, before the argv
+// split (a sha is one word, so the split is unchanged by it).
+//
+// A red gate is the answer, not a flake: no retry, and no bisect — a map gate
+// judges the landing as a whole, so there is no culprit sink to name.
+
+const BASE_TOKEN = '{base}';
+const OUTPUT_TAIL_MAX = 2000;
+
+async function refuseUnrunnableGates(
+  deps: ConductorDeps,
+  commands: readonly string[],
+): Promise<void> {
+  for (const command of commands) {
+    const refusal = shellGuardRefusal(command);
+    if (refusal === null) continue;
+    await deps.journal.append({
+      event: 'land-gate-refused',
+      command,
+      exitCode: -1,
+      outputTail: refusal,
+    });
+    throw new LandBlockedError(`land gate '${command}' cannot be run: ${refusal}`);
+  }
+}
+
+async function runLandGates(
+  deps: ConductorDeps,
+  stack: LandStack,
+  commands: readonly string[],
+): Promise<void> {
+  for (const authored of commands) {
+    const command = authored.replaceAll(BASE_TOKEN, stack.baseSha);
+    const { output, exitCode } = await guardedExec(deps.exec, command, {
+      cwd: stack.cwd,
+      timeoutMs: LAND_GATE_TIMEOUT_MS,
+    });
+    if (exitCode !== 0) {
+      // The substituted command, because the journal line is the operator's
+      // evidence and `{base}` is not something anyone can re-run.
+      await deps.journal.append({
+        event: 'land-gate-refused',
+        command,
+        exitCode,
+        outputTail: output.slice(-OUTPUT_TAIL_MAX),
+      });
+      throw new LandBlockedError(
+        `land gate refused the landing: '${command}' exited ${exitCode}; nothing lands`,
+      );
+    }
+  }
+}
+
 interface GateFailure {
   command: string;
   outputTail: string;
@@ -254,19 +332,23 @@ async function gateAndPublish(
   repoRoot: string,
   sinks: readonly string[],
   refs: readonly string[],
+  landGates: readonly string[],
 ): Promise<{ branch: string; sha: string }> {
   const gate = collectLandGate(plan, sinks);
   const setups = collectSetupFor(plan, sinks);
   const stack: LandStack = await deps.isolate.landStack(repoRoot, refs);
   try {
+    // Anything that runs on the stack needs the stack provisioned — the
+    // operator's gates as much as the sinks' smokes (D9), and a plan whose
+    // nodes declare no smoke at all still gets provisioned for them.
+    if ((gate.length > 0 || landGates.length > 0) && setups.length > 0) {
+      await deps.journal.append({
+        event: 'land-setup',
+        commands: setups.map((s) => s.command),
+      });
+      await provisionOrRefuse(deps, stack.cwd, setups, 'gate');
+    }
     if (gate.length > 0) {
-      if (setups.length > 0) {
-        await deps.journal.append({
-          event: 'land-setup',
-          commands: setups.map((s) => s.command),
-        });
-        await provisionOrRefuse(deps, stack.cwd, setups, 'gate');
-      }
       await deps.journal.append({
         event: 'land-gate',
         commands: gate.map((g) => g.command),
@@ -291,6 +373,7 @@ async function gateAndPublish(
         await refuseWithDiagnosis(plan, deps, repoRoot, sinks, refs, gate, red);
       }
     }
+    await runLandGates(deps, stack, landGates);
     return await stack.publish();
   } finally {
     await stack.dispose();
