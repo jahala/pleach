@@ -9,6 +9,12 @@ import { AuditParseError } from './errors.ts';
 
 const FENCE_LABEL = 'tend-audit-result';
 
+// What this module looks for, in words. The journal names it in the line that
+// records not finding it (D17): "the egress did not parse" without saying what
+// was expected sends whoever reads that line to the source instead of to the
+// auditor's reply, which is the only place the answer is.
+export const EXPECTED_EGRESS = `a fenced ${FENCE_LABEL} block`;
+
 // Opening fence: a line that is ``` immediately followed by the label and
 // nothing else (trailing whitespace tolerated). Closing fence: a line that is
 // ``` and nothing else. Captures the content between them.

@@ -79,3 +79,16 @@
   umbel to re-vendor. The hashed envelope is untouched too, so every receipt already on disk still
   verifies. Recorded here because the umbrella's predicate (`predicate.weeder.sarif.sha256`) reads the
   artifact path out of a receipt: read it from the receipt, never by guessing the node's name.
+
+- **Receipt, not schema (2026-09-10)** — the close receipt's facts gained `base?: { kind:
+  'quarantine', sha }`: the tree a close was seeded from when it did not build its own (ledger D17).
+  `pleach audit <plan> <node>` re-runs only the audit on a quarantined node whose build was green,
+  checking the quarantined tree out again, so its close must stay distinguishable from a fresh
+  build's forever — the umbrella's predicate has to be able to tell a re-adjudicated close from one
+  whose gates all ran on the tree that close made. Additive, and outside the contract:
+  `@agent-contract/plan` is untouched — no schema-block change, no version bump, drift guards
+  unaffected, nothing for tend or umbel to re-vendor. Sealed INSIDE the hashed envelope (unlike
+  `refs`/`artifacts`), because what was judged is a fact of the close rather than a ref settled
+  after the freeze; `canonicalJson` drops undefined, so every receipt already on disk hashes exactly
+  as it did and still verifies. `deriveStatus` does not read it: seeding from a quarantine changes
+  what a close stood on, never what its facts imply.

@@ -53,6 +53,13 @@ export interface ReceiptFacts {
   model?: string;
   gates: GateRecord[]; // final attempt, ladder order
   audit?: AuditRecord[]; // absent when the audit never dispatched
+  // The tree this close was seeded from when it did not build its own (D17):
+  // a quarantined tree a re-adjudication stood on, at the sha it was taken at,
+  // so a resumed close stays distinguishable from a fresh one forever. Sealed
+  // INSIDE the envelope, because what was judged is a fact of the close and not
+  // a ref settled after the freeze; `canonicalJson` drops undefined, so a
+  // receipt that built its own tree hashes exactly as it did before the field.
+  base?: { kind: 'quarantine'; sha: string };
   // The node's acceptance AS RUN — the evolution-invalidation record. A later
   // run whose plan carries different strings must not skip-trust this close.
   acceptance: { smoke?: string; audit?: string };

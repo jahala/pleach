@@ -1,4 +1,4 @@
-import { GateFailedError, RebuildRequiredError } from '../core/errors.ts';
+import { GateFailedError, QuarantineBusyError, RebuildRequiredError } from '../core/errors.ts';
 import type { Node, Plan, Verdict } from '../core/plan.ts';
 import {
   computeDegraded,
@@ -49,7 +49,7 @@ export interface RunPlanOpts {
   fallbackProvider?: string;
 }
 
-const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes (binding prose).
+export const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes (binding prose).
 const FALLBACK_CONCURRENCY = 1; // conservative when no cap is supplied.
 const ROOT_BASE_REF = 'HEAD'; // a node with no needs isolates from repo HEAD.
 
@@ -231,38 +231,6 @@ async function runUnderLock(
     await settle(node, outcome, startedAt);
   }
 
-  // Failed work is evidence, not garbage: commit the tree's changes to
-  // quarantine/<id> — never node/<id>, nothing was verified — so the operator
-  // can inspect what the agent actually wrote instead of debugging from a
-  // 2000-char output tail. Best-effort: a quarantine failure journals and
-  // never masks the real verdict. An unchanged tree quarantines nothing.
-  // A receipt-file write failure must never fail a settled node — the trailer
-  // is already pinned in git; journal the miss and continue. An overwrite (a
-  // retried node) points back at the receipt it replaces.
-  async function writeReceiptOrJournal(nodeId: string, incoming: Receipt): Promise<void> {
-    try {
-      const prior = await deps.receipts.read(nodeId);
-      const receipt: Receipt =
-        prior !== null && prior.sha256 !== incoming.sha256
-          ? { ...incoming, refs: { ...incoming.refs, previousReceiptSha256: prior.sha256 } }
-          : incoming;
-      await deps.receipts.write(nodeId, receipt);
-      await deps.journal.append({
-        event: 'receipt',
-        node: nodeId,
-        sha256: receipt.sha256,
-        derived: receipt.derived,
-        degraded: receipt.facts.degraded,
-      });
-    } catch (err) {
-      await deps.journal.append({
-        event: 'receipt-write-failed',
-        node: nodeId,
-        detail: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
   // A gate's findings log and the tree's own friction journal (D14), and the
   // message the work handed back (D17), all outlive the tree. Each is kept
   // beside the receipt BEFORE dispose: keeping is part of settling a live
@@ -355,64 +323,6 @@ async function runUnderLock(
     }
   }
 
-  // Returns the quarantine refs when a commit landed, undefined otherwise —
-  // the caller writes the receipt either way (D11).
-  async function quarantineOrJournal(
-    node: Node,
-    iso: Isolation,
-    receipt: Receipt,
-  ): Promise<Receipt['refs']> {
-    try {
-      const changed = await deps.isolate.changedFiles(iso.cwd);
-      if (changed.length === 0) return undefined;
-      await deps.isolate.stage(iso.cwd, changed);
-      // #12: the quarantine branch may be checked out in a human's worktree
-      // (the owner inspecting the last failure). A busy-branch refusal falls
-      // back to a suffixed ref — evidence must never evaporate over ref
-      // hygiene. Other errors go to the honest quarantine-failed path.
-      const base = `quarantine/${node.id}`;
-      const message = `pleach: ${node.id} quarantined\n\nsource: ${plan.source}\ngoal: ${plan.goal}\n\nreceipt-sha256: ${receipt.sha256}`;
-      let landedBranch: string | null = null;
-      let sha = '';
-      for (const branch of [base, `${base}.2`, `${base}.3`, `${base}.4`]) {
-        try {
-          ({ sha } = await deps.isolate.commitBranch(iso.cwd, branch, message));
-          landedBranch = branch;
-          break;
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (!msg.includes('used by worktree')) throw err;
-        }
-      }
-      if (landedBranch === null) throw new Error(`all quarantine refs for ${base} are busy`);
-      quarantined.add(node.id);
-      await deps.journal.append({ event: 'quarantined', node: node.id, branch: landedBranch, sha });
-      return { quarantineBranch: landedBranch, quarantineSha: sha };
-    } catch (err) {
-      await deps.journal.append({
-        event: 'quarantine-failed',
-        node: node.id,
-        detail: err instanceof Error ? err.message : String(err),
-      });
-      return undefined;
-    }
-  }
-
-  // Node promises NEVER reject (run-plan.ts:115). A dispose() failure must not
-  // propagate — the work is already committed and the verdict emitted. Journal it
-  // and continue so the run summary reflects the correct closed/failed state.
-  async function disposeOrJournal(iso: Isolation, nodeId: string): Promise<void> {
-    try {
-      await iso.dispose();
-    } catch (err) {
-      await deps.journal.append({
-        event: 'dispose-failed',
-        node: nodeId,
-        detail: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
   // Commit-before-emit + dual-close, then dispose — all inside this promise so
   // the closed.set happens-before dispose, and dispose happens-before any
   // dependent's isolate (the scheduler only schedules dependents after closed).
@@ -488,10 +398,11 @@ async function runUnderLock(
       const artifacts = await keepArtifactsOrJournal(node, iso, outcome, receipt);
       let refs: Receipt['refs'];
       if (iso) {
-        refs = await quarantineOrJournal(node, iso, receipt);
-        await disposeOrJournal(iso, node.id);
+        refs = await quarantineTree(deps, plan, node, iso, receipt);
+        if (refs !== undefined) quarantined.add(node.id);
+        await disposeOrJournal(deps, iso, node.id);
       }
-      await writeReceiptOrJournal(node.id, {
+      await writeReceiptOrJournal(deps, node.id, {
         ...receipt,
         ...(refs !== undefined ? { refs } : {}),
         ...(artifacts !== undefined ? { artifacts } : {}),
@@ -545,7 +456,7 @@ async function runUnderLock(
         ? await keepArtifactsOrJournal(node, iso, outcome, receipt)
         : undefined;
 
-    await disposeOrJournal(iso, node.id);
+    await disposeOrJournal(deps, iso, node.id);
 
     if (failure !== undefined || sha === undefined || decision === undefined) {
       const err = failure;
@@ -571,7 +482,7 @@ async function runUnderLock(
     // published commit — even when tend declines the close (partial), the
     // pinned hash must stay resolvable to its facts.
     if (receipt !== undefined) {
-      await writeReceiptOrJournal(node.id, {
+      await writeReceiptOrJournal(deps, node.id, {
         ...receipt,
         refs: { diffRef: sha },
         ...(artifacts !== undefined ? { artifacts } : {}),
@@ -663,6 +574,114 @@ async function runUnderLock(
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+//
+// Settling a node — its record, its evidence, its tree — is the same work
+// wherever the verdict came from, so run-plan's scheduler and `pleach audit`'s
+// re-adjudication (D17) share these three rather than each keeping a copy of
+// the rules about what may never fail a close.
+
+// A receipt-file write failure must never fail a settled node — the trailer is
+// already pinned in git; journal the miss and continue. A node that closes
+// again keeps both records (D17): the store files every close under its own
+// hash, and the new one points back at the receipt it replaced as the latest.
+export async function writeReceiptOrJournal(
+  deps: ConductorDeps,
+  nodeId: string,
+  incoming: Receipt,
+): Promise<void> {
+  try {
+    const prior = await deps.receipts.read(nodeId);
+    const receipt: Receipt =
+      prior !== null && prior.sha256 !== incoming.sha256
+        ? { ...incoming, refs: { ...incoming.refs, previousReceiptSha256: prior.sha256 } }
+        : incoming;
+    await deps.receipts.write(nodeId, receipt);
+    await deps.journal.append({
+      event: 'receipt',
+      node: nodeId,
+      sha256: receipt.sha256,
+      derived: receipt.derived,
+      degraded: receipt.facts.degraded,
+    });
+  } catch (err) {
+    await deps.journal.append({
+      event: 'receipt-write-failed',
+      node: nodeId,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+// Failed work is evidence, not garbage: commit the tree's changes to
+// quarantine/<id> — never node/<id>, nothing was verified — so the operator can
+// inspect what the agent actually wrote instead of debugging from a 2000-char
+// output tail. Best-effort: a quarantine failure journals and never masks the
+// real verdict. An unchanged tree quarantines nothing, unless the caller says
+// otherwise: a re-adjudication (D17) judges a tree it did not write, and its
+// refusal is a fact about that tree that must reach a commit of its own — no
+// terminal verdict without an artifact (D11). Returns the quarantine refs when
+// a commit landed, undefined otherwise — the caller writes the receipt either way.
+export async function quarantineTree(
+  deps: ConductorDeps,
+  plan: Plan,
+  node: Node,
+  iso: Isolation,
+  receipt: Receipt,
+  opts: { allowEmpty?: boolean } = {},
+): Promise<Receipt['refs']> {
+  try {
+    const changed = await deps.isolate.changedFiles(iso.cwd);
+    if (changed.length === 0 && opts.allowEmpty !== true) return undefined;
+    if (changed.length > 0) await deps.isolate.stage(iso.cwd, changed);
+    // #12: the quarantine branch may be checked out in a human's worktree
+    // (the owner inspecting the last failure). A busy-branch refusal falls
+    // back to a suffixed ref — evidence must never evaporate over ref
+    // hygiene. Other errors go to the honest quarantine-failed path.
+    const base = `quarantine/${node.id}`;
+    const message = `pleach: ${node.id} quarantined\n\nsource: ${plan.source}\ngoal: ${plan.goal}\n\nreceipt-sha256: ${receipt.sha256}`;
+    let landedBranch: string | null = null;
+    let sha = '';
+    for (const branch of [base, `${base}.2`, `${base}.3`, `${base}.4`]) {
+      try {
+        ({ sha } = await deps.isolate.commitBranch(iso.cwd, branch, message));
+        landedBranch = branch;
+        break;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!msg.includes('used by worktree')) throw err;
+      }
+    }
+    if (landedBranch === null) throw new QuarantineBusyError(base);
+    await deps.journal.append({ event: 'quarantined', node: node.id, branch: landedBranch, sha });
+    return { quarantineBranch: landedBranch, quarantineSha: sha };
+  } catch (err) {
+    await deps.journal.append({
+      event: 'quarantine-failed',
+      node: node.id,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+    return undefined;
+  }
+}
+
+// Node promises NEVER reject. A dispose() failure must not propagate — the work
+// is already committed and the verdict emitted. Journal it and continue so the
+// run summary reflects the correct closed/failed state.
+export async function disposeOrJournal(
+  deps: ConductorDeps,
+  iso: Isolation,
+  nodeId: string,
+): Promise<void> {
+  try {
+    await iso.dispose();
+  } catch (err) {
+    await deps.journal.append({
+      event: 'dispose-failed',
+      node: nodeId,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
 
 // Every transitive ancestor (via needs) of a closed node is also closed — a
 // closed integration node contains its steps' work, so its steps need not run.
@@ -739,7 +758,7 @@ function gatesWithTailSha(outcome: RunNodeResult): GateRecord[] {
 
 // The node's acceptance as command strings — the receipt's evolution-
 // invalidation record (§D). Generic strings, no pin semantics parsed.
-function acceptanceOf(node: Node): { smoke?: string; audit?: string } {
+export function acceptanceOf(node: Node): { smoke?: string; audit?: string } {
   return {
     ...(node.accept.smoke !== undefined ? { smoke: node.accept.smoke } : {}),
     ...(node.accept.audit !== undefined ? { audit: node.accept.audit.command } : {}),

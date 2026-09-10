@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { cpus } from 'node:os';
 import {
+  AuditRefusedError,
   ConfigError,
   LandBlockedError,
   LandConflictError,
@@ -14,6 +15,7 @@ import { type Plan, PlanSchema } from '../core/plan.ts';
 import { receiptPrefix } from '../core/receipt.ts';
 import { planJsonSchema } from '../core/schema-json.ts';
 import { nodeSummaries, planWarnings, validatePlan } from '../core/validate.ts';
+import { auditNode } from '../loop/audit-node.ts';
 import type { RunSummary } from '../loop/deps.ts';
 import { landPlan } from '../loop/land.ts';
 import { verifyReceipt } from '../loop/receipt-verify.ts';
@@ -41,6 +43,8 @@ const HELP = `pleach — deterministic conductor for DAGs of verified agent work
 Usage:
   pleach run <plan.json> [flags]     Execute a plan
   pleach land <plan.json> [flags]    Merge a verified plan's sinks onto the checked-out branch
+  pleach audit <plan.json> <node>    Re-run ONLY the cross-provider audit on a quarantined
+                                     node whose build was green (--repo-root applies)
   pleach stop <plan.json> [flags]    Drain a running plan: no new nodes launch, in-flight nodes
                                      settle; --now aborts them (SIGINT to the run)
   pleach validate <plan.json>        Parse + validate a plan; print the topo order
@@ -105,6 +109,15 @@ session is terminated (nothing to attach to); the prompt text is recorded in
 the journal as blockedReason. Fix --permission-mode / --allowed-tools and
 re-run. A failed node's uncommitted work is preserved on quarantine/<id> for
 inspection (summary field "quarantined"); it is never treated as verified.
+
+An auditor's bad relay costs one auditor turn, not the node: when the egress
+never parses (or the auditor dies), the node is quarantined with its build's
+gates green, and \`pleach audit <plan.json> <node>\` re-adjudicates it — the
+quarantined tree is checked out again with its dependencies merged as a run
+merges them, setup provisions it, and only the audit runs. A pass publishes
+node/<id> and closes; anything else writes a new quarantine receipt. It refuses
+(exit 1) a node whose latest close is not a quarantine with a green smoke: an
+audit verdict over an unproven build proves nothing.
 
 Exit codes:
   0  every plan node closed (verified)
@@ -339,13 +352,10 @@ async function depsFromFlags(flags: Flags) {
   });
 }
 
-async function verbRun(planPath: string, flags: Flags): Promise<number> {
-  const plan = await readPlan(planPath);
-  const deps = await depsFromFlags(flags);
-
-  // D12: SIGINT/SIGTERM tear the run down instead of orphaning it — workers
-  // killed, trees quarantined/disposed, lock released, journal says why. A
-  // second signal falls through to the default handler (immediate death).
+// D12: SIGINT/SIGTERM tear the work down instead of orphaning it — workers
+// killed, trees quarantined/disposed, lock released, journal says why. A second
+// signal falls through to the default handler (immediate death).
+function teardownOnSignal(): AbortSignal {
   const teardown = new AbortController();
   const onSignal = (sig: string) => {
     process.stderr.write(`pleach: ${sig} — aborting run, tearing down\n`);
@@ -353,11 +363,18 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
   };
   process.once('SIGINT', () => onSignal('SIGINT'));
   process.once('SIGTERM', () => onSignal('SIGTERM'));
+  return teardown.signal;
+}
+
+async function verbRun(planPath: string, flags: Flags): Promise<number> {
+  const plan = await readPlan(planPath);
+  const deps = await depsFromFlags(flags);
+  const signal = teardownOnSignal();
 
   const summary = await runPlan(plan, deps, {
     repoRoot: flags.repoRoot,
     pleachVersion: await pleachVersion(),
-    signal: teardown.signal,
+    signal,
     // The contract's conductor default when neither flag nor plan caps it:
     // cores−2, floored at 1 (the loop stays environment-free).
     defaultConcurrency: Math.max(1, cpus().length - 2),
@@ -416,6 +433,30 @@ async function verbReceipt(nodeId: string, flags: Flags): Promise<number> {
     })}\n`,
   );
   return check.outcome === 'pass' ? 0 : check.outcome === 'tampered' ? 1 : 2;
+}
+
+// D17: an unparseable audit relay must cost one auditor turn, not the node it
+// failed. The loop owns every refusal (a build that was never green, a tree
+// that is gone); the face maps its typed error to exit 1 like any other.
+async function verbAudit(
+  planPath: string,
+  nodeId: string | undefined,
+  flags: Flags,
+): Promise<number> {
+  if (nodeId === undefined) throw new UsageError('audit: <node> is required');
+  const plan = await readPlan(planPath);
+  const deps = await depsFromFlags(flags);
+  const result = await auditNode(plan, nodeId, deps, {
+    repoRoot: flags.repoRoot,
+    pleachVersion: await pleachVersion(),
+    signal: teardownOnSignal(),
+    idleMs: flags.idleMs,
+    ...(flags.timeoutMs !== undefined ? { defaultTimeoutMs: flags.timeoutMs } : {}),
+  });
+  process.stdout.write(`${JSON.stringify(result)}\n`);
+  // Only a verified close is success: a re-quarantine settled honestly, but the
+  // node is no more verified than it was before.
+  return result.status === 'closed' ? 0 : 1;
 }
 
 async function verbLand(planPath: string, flags: Flags): Promise<number> {
@@ -500,6 +541,8 @@ export async function runCli(argv: readonly string[]): Promise<number> {
     switch (verb) {
       case 'run':
         return await verbRun(planPath, flags);
+      case 'audit':
+        return await verbAudit(planPath, positionals[2], flags);
       case 'land':
         return await verbLand(planPath, flags);
       case 'stop':
@@ -524,6 +567,7 @@ export async function runCli(argv: readonly string[]): Promise<number> {
       return 3;
     }
     if (
+      err instanceof AuditRefusedError ||
       err instanceof RebuildRequiredError ||
       err instanceof TendTransportError ||
       err instanceof LandBlockedError ||
