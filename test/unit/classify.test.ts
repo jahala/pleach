@@ -1,8 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import type { ClassifyInput } from '../../src/core/classify.ts';
-import { classify } from '../../src/core/classify.ts';
+import {
+  classify,
+  GUARD_REFUSED_EXIT,
+  gateFault,
+  SPAWN_FAILED_EXIT,
+} from '../../src/core/classify.ts';
 import {
   AuditParseError,
+  GateCannotRunError,
   GateFailedError,
   LockHeldError,
   PlanInvalidError,
@@ -80,6 +86,18 @@ describe('classify — errors', () => {
     expect(classify(errorInput(new GateFailedError('setup', '', 1)))).toBe('retryable');
   });
 
+  // ledger: D19 — a gate that never ran is nothing a retry or a worker can fix.
+  test('GateCannotRunError → "terminal", whichever fault it names', () => {
+    expect(
+      classify(errorInput(new GateCannotRunError('smoke', 'refused', GUARD_REFUSED_EXIT, 'plan'))),
+    ).toBe('terminal');
+    expect(
+      classify(
+        errorInput(new GateCannotRunError('setup', 'ENOENT', SPAWN_FAILED_EXIT, 'environment')),
+      ),
+    ).toBe('terminal');
+  });
+
   test('AuditParseError → "reaudit"', () => {
     expect(classify(errorInput(new AuditParseError('garbage')))).toBe('reaudit');
   });
@@ -98,6 +116,25 @@ describe('classify — errors', () => {
 
   test('non-Error thrown value → "terminal"', () => {
     expect(classify({ kind: 'error', error: new TypeError('unexpected') })).toBe('terminal');
+  });
+});
+
+// ledger: D19 — whose fault a gate's exit code names when no command ran: the
+// no-shell guard's refusal is the plan's, a spawn that never happened is the
+// environment's, and every exit a command could have produced is the work's.
+describe('gateFault — a gate that never ran', () => {
+  test('the guard refusal (-1) is the plan’s fault', () => {
+    expect(GUARD_REFUSED_EXIT).toBe(-1);
+    expect(gateFault(GUARD_REFUSED_EXIT)).toBe('plan');
+  });
+
+  test('a spawn failure (127) is the environment’s fault', () => {
+    expect(SPAWN_FAILED_EXIT).toBe(127);
+    expect(gateFault(SPAWN_FAILED_EXIT)).toBe('environment');
+  });
+
+  test('any other exit ran a command: no fault, the work’s red (or green)', () => {
+    for (const code of [0, 1, 2, 126, 128, 137, 255, -2]) expect(gateFault(code)).toBeNull();
   });
 });
 

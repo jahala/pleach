@@ -8,6 +8,11 @@ import { checkDiffHygiene } from '../../src/core/hygiene.ts';
 
 const NUM = (file: string, added: number, deleted: number) => ({ file, added, deleted });
 
+// A live-shaped AWS key id, assembled from halves so this file's own diff does
+// not trip the battery it tests. Not AWS's documented example: that one is
+// allowlisted (D19, hygiene-allowlist.test.ts).
+const AWS_KEY = ['AKIA', 'Q3VZ7K2MXW9RT4LB'].join('');
+
 describe('checkDiffHygiene (§E)', () => {
   test('clean diff passes', () => {
     const r = checkDiffHygiene({
@@ -47,7 +52,7 @@ describe('checkDiffHygiene (§E)', () => {
     const diff = [
       'diff --git a/src/config.ts b/src/config.ts',
       '+++ b/src/config.ts',
-      '+const key = "AKIAIOSFODNN7EXAMPLE";',
+      `+const key = "${AWS_KEY}";`,
     ].join('\n');
     const r = checkDiffHygiene({
       workKind: 'prompt',
@@ -73,8 +78,7 @@ describe('checkDiffHygiene (§E)', () => {
   });
 
   test('REMOVING a secret is not a violation (deleted lines are not scanned)', () => {
-    const diff =
-      '+++ b/src/config.ts\n-const key = "AKIAIOSFODNN7EXAMPLE";\n+const key = env.KEY;\n';
+    const diff = `+++ b/src/config.ts\n-const key = "${AWS_KEY}";\n+const key = env.KEY;\n`;
     const r = checkDiffHygiene({
       workKind: 'prompt',
       stagedFiles: ['src/config.ts'],

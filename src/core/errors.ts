@@ -1,3 +1,4 @@
+import type { GateFault } from './classify.ts';
 import type { HygieneFailure } from './hygiene.ts';
 
 export class PlanInvalidError extends Error {
@@ -88,6 +89,27 @@ export class GateFailedError extends Error {
     this.gate = gate;
     this.evidence = evidence;
     this.exitCode = exitCode;
+  }
+}
+
+// ledger: D19 — a gate that never ran a command: the no-shell guard refused
+// it, or the exec seam could not spawn it. Distinct from GateFailedError on
+// purpose: that one is a red the work can fix and retries; this one names the
+// plan or the environment and settles the node on the attempt that found it.
+// `output` is what the guard or the seam said — no child ever wrote any.
+export class GateCannotRunError extends Error {
+  readonly name = 'GateCannotRunError';
+  readonly gate: GateKind;
+  readonly output: string;
+  readonly exitCode: number;
+  readonly fault: GateFault;
+
+  constructor(gate: GateKind, output: string, exitCode: number, fault: GateFault) {
+    super(`gate '${gate}' cannot run (${fault})`);
+    this.gate = gate;
+    this.output = output;
+    this.exitCode = exitCode;
+    this.fault = fault;
   }
 }
 

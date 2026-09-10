@@ -369,6 +369,22 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     return out;
   }
 
+  // ── stagedPaths (what the receipt counts, D19) ──────────────────────────
+
+  async function stagedPaths(cwd: string): Promise<string[]> {
+    // core.quotePath=false: git otherwise answers a non-ASCII path in its
+    // quoted octal form, which names no file. A git that cannot read the index
+    // must fail CLOSED — "nothing staged" would be a fact nobody observed.
+    const r = await git(exec, cwd, '-c', 'core.quotePath=false', 'diff', '--cached', '--name-only');
+    if (r.exitCode !== 0) {
+      throw new IsolateCatastrophicError(
+        'git diff --cached --name-only',
+        `exited ${r.exitCode} in ${cwd}:\n${r.output}`,
+      );
+    }
+    return r.output.split('\n').filter((l) => l !== '');
+  }
+
   // ── commit ───────────────────────────────────────────────────────────────
 
   // The phase seal (D13): a commit on the worktree's detached HEAD. No branch
@@ -520,6 +536,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     stage,
     stagedDiff,
     stagedNumstat,
+    stagedPaths,
     changedFiles,
     commit,
     commitBranch,

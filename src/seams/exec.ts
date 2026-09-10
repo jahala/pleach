@@ -1,3 +1,4 @@
+import { SPAWN_FAILED_EXIT } from '../core/classify.ts';
 import type { ExecFn } from '../loop/deps.ts';
 
 // stdout and stderr are both captured and concatenated in arrival order.
@@ -21,7 +22,8 @@ export const exec: ExecFn = async (argv, opts) => {
 
   // Totality: spawn itself can fail (nonexistent cwd or binary). The contract
   // is "the return type says so" — resolve with exit 127 (command-not-found
-  // convention) instead of rejecting with an untyped Error.
+  // convention) instead of rejecting with an untyped Error. The loop reads it
+  // as the environment's fault, never the work's (ledger D19).
   let proc: Bun.Subprocess<'ignore', 'pipe', 'pipe'>;
   try {
     proc = Bun.spawn(argv as string[], {
@@ -40,7 +42,7 @@ export const exec: ExecFn = async (argv, opts) => {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { output: message, stdout: '', exitCode: 127 };
+    return { output: message, stdout: '', exitCode: SPAWN_FAILED_EXIT };
   }
 
   let output = '';

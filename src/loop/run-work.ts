@@ -1,12 +1,18 @@
-import { shellOperatorTokens, toArgv } from '../core/argv.ts';
-import { GateFailedError, PlanInvalidError } from '../core/errors.ts';
+import { shellOperatorRefusal, toArgv } from '../core/argv.ts';
+import { GUARD_REFUSED_EXIT, gateFault } from '../core/classify.ts';
+import {
+  GateCannotRunError,
+  GateFailedError,
+  type GateKind,
+  PlanInvalidError,
+} from '../core/errors.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, ExecResult, Worker, WorkerResult } from './deps.ts';
 
 // Exec a plan-authored command string with the no-shell guard: a bare shell
 // operator would be passed as a literal argument and do silently-wrong things
 // (the 2026-08-17 canary catch). Guard hits report exitCode -1 with the
-// escape hatch named, flowing through each gate's existing failure path.
+// escape hatch named; each gate reads it with gateFault as the plan's (D19).
 export async function guardedExec(
   exec: ExecFn,
   command: string,
@@ -15,9 +21,18 @@ export async function guardedExec(
   const refusal = shellGuardRefusal(command);
   if (refusal !== null) {
     // No child ran, so there is no stdout — pleach's own finding, on `output`.
-    return { output: refusal, stdout: '', exitCode: -1 };
+    return { output: refusal, stdout: '', exitCode: GUARD_REFUSED_EXIT };
   }
   return exec(toArgv(command), opts);
+}
+
+// A gate whose command could not run at all (D19) is not a red for this attempt
+// to fix: throw it as the plan's or the environment's before any exit-code rule
+// reads it — the red gate's "must fail" would otherwise seal a refusal as the
+// failing test.
+function refuseIfCannotRun(gate: GateKind, output: string, exitCode: number): void {
+  const fault = gateFault(exitCode);
+  if (fault !== null) throw new GateCannotRunError(gate, output, exitCode, fault);
 }
 
 // The guard as a question, askable without running anything: why `command`
@@ -25,13 +40,8 @@ export async function guardedExec(
 // unrunnable before it provisions anything (a land gate, D18) refuses there
 // instead of paying for a worktree first.
 export function shellGuardRefusal(command: string): string | null {
-  const ops = shellOperatorTokens(toArgv(command));
-  if (ops.length === 0) return null;
-  return (
-    `command contains bare shell operator(s): ${ops.join(' ')} — pleach execs ` +
-    `without a shell (arg-array; contract exec semantics). For shell features, ` +
-    `wrap the command: bash -lc '<command>'`
-  );
+  const refusal = shellOperatorRefusal(command);
+  return refusal === null ? null : `command ${refusal}`;
 }
 
 // runWork drives one attempt of a node's Work through its worker + exec gates.
@@ -120,6 +130,7 @@ export async function runWork(
         telemetry: {},
       };
     }
+    refuseIfCannotRun('command', output, exitCode);
     if (exitCode !== 0) throw new GateFailedError('command', output, exitCode);
     return {
       finalMessage: output,
@@ -170,8 +181,10 @@ export async function runWork(
           cwd,
           timeoutMs: opts.timeoutMs,
         });
-        // RED must FAIL: a test that already passes means no failing test was
-        // written (or a harness error) — the TDD guarantee is void.
+        // A test that never ran is no red (D19). RED must FAIL: a test that
+        // already passes means no failing test was written — the TDD
+        // guarantee is void.
+        refuseIfCannotRun('red', output, exitCode);
         if (exitCode === 0) throw new GateFailedError('red', output, exitCode);
         // The red state is sealed as its own commit before the next prompt goes
         // out (D13) — after that the tree carries impl work and nothing can
@@ -183,6 +196,7 @@ export async function runWork(
           cwd,
           timeoutMs: opts.timeoutMs,
         });
+        refuseIfCannotRun('green', output, exitCode);
         if (exitCode !== 0) throw new GateFailedError('green', output, exitCode);
       }
     }

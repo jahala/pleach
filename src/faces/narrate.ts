@@ -42,7 +42,12 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       return `⚠ ${s(e.node)} NEEDS YOU — worker blocked: ${s(e.reason)}`;
     case 'verdict': {
       if (e.status === 'done') return null; // 'closed' narrates the publish
-      return `✗ ${s(e.node)}: ${s(e.status)} after ${n(e.attempts)} attempt(s)`;
+      // `detail` is why the node settled where no gate says it (D17, D19): a
+      // gate that could not run names whose fault it is, and an operator who
+      // reads only stderr must see that, not just that the node failed.
+      const head = `✗ ${s(e.node)}: ${s(e.status)} after ${n(e.attempts)} attempt(s)`;
+      const why = typeof e.detail === 'string' ? e.detail.trim() : '';
+      return why === '' ? head : `${head}\n${why}`;
     }
     case 'closed': {
       // degraded[] rides the close line — "no coverage is not coverage" must

@@ -478,6 +478,9 @@ async function journalVerdict(
     durationMs,
     provider: node.worker.provider ?? DEFAULT_WORKER_PROVIDER,
     ...(node.worker.model !== undefined ? { model: node.worker.model } : {}),
+    // A re-adjudication runs setup and the auditor, never the cast (D19): the
+    // work it judges was produced by a build this line is not about.
+    spawned: false,
     ...(verdict.evidence.gate
       ? { gate: { ...verdict.evidence.gate, ...(tail !== undefined ? { outputTail: tail } : {}) } }
       : {}),
