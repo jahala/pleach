@@ -63,6 +63,11 @@ export interface RunNodeResult {
   // carried so settle can keep them beside the receipt before the tree goes.
   // Journal/settle material only; the Verdict contract is untouched.
   smokeStdout?: string;
+  // The final attempt's hand-back: the message the work ended with, verbatim
+  // (ledger D17). Read by nobody here — settle keeps it beside the receipt and
+  // the session it came from is killed moments later. Journal/settle material
+  // only, like smokeStdout; absent when the attempt never got a result.
+  handback?: string;
 }
 
 const REAUDIT_BUDGET = 2;
@@ -102,6 +107,7 @@ export async function runNode(
       ...result,
       gates,
       ...(smokeStdout !== undefined ? { smokeStdout } : {}),
+      ...(handback !== undefined ? { handback } : {}),
       ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
       ...(result.stagedFiles === undefined && lastStaged !== undefined
         ? { stagedFiles: lastStaged }
@@ -142,6 +148,10 @@ export async function runNode(
   let lastStaged: string[] | undefined;
   // The smoke gate's findings log, when this attempt's gate wrote one (D14).
   let smokeStdout: string | undefined;
+  // What this attempt's work handed back (D17) — the builder's final message,
+  // never the auditor's, which is egress the loop parses rather than work a
+  // worker produced.
+  let handback: string | undefined;
 
   try {
     for (;;) {
@@ -150,6 +160,7 @@ export async function runNode(
       auditRecords = undefined;
       lastStaged = undefined;
       smokeStdout = undefined;
+      handback = undefined;
 
       // ── isolate (or reuse the tree for a retryable retry) ───────────────────
       if (iso === null) {
@@ -233,6 +244,7 @@ export async function runNode(
         throw err;
       }
       await worker?.kill();
+      handback = result.finalMessage;
 
       // ── non-stop reasons ──────────────────────────────────────────────────
       if (result.reason !== 'stop') {
@@ -506,6 +518,7 @@ export async function runNode(
         stagedFiles,
         gates,
         ...(smokeStdout !== undefined ? { smokeStdout } : {}),
+        ...(handback !== undefined ? { handback } : {}),
         ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
       };
     }

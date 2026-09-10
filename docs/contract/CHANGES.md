@@ -49,6 +49,16 @@
   every receipt already on disk still verifies. Recorded here because the receipt is the surface the
   umbrella's predicate (`predicate.weeder.sarif.sha256`) cites.
 
+- **Receipt, not schema (2026-09-10)** — the receipt file's `artifacts?` gained `handback?`: the
+  message the worker handed the work back with, kept verbatim beside the receipt at
+  `<git-dir>/pleach/receipts/<node>.handback.md` on every close, done or quarantined (ledger D17 —
+  until now it lived only in the provider's own session, which the runner kills moments later).
+  Kept, never read: pleach hashes the bytes and names the file, and nothing in pleach parses a word
+  of it. Additive, and outside the contract: `@agent-contract/plan` is untouched — no schema-block
+  change, no version bump, drift guards unaffected, nothing for tend or umbel to re-vendor. The
+  hashed envelope is untouched too (`artifacts` sits beside `refs`, settled after the freeze), so
+  every receipt already on disk still verifies.
+
 - **Seam prose, not schema (2026-09-10)** — `Worker.wait`'s opts gained `idleMs?: number` in the
   informative "Seam interfaces" block: the conductor's idle policy, handed to the runner so a
   wedged worker ends at an idle timeout instead of riding the attempt clock (ledger D16; the

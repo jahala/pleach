@@ -256,13 +256,15 @@ async function runUnderLock(
     }
   }
 
-  // A gate's findings log, and the tree's own friction journal, outlive the
-  // tree (D14). Both are kept beside the receipt BEFORE dispose: keeping is
-  // part of settling a live tree, not of the bookkeeping after it, so nothing
-  // that has to be read from the worktree can be lost to ordering.
+  // A gate's findings log and the tree's own friction journal (D14), and the
+  // message the work handed back (D17), all outlive the tree. Each is kept
+  // beside the receipt BEFORE dispose: keeping is part of settling a live
+  // tree, not of the bookkeeping after it, so nothing that has to be read from
+  // the worktree can be lost to ordering, and nothing is kept for a session
+  // that has already been killed.
   // Returns what the receipt file should name, outside its envelope; a gate
-  // that printed something else, and a tree with no journal in it, keep
-  // nothing. A write failure journals `receipt-write-failed` and the close
+  // that printed something else, a tree with no journal in it, and a worker
+  // that said nothing keep nothing. A write failure journals `receipt-write-failed` and the close
   // proceeds, exactly like the receipt file's own write: the seal is already
   // pinned in the commit trailer.
   async function keepArtifactsOrJournal(
@@ -287,10 +289,20 @@ async function runUnderLock(
       const text = iso === undefined ? null : await deps.isolate.readFriction(iso.cwd);
       return text === null ? null : { bytes: text, sha256: sha256Hex(text) };
     });
-    if (sarif === undefined && friction === undefined) return undefined;
+    // What the worker said when it handed the work back (D17) — the message
+    // whose dated Tried line the garden's law asks for, which until now
+    // survived only in the provider's own transcript. Kept verbatim and read
+    // by nobody: agents produce, code decides. A worker that said nothing
+    // hands back nothing to keep.
+    const handback = await keepOrJournal(node, 'handback', 'handback', async () => {
+      const text = outcome.handback;
+      return text === undefined || text === '' ? null : { bytes: text, sha256: sha256Hex(text) };
+    });
+    if (sarif === undefined && friction === undefined && handback === undefined) return undefined;
     return {
       ...(sarif !== undefined ? { sarif } : {}),
       ...(friction !== undefined ? { friction } : {}),
+      ...(handback !== undefined ? { handback } : {}),
     };
   }
 
@@ -299,7 +311,7 @@ async function runUnderLock(
   // close — nor a reason to lose the other artifact.
   async function keepOrJournal(
     node: Node,
-    gate: 'smoke' | 'friction',
+    gate: 'smoke' | 'friction' | 'handback',
     kind: ArtifactKind,
     read: () => Promise<{ bytes: string; sha256: string } | null>,
   ): Promise<string | undefined> {

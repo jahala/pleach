@@ -19,6 +19,7 @@ import type { ArtifactKind, ReceiptStore } from '../loop/deps.ts';
 const ARTIFACT_EXTENSION: Record<ArtifactKind, string> = {
   sarif: '.sarif',
   friction: '.friction.jsonl',
+  handback: '.handback.md',
 };
 
 export function createReceiptStore(dir: string): ReceiptStore {
