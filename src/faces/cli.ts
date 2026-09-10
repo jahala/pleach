@@ -94,6 +94,14 @@ Flags (run):
                           node event; a worker blocked on you is shouted). The JSONL
                           journal records everything regardless.
 
+Flags (land):
+  --repo-root PATH        Git repo whose checked-out branch receives the merge (default: cwd)
+  --sinks a,b             Land only these verified node ids (comma-separated) as the landing's
+                          sinks, instead of the plan's own. A named node that is not verified
+                          refuses the landing by name before anything is built; the composition
+                          gate and the publish cover exactly the subset. Without it every plan
+                          node must be verified.
+
 Flags (stop):
   --repo-root PATH        Git repo whose run is drained (default: cwd)
   --now                   Abort the in-flight nodes too: SIGINT to the run's process. Their
@@ -101,8 +109,9 @@ Flags (stop):
 
 Landing: verified work is published as node/<id> branches; \`pleach land\` merges
 the plan's sinks onto the branch checked out in --repo-root. It refuses unless
-EVERY plan node is verified, and a merge conflict or non-fast-forward aborts
-with the repo untouched — resolve those by hand (git merge node/<id>).
+EVERY plan node is verified (with --sinks, unless every named one is), and a
+merge conflict or non-fast-forward aborts with the repo untouched — resolve
+those by hand (git merge node/<id>).
 
 Resuming is automatic: re-running a plan skips nodes already verified in the
 ledger (their node/<id> branch exists) — only unbuilt or previously-failed
@@ -153,6 +162,7 @@ interface Flags {
   config?: string;
   fresh: boolean;
   land: boolean;
+  sinks?: string[];
   now: boolean;
   quiet: boolean;
   runnerKind?: 'umbel' | 'direct-cli';
@@ -243,6 +253,16 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         flags.permissionMode = takeValue(arg, next);
         i += 1;
         break;
+      case '--sinks': {
+        const ids = takeValue(arg, next)
+          .split(',')
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0);
+        if (ids.length === 0) throw new UsageError('--sinks requires at least one node id');
+        flags.sinks = ids;
+        i += 1;
+        break;
+      }
       case '--fresh':
         flags.fresh = true;
         break;
@@ -472,7 +492,7 @@ async function verbAudit(
 async function verbLand(planPath: string, flags: Flags): Promise<number> {
   const plan = await readPlan(planPath);
   const deps = await depsFromFlags(flags);
-  const land = await landPlan(plan, deps, { repoRoot: flags.repoRoot });
+  const land = await landPlan(plan, deps, { repoRoot: flags.repoRoot, sinks: flags.sinks });
   process.stderr.write(`pleach: landed ${land.landed.join(', ')} on '${land.branch}'\n`);
   process.stdout.write(`${JSON.stringify(land)}\n`);
   return 0;
