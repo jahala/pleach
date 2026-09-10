@@ -170,3 +170,17 @@ export class ConfigError extends Error {
     this.detail = detail;
   }
 }
+
+// A journal event with no pinned `plotplot.kind` (ledger D15). Unreachable
+// while `KINDS` covers every event docs/journal.md documents; a throw rather
+// than a default kind precisely because a silent fallback is how a stream
+// acquires a fourteenth private kind.
+export class JournalEventUnknownError extends Error {
+  readonly name = 'JournalEventUnknownError';
+  readonly event: string;
+
+  constructor(event: string) {
+    super(`no pinned plotplot.kind for journal event '${event}'`);
+    this.event = event;
+  }
+}
