@@ -44,7 +44,7 @@ tolerate unknown events and unknown fields.
 | `run-end` | the `RunSummary` fields (`closed`, `failed`, `partial`, `skipped`, `blocked`, `aborted`, `quarantined`, `alreadyVerified`, …) | the run settled — `aborted` names the nodes the run's own signal cut off mid-wait (D16): settled with `status: "aborted"`, receipt written, tree quarantined, never counted as failures |
 | `run-aborted` | — | SIGINT/SIGTERM teardown (D12): no new launches; in-flight waits interrupted, their nodes settle with evidence; `run-end` still follows |
 | `run-stopped` | — | `pleach stop` drained the run (D16): the marker beside the run's lock is read in the same tick as every launch decision, so nothing further launched; in-flight nodes settled normally and kept their work, the marker is consumed, and the nodes that never started are `skipped` in the `run-end` that follows |
-| `land-start` | `goal` | landing began |
+| `land-start` | `goal`, `sinks` | landing began; `sinks` are the ids being landed (the `--sinks` subset, else the plan's own) |
 | `land-setup` | `commands[]` | stack provisioning: the sinks' deduped setup commands run in the gate worktree before their smokes (D9 — a fresh stack has no environment) |
 | `land-setup-failed` | `command`, `exitCode`, `outputTail` | provisioning failed — an ENVIRONMENT refusal, never a composition culprit; the bisect does not run |
 | `land-gate` | `commands[]`, `sinks[]` | the composition gate: sinks' deduped smokes run on the stack tip |

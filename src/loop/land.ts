@@ -1,4 +1,9 @@
-import { LandBlockedError, LandConflictError, RebuildRequiredError } from '../core/errors.ts';
+import {
+  LandBlockedError,
+  LandConflictError,
+  PlanInvalidError,
+  RebuildRequiredError,
+} from '../core/errors.ts';
 import type { Plan } from '../core/plan.ts';
 import { sinkIds, validatePlan } from '../core/validate.ts';
 import type { ConductorDeps, LandStack } from './deps.ts';
@@ -9,7 +14,8 @@ import { guardedExec } from './run-work.ts';
 //
 // Verified work sits on node/<id> branches; landPlan merges the plan's sinks
 // onto the branch checked out in repoRoot. Policy lives here — every plan node
-// must be verified-closed, sinks resolve through the B1/C5 baseRef chain — and
+// must be verified-closed (with --sinks, exactly the named ones, which then
+// ARE the landing's sinks), sinks resolve through the B1/C5 baseRef chain — and
 // the git mechanics live in the isolate seam's land(), which builds the merges
 // in a throwaway worktree and only ever touches the checkout via --ff-only.
 // Composes injected seams only; holds the (repo, source) LAND lock — never the
@@ -17,6 +23,9 @@ import { guardedExec } from './run-work.ts';
 
 export interface LandOpts {
   repoRoot: string;
+  // The operator's subset (D18): land exactly these verified ids as the
+  // landing's sinks. Absent = the plan's own sinks, all-or-nothing.
+  sinks?: string[];
 }
 
 export interface LandSummary {
@@ -32,17 +41,26 @@ export async function landPlan(
 ): Promise<LandSummary> {
   validatePlan(plan); // throws PlanInvalidError — the face maps exit 2.
 
+  // Which sinks this landing is for — a plan question, answered before any
+  // lock is taken or any ledger read.
+  const sinks = landingSinks(plan, opts.sinks);
+
   const lock = await deps.lock.acquireLand(opts.repoRoot, plan.source);
   try {
-    await deps.journal.append({ event: 'land-start', goal: plan.goal });
+    await deps.journal.append({ event: 'land-start', goal: plan.goal, sinks });
 
     // Defensive copy (M3), then the same implied-ancestor closure as runPlan.
     const closed = new Map<string, string | null>(await deps.ledger.readClosed(plan.source));
     seedClosure(plan, closed);
 
-    // Landing is all-or-nothing: half a plan on the branch would break the
-    // verified-only invariant the node branches exist to protect.
-    const unclosed = plan.nodes.filter((n) => !closed.has(n.id)).map((n) => n.id);
+    // Landing is all-or-nothing over what it is landing: the whole plan by
+    // default (half a plan on the branch would break the verified-only
+    // invariant the node branches exist to protect), or exactly the named
+    // subset — the operator's answer to a settled node stranded behind the
+    // rest of the run. Either way the refusal names the unverified ids, and
+    // it lands before anything is built.
+    const scope = opts.sinks === undefined ? plan.nodes.map((n) => n.id) : sinks;
+    const unclosed = scope.filter((id) => !closed.has(id));
     if (unclosed.length > 0) {
       await deps.journal.append({ event: 'land-blocked', unverified: unclosed });
       throw new LandBlockedError(`unverified node(s): ${unclosed.join(', ')}`);
@@ -50,7 +68,6 @@ export async function landPlan(
 
     // Resolve each sink through the baseRef chain — a vanished ref is a
     // rebuild, a force-moved branch is refused (C5 verify-before-use).
-    const sinks = sinkIds(plan);
     const refs: string[] = [];
     for (const id of sinks) {
       const resolved = await resolveBaseRef(deps, opts.repoRoot, id, closed.get(id) ?? null);
@@ -83,6 +100,19 @@ export async function landPlan(
   } finally {
     await lock.release();
   }
+}
+
+// The landing's sinks: the operator's named subset (D18) or the plan's own.
+// A named id that is no node of the plan is a plan-level refusal — nothing the
+// ledger says can make it landable, so it never reaches the lock.
+function landingSinks(plan: Plan, named: readonly string[] | undefined): string[] {
+  if (named === undefined) return sinkIds(plan);
+  const ids = new Set(plan.nodes.map((n) => n.id));
+  const unknown = named.filter((id) => !ids.has(id));
+  if (unknown.length > 0) {
+    throw new PlanInvalidError([`--sinks names node(s) not in the plan: ${unknown.join(', ')}`]);
+  }
+  return [...new Set(named)];
 }
 
 // ── the land gate (§A: verify the composition, refuse-all, name the culprit) ──
