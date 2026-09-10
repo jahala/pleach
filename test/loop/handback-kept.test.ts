@@ -14,7 +14,7 @@
 import { describe, expect, test } from 'bun:test';
 import { PlanSchema } from '../../src/core/plan.ts';
 import { canonicalJson, type Receipt, rehash, sha256Hex } from '../../src/core/receipt.ts';
-import type { RunSummary, WorkerResult } from '../../src/loop/deps.ts';
+import type { RunSummary } from '../../src/loop/deps.ts';
 import { runPlan } from '../../src/loop/run-plan.ts';
 import { type Harness, type HarnessOpts, makeHarness, stop } from './harness.ts';
 
@@ -189,17 +189,14 @@ describe('the handback is kept beside the receipt (D17)', () => {
   });
 
   test('a halted node keeps what the worker managed to say (D16 settle)', async () => {
-    const controller = new AbortController();
     const partial = 'Half way: the red test is written, the fix is not.\n';
     const h = makeHarness({
       changedByNode: { x: ['src/wip.ts'] },
-      waitScript: (ctx) => {
-        if (ctx.role !== 'build') return stop();
-        controller.abort();
-        return new Promise<WorkerResult>((resolve) => {
-          setTimeout(() => resolve(stop({ finalMessage: partial, reason: 'aborted' })), 0);
-        });
-      },
+      // A runner whose wait was interrupted, reporting what it had captured
+      // before the halt — the message is the work, and the halt is not a
+      // reason to lose it. A runner that captured nothing keeps nothing.
+      waitScript: (ctx) =>
+        ctx.role === 'build' ? stop({ finalMessage: partial, reason: 'aborted' }) : stop(),
     });
 
     const summary = await runPlan(
@@ -209,7 +206,7 @@ describe('the handback is kept beside the receipt (D17)', () => {
         nodes: [{ id: 'x', work: { prompt: 'build x' }, policy: { maxAttempts: 2 } }],
       }),
       h.deps,
-      { ...OPTS, signal: controller.signal },
+      OPTS,
     );
     expect(summary.aborted).toEqual(['x']);
 
@@ -221,19 +218,24 @@ describe('the handback is kept beside the receipt (D17)', () => {
   test('the FINAL attempt is the one kept, once', async () => {
     const first = 'Attempt 1: the smoke is red and I do not know why yet.\n';
     const last = 'Attempt 2: fixed the import; smoke green.\n\nTried: 2026-09-10 fixed it.\n';
-    let smokeRuns = 0;
+    // The smoke is red for the first attempt's builder and green for the
+    // second — the gate's own flake retry runs the command twice per attempt,
+    // so the attempt, not the command run, is what the colour keys off.
+    let attempt = 0;
     const h = makeHarness({
-      waitScript: (ctx) =>
-        ctx.role === 'build' ? stop({ finalMessage: ctx.spawnIndex === 0 ? first : last }) : stop(),
-      execScript: (argv) => {
-        if (argv[0] !== 'weeder') return { output: '', exitCode: 0 };
-        smokeRuns += 1;
-        return { output: 'smoke\n', exitCode: smokeRuns === 1 ? 1 : 0 };
+      waitScript: (ctx) => {
+        if (ctx.role !== 'build') return stop();
+        attempt = ctx.spawnIndex + 1;
+        return stop({ finalMessage: attempt === 1 ? first : last });
       },
+      execScript: (argv) =>
+        argv[0] === 'weeder'
+          ? { output: 'smoke\n', exitCode: attempt === 1 ? 1 : 0 }
+          : { output: '', exitCode: 0 },
     });
     const summary = await run(h, { smoke: SMOKE, maxAttempts: 2 });
     expect(summary.closed).toEqual(['x']);
-    expect(smokeRuns).toBe(2);
+    expect(h.log.count('spawn:build', 'x')).toBe(2);
 
     expect(handbackEvents(h)).toHaveLength(1);
     expect(h.artifacts.get(HANDBACK_PATH)).toBe(last);

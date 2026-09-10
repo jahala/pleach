@@ -169,10 +169,11 @@ export interface JournalSeam {
 // <git-dir>/pleach/receipts/. read() returns null for missing OR unreadable —
 // the callers' honest degradations (no invalidation without a record; the
 // receipt verb reports UNDERIVABLE).
-// What can be kept beside a receipt (D14): a gate's findings log, or the
-// worktree's friction journal. The store owns the filenames — a caller asks
-// for a kind and is told where the bytes went.
-export type ArtifactKind = 'sarif' | 'friction';
+// What can be kept beside a receipt: a gate's findings log, the worktree's
+// friction journal (D14), or the message the worker handed the work back with
+// (D17). The store owns the filenames — a caller asks for a kind and is told
+// where the bytes went.
+export type ArtifactKind = 'sarif' | 'friction' | 'handback';
 
 export interface ReceiptStore {
   write(node: string, receipt: Receipt): Promise<void>;

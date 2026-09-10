@@ -20,6 +20,7 @@ import { type Harness, type HarnessOpts, makeHarness } from './harness.ts';
 
 const OPTS = { repoRoot: '/r', pleachVersion: '0.0.1-test' };
 const SMOKE = 'weeder check --strict --format sarif';
+const SARIF_PATH = '/r/.git/pleach/receipts/x.sarif';
 
 // A findings log as a real gate prints it — pretty-printed, trailing newline.
 // The kept bytes are these, verbatim: never a re-serialization of the parse.
@@ -94,8 +95,16 @@ function sealedArtifactSha(h: Harness): string | undefined {
   return receiptOf(h).facts.gates.find((g) => g.gate === 'smoke')?.artifactSha;
 }
 
-function gateArtifactEvents(h: Harness): Record<string, unknown>[] {
-  return h.journal.filter((e) => e.event === 'gate-artifact');
+// Every close also keeps the worker's handback (D17), so a settle's events are
+// read by kind: the claim here is the gate's own findings log. The handback's
+// own claim is test/loop/handback-kept.test.ts.
+function gateArtifactEvents(h: Harness, gate = 'smoke'): Record<string, unknown>[] {
+  return h.journal.filter((e) => e.event === 'gate-artifact' && e.gate === gate);
+}
+
+// Whether the log was kept, by the path the store returns for it.
+function keptSarif(h: Harness): string | undefined {
+  return h.artifacts.get(SARIF_PATH);
 }
 
 describe('gate artifacts — the kept log at settle (D14)', () => {
@@ -111,7 +120,7 @@ describe('gate artifacts — the kept log at settle (D14)', () => {
     expect(written).toBeLessThan(h.log.first('dispose-start', 'x'));
 
     const path = keptPaths(h).sarif;
-    expect(path).toBe('/r/.git/pleach/receipts/x.sarif');
+    expect(path).toBe(SARIF_PATH);
     const bytes = h.artifacts.get(path ?? '');
     expect(bytes).toBe(LOG);
     // One hash, two carriers: the seal cites the file, the file answers to it.
@@ -189,10 +198,10 @@ describe('gate artifacts — the kept log at settle (D14)', () => {
     for (const stdout of [PLAIN, '']) {
       const h = makeHarness({ execScript: smokeThatPrints(stdout) });
       await run(h);
-      expect(h.artifacts.size).toBe(0);
+      expect(keptSarif(h)).toBeUndefined();
       expect(gateArtifactEvents(h)).toEqual([]);
-      expect(keptPaths(h)).toEqual({});
-      expect(h.log.first('receipt.artifact', 'x')).toBe(-1);
+      expect(keptPaths(h).sarif).toBeUndefined();
+      expect(h.log.events.some((e) => e.detail === SARIF_PATH)).toBe(false);
     }
   });
 
@@ -209,13 +218,18 @@ describe('gate artifacts — the kept log at settle (D14)', () => {
     expect(h.journal.filter((e) => e.event === 'closed' && e.node === 'x')).toHaveLength(1);
     expect(receiptOf(h).sha256).toBeDefined();
 
-    // Nothing was kept, so nothing is claimed — and the miss is named.
+    // Nothing was kept, so nothing is claimed — and every miss is named: one
+    // line per artifact this close would have kept (the log, and the worker's
+    // handback), because a failure of one is never allowed to hide the other.
     expect(gateArtifactEvents(h)).toEqual([]);
-    expect(keptPaths(h)).toEqual({});
+    expect(keptPaths(h).sarif).toBeUndefined();
+    expect(h.artifacts.size).toBe(0);
     const failures = h.journal.filter((e) => e.event === 'receipt-write-failed');
-    expect(failures).toHaveLength(1);
-    expect(String(failures[0]?.detail)).toContain('read-only file system (test)');
-    expect(failures[0]?.node).toBe('x');
+    expect(failures).toHaveLength(2);
+    for (const failure of failures) {
+      expect(String(failure.detail)).toContain('read-only file system (test)');
+      expect(failure.node).toBe('x');
+    }
   });
 });
 

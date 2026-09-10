@@ -2,6 +2,7 @@ import { IsolateCatastrophicError } from '../../src/core/errors.ts';
 import type { Node, Verdict } from '../../src/core/plan.ts';
 import type { Receipt } from '../../src/core/receipt.ts';
 import type {
+  ArtifactKind,
   ConductorDeps,
   ExecFn,
   IsolateSeam,
@@ -128,7 +129,11 @@ function isFrictionMonth(path: string): boolean {
   if (!path.startsWith(FRICTION_DIR) || !path.endsWith('.jsonl')) return false;
   return !path.slice(FRICTION_DIR.length).includes('/');
 }
-const ARTIFACT_SUFFIX = { sarif: '.sarif', friction: '.friction.jsonl' } as const;
+const ARTIFACT_SUFFIX: Record<ArtifactKind, string> = {
+  sarif: '.sarif',
+  friction: '.friction.jsonl',
+  handback: '.handback.md',
+};
 
 // ── harness construction ─────────────────────────────────────────────────────
 
@@ -493,14 +498,14 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   const receiptsStore = new Map<string, Receipt>(Object.entries(opts.receiptsSeed ?? {}));
   const artifactStore = new Map<string, string>();
   const receipts = {
-    async writeArtifact(node: string, kind: 'sarif' | 'friction', bytes: string): Promise<string> {
+    async writeArtifact(node: string, kind: ArtifactKind, bytes: string): Promise<string> {
       if (opts.writeArtifactThrows) throw opts.writeArtifactThrows;
       const path = `${RECEIPT_DIR}/${node}${ARTIFACT_SUFFIX[kind]}`;
       artifactStore.set(path, bytes);
       log.push('receipt.artifact', node, path);
       return path;
     },
-    async discardArtifact(node: string, kind: 'sarif' | 'friction'): Promise<void> {
+    async discardArtifact(node: string, kind: ArtifactKind): Promise<void> {
       const path = `${RECEIPT_DIR}/${node}${ARTIFACT_SUFFIX[kind]}`;
       if (artifactStore.delete(path)) log.push('receipt.artifact-discard', node, path);
     },

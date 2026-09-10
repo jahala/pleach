@@ -89,6 +89,8 @@ export interface Receipt {
   artifacts?: {
     sarif?: string;
     friction?: string;
+    // The message the worker handed the work back with (D17), verbatim.
+    handback?: string;
   };
 }
 
