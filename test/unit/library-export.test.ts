@@ -24,6 +24,7 @@ describe('library export — package root', () => {
       partial: [],
       skipped: [],
       blocked: [],
+      aborted: [],
       quarantined: [],
       alreadyVerified: [],
     };

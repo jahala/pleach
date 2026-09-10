@@ -10,7 +10,7 @@ import type { ExecFn, ExecResult, Worker, WorkerResult } from './deps.ts';
 export async function guardedExec(
   exec: ExecFn,
   command: string,
-  opts: { cwd: string; timeoutMs: number },
+  opts: { cwd: string; timeoutMs: number; signal?: AbortSignal },
 ): Promise<ExecResult> {
   const tokens = toArgv(command);
   const ops = shellOperatorTokens(tokens);
@@ -43,9 +43,13 @@ export interface RunWorkOpts {
   // Evidence section appended to the worker prompt on a retry attempt (A3).
   // Absent on the first attempt; present and non-empty on every retry.
   evidence?: string;
-  // Teardown signal (D12): interrupts the WAIT — the run's long pole. Work
-  // commands and gates run to completion, bounded by their own timeouts.
+  // Teardown signal (D12): interrupts the WAIT — the run's long pole — and,
+  // for a {command} node, the command that stands in for one (D16). Gates run
+  // to completion, bounded by their own timeouts.
   signal?: AbortSignal;
+  // The conductor's idle timeout (D16): every wait this attempt makes ends
+  // when the worker has been quiet that long, instead of riding timeoutMs.
+  idleMs?: number;
   // The red-phase seal (D13): called with the red phase's worker result and the
   // red gate's exit code the moment the RED gate passes and before the next
   // phase's prompt is sent, so the failing-test state is history. run-node
@@ -91,7 +95,25 @@ export async function runWork(
     const { output, exitCode } = await guardedExec(exec, work.command, {
       cwd,
       timeoutMs: opts.timeoutMs,
+      // A {command} node spawns no worker, so this exec IS its wait — the run's
+      // long pole, and the one thing the teardown signal must reach (D16).
+      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     });
+    // The run's own signal fired: the exec seam SIGKILLed the command tree, so
+    // the non-zero exit below reports our teardown, not the command. This is
+    // where that is knowable — the same answer the umbel adapter gives for an
+    // interrupted wait — so run-node hands the live tree back with status
+    // 'aborted' (receipt written, tree quarantined as it stands) instead of
+    // reading a halt as a failed gate and retrying it (ledger D16).
+    if (exitCode !== 0 && opts.signal?.aborted === true) {
+      return {
+        finalMessage: output,
+        filesTouched: [],
+        exitCode,
+        reason: 'aborted',
+        telemetry: {},
+      };
+    }
     if (exitCode !== 0) throw new GateFailedError('command', output, exitCode);
     return {
       finalMessage: output,
@@ -134,7 +156,7 @@ export async function runWork(
           ? withEvidence(phase.prompt, opts.evidence)
           : phase.prompt;
       await w.send(text);
-      last = await w.wait({ timeoutMs: opts.timeoutMs, signal: opts.signal });
+      last = await w.wait({ timeoutMs: opts.timeoutMs, signal: opts.signal, idleMs: opts.idleMs });
       if (last.reason !== 'stop') return last;
 
       if (phase.phase === 'red') {
@@ -164,5 +186,5 @@ export async function runWork(
 
   // {prompt}: single send/wait.
   await w.send(promptFor(node, opts.evidence));
-  return w.wait({ timeoutMs: opts.timeoutMs, signal: opts.signal });
+  return w.wait({ timeoutMs: opts.timeoutMs, signal: opts.signal, idleMs: opts.idleMs });
 }

@@ -48,3 +48,12 @@
   artifact hashes exactly as it did before the field existed (`canonicalJson` drops undefined), so
   every receipt already on disk still verifies. Recorded here because the receipt is the surface the
   umbrella's predicate (`predicate.weeder.sarif.sha256`) cites.
+
+- **Seam prose, not schema (2026-09-10)** — `Worker.wait`'s opts gained `idleMs?: number` in the
+  informative "Seam interfaces" block: the conductor's idle policy, handed to the runner so a
+  wedged worker ends at an idle timeout instead of riding the attempt clock (ledger D16; the
+  umbel adapter passes it as `--idle-timeout`, the CLI default is `--idle-ms`, ten minutes).
+  Doc-only and additive: `@agent-contract/plan` is untouched — no schema-block change, no version
+  bump, drift guards unaffected. A runner that cannot detect idleness ignores the field and
+  behaves exactly as before. The `idle` reason it produces is the one `WorkerResult.reason` has
+  always carried, and its mapping (blocked, prompt text as `blockedReason`) is unchanged.

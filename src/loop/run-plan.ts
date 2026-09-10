@@ -19,7 +19,7 @@ import { type RunNodeResult, runNode } from './run-node.ts';
 // commit-before-emit + dual-close decision. Composes injected seams only.
 //
 // Concurrency model (the v0.3 shape): ready() = pending nodes whose needs are
-// all closed and that aren't failed/partial/blocked/inflight; launch up to a semaphore
+// all closed and that aren't failed/partial/blocked/aborted/inflight; launch up to a semaphore
 // cap; Promise.race the inflight set; node promises NEVER reject (.catch maps a
 // surprise to a failed verdict). The closed-then-dispose ordering happens
 // inside each node's inflight promise so a dependent can never isolate against
@@ -39,6 +39,10 @@ export interface RunPlanOpts {
   // Teardown signal (D12): stop launching, interrupt in-flight waits, settle
   // what's live (workers killed, trees quarantined/disposed), journal why.
   signal?: AbortSignal;
+  // The conductor's idle timeout (D16), handed to every worker wait in the
+  // run. The face owns the default; a runner that cannot detect idleness
+  // ignores it. Absent leaves the attempt clock as the only bound.
+  idleMs?: number;
 }
 
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes (binding prose).
@@ -66,6 +70,7 @@ export async function runPlan(
       maxConcurrency,
       pleachVersion: opts.pleachVersion ?? '0.0.0-dev',
       ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+      ...(opts.idleMs !== undefined ? { idleMs: opts.idleMs } : {}),
     });
   } finally {
     await lock.release();
@@ -78,6 +83,7 @@ interface ResolvedOpts {
   maxConcurrency: number;
   pleachVersion: string;
   signal?: AbortSignal;
+  idleMs?: number;
 }
 
 async function runUnderLock(
@@ -156,6 +162,8 @@ async function runUnderLock(
 
   const failed = new Set<string>();
   const blocked = new Set<string>();
+  // Nodes the run's own signal cut off mid-wait (D16) — settled, not failed.
+  const aborted = new Set<string>();
   // Audit nodes that reached a 'done' verdict (work committed, gates green) but
   // tend declined to verify-close — published, unverified, terminal (never re-run).
   const partial = new Set<string>();
@@ -163,8 +171,8 @@ async function runUnderLock(
   const quarantined = new Set<string>();
   const inflight = new Map<string, Promise<void>>();
 
-  // A node is schedulable when pending, not yet failed/blocked/partial/inflight,
-  // and all its needs are closed.
+  // A node is schedulable when pending, not yet failed/blocked/aborted/partial/
+  // inflight, and all its needs are closed.
   function ready(): Node[] {
     const out: Node[] = [];
     for (const node of plan.nodes) {
@@ -172,6 +180,7 @@ async function runUnderLock(
         closed.has(node.id) ||
         failed.has(node.id) ||
         blocked.has(node.id) ||
+        aborted.has(node.id) ||
         partial.has(node.id)
       )
         continue;
@@ -181,7 +190,8 @@ async function runUnderLock(
     return out;
   }
 
-  // Run one node to its terminal effect on closed/failed/partial/blocked. Never rejects.
+  // Run one node to its terminal effect on closed/failed/partial/blocked/aborted.
+  // Never rejects.
   async function runOne(node: Node): Promise<void> {
     const baseRefs = baseRefsFor(node, baseRefForClosed);
     await deps.journal.append({ event: 'node-start', node: node.id });
@@ -192,6 +202,7 @@ async function runUnderLock(
       outcome = await runNode(node, baseRefs, deps, {
         defaultTimeoutMs: opts.defaultTimeoutMs,
         signal: opts.signal,
+        idleMs: opts.idleMs,
       });
     } catch (err) {
       // A node promise must never reject — map a surprise to a failed verdict.
@@ -438,6 +449,11 @@ async function runUnderLock(
           node: node.id,
           reason: verdict.evidence.blockedReason,
         });
+      } else if (verdict.status === 'aborted') {
+        // The run stopped holding this node; it did not lose (D16). Everything
+        // below is the settle every terminal verdict gets — receipt, quarantine,
+        // dispose — so the work survives the halt.
+        aborted.add(node.id);
       } else {
         failed.add(node.id);
       }
@@ -570,6 +586,13 @@ async function runUnderLock(
     while (inflight.size < opts.maxConcurrency && opts.signal?.aborted !== true) {
       const next = ready().find((n) => !inflight.has(n.id));
       if (!next) break;
+      // The drain (D16) is decided HERE, in the same tick as the close that
+      // made this node ready — read fresh per launch, never cached at the top
+      // of the run, because that tick is exactly where an operator's `pleach
+      // stop` used to lose the race and spawn a worker only to kill it (#67).
+      // It gates the launch and nothing else: what is already in flight is
+      // carried to its own close.
+      if (await deps.lock.stopRequested(opts.repoRoot, plan.source)) break;
       const promise = runOne(next).finally(() => inflight.delete(next.id));
       inflight.set(next.id, promise);
     }
@@ -579,10 +602,22 @@ async function runUnderLock(
   if (opts.signal?.aborted === true) {
     await deps.journal.append({ event: 'run-aborted' });
   }
+  // One authoritative read at the end, so a stop that landed after the last
+  // launch decision — with nothing left to gate — is still recorded and still
+  // consumed. An unconsumed marker would drain the NEXT run before it started.
+  if (await deps.lock.stopRequested(opts.repoRoot, plan.source)) {
+    await deps.journal.append({ event: 'run-stopped' });
+    await deps.lock.clearStop(opts.repoRoot, plan.source);
+  }
 
   const skipped = plan.nodes
     .filter(
-      (n) => !closed.has(n.id) && !failed.has(n.id) && !blocked.has(n.id) && !partial.has(n.id),
+      (n) =>
+        !closed.has(n.id) &&
+        !failed.has(n.id) &&
+        !blocked.has(n.id) &&
+        !aborted.has(n.id) &&
+        !partial.has(n.id),
     )
     .map((n) => n.id);
 
@@ -595,6 +630,7 @@ async function runUnderLock(
     partial: [...partial],
     skipped,
     blocked: [...blocked],
+    aborted: [...aborted],
     quarantined: [...quarantined],
     alreadyVerified,
   };

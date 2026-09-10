@@ -124,7 +124,7 @@ export interface RunnerSeam {
 }
 export interface Worker {
   send(text: string): Promise<void>;
-  wait(opts?: { timeoutMs?: number }): Promise<WorkerResult>;
+  wait(opts?: { timeoutMs?: number; idleMs?: number }): Promise<WorkerResult>;  // idleMs: end a quiet wait (conductor policy)
   kill(): Promise<void>;
 }
 export interface WorkerResult {

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { open, readFile, unlink } from 'node:fs/promises';
+import { open, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { LockHeldError } from '../core/errors.ts';
+import { LockHeldError, NoRunError } from '../core/errors.ts';
 import type { LockHandle, LockSeam } from '../loop/deps.ts';
 import { resolveGitDir } from './gitdir.ts';
 
@@ -23,6 +23,46 @@ import { resolveGitDir } from './gitdir.ts';
 function lockPath(repoRoot: string, source: string): string {
   const sha = createHash('sha1').update(source).digest('hex').slice(0, 12);
   return join(resolveGitDir(repoRoot), `pleach-${sha}.lock`);
+}
+
+// ledger: D16 — the drain marker, beside the lock of the run it drains, so the
+// two are named by the same (repoRoot, source) and cannot drift apart. Nothing
+// reads the file's bytes: its presence IS the request, which is what makes the
+// scheduler's per-launch read a single cheap stat.
+export function stopPath(repoRoot: string, source: string): string {
+  return `${lockPath(repoRoot, source)}.stop`;
+}
+
+// The pid of the run that holds this (repoRoot, source), or NoRunError. A dead
+// pid is not a run: a stale lockfile outlives the process that wrote it (B4),
+// and draining it would leave a marker for a run that will never read it.
+async function liveHolder(repoRoot: string, source: string): Promise<number> {
+  const pid = await readPid(lockPath(repoRoot, source));
+  if (pid === null || !isAlive(pid)) throw new NoRunError(source);
+  return pid;
+}
+
+// ledger: D16 — write the drain marker for a live run and answer whose it is.
+// The bytes are nothing; the file's presence is the whole request, which is what
+// lets the scheduler ask for it with a single stat per launch decision.
+export async function requestStop(repoRoot: string, source: string): Promise<number> {
+  const pid = await liveHolder(repoRoot, source);
+  await writeFile(stopPath(repoRoot, source), '', 'utf8');
+  return pid;
+}
+
+// ledger: D16 — the hard abort (`stop --now`), sent to the pid the lock names.
+// Signalling lives here and not in the face for the same reason the marker does:
+// the (repoRoot, source) → holder mapping is the lock's, and nothing above the
+// seams touches a process.
+export async function signalRun(
+  repoRoot: string,
+  source: string,
+  signal: NodeJS.Signals,
+): Promise<number> {
+  const pid = await liveHolder(repoRoot, source);
+  process.kill(pid, signal);
+  return pid;
 }
 
 // Returns true on success, false on EEXIST; re-throws other errors.
@@ -95,6 +135,29 @@ export function createLockSeam(): LockSeam {
       // Lost the race after stale takeover: read the new holder
       const newPid = await readPid(path);
       throw new LockHeldError(path, newPid ?? 0);
+    },
+
+    async stopRequested(repoRoot: string, source: string): Promise<boolean> {
+      try {
+        await stat(stopPath(repoRoot, source));
+        return true;
+      } catch (err) {
+        // Absent is the answer "no drain". Anything else — an unreadable git
+        // dir, a permission refusal — is not an answer, and a run must not
+        // read it as one: it would keep launching through an operator's stop.
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
+        throw err;
+      }
+    },
+
+    async clearStop(repoRoot: string, source: string): Promise<void> {
+      try {
+        await unlink(stopPath(repoRoot, source));
+      } catch (err) {
+        // Idempotent, like the lock's own release: nothing to consume means
+        // the drain is already consumed.
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+      }
     },
   };
 }

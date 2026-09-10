@@ -5,6 +5,7 @@ import {
   LandBlockedError,
   LandConflictError,
   LockHeldError,
+  NoRunError,
   PlanInvalidError,
   RebuildRequiredError,
   TendTransportError,
@@ -18,6 +19,7 @@ import { verifyReceipt } from '../loop/receipt-verify.ts';
 import { runPlan } from '../loop/run-plan.ts';
 import { sweepOrphanWorktrees, sweepStaleLocks } from '../seams/clean.ts';
 import { exec } from '../seams/exec.ts';
+import { requestStop, signalRun } from '../seams/lock.ts';
 import { buildDeps, receiptDeps, resolveSeams } from './config.ts';
 import { narrateEvent } from './narrate.ts';
 
@@ -38,6 +40,8 @@ const HELP = `pleach — deterministic conductor for DAGs of verified agent work
 Usage:
   pleach run <plan.json> [flags]     Execute a plan
   pleach land <plan.json> [flags]    Merge a verified plan's sinks onto the checked-out branch
+  pleach stop <plan.json> [flags]    Drain a running plan: no new nodes launch, in-flight nodes
+                                     settle; --now aborts them (SIGINT to the run)
   pleach validate <plan.json>        Parse + validate a plan; print the topo order
   pleach schema                      Emit the plan contract as JSON Schema (for planners / codegen)
   pleach receipt <node> [flags]      Verify a settled node's close receipt (--repo-root applies)
@@ -52,6 +56,9 @@ Flags (run):
   --repo-root PATH        Git repo the worktrees and node/<id> branches live in (default: cwd)
   --max-concurrency N     Parallel node cap (default: plan.maxConcurrency, else CPU cores − 2)
   --timeout-ms N          Default per-attempt timeout when a node omits policy.timeoutMs (default: 30m)
+  --idle-ms N             End a worker's wait after this long with no activity (default: 10m).
+                          A wedged worker (an auditor idle on a 404) settles blocked with its
+                          tree quarantined instead of riding the attempt clock.
   --journal PATH          Run journal JSONL (default: <git-dir>/pleach/journal.jsonl)
   --runner NAME           Bundled runner for zero-config runs: 'umbel' (default; interactive
                           CLIs over tmux) or 'direct-cli' (headless \`claude -p\` / \`codex exec\` —
@@ -73,6 +80,11 @@ Flags (run):
                           node event; a worker blocked on you is shouted). The JSONL
                           journal records everything regardless.
 
+Flags (stop):
+  --repo-root PATH        Git repo whose run is drained (default: cwd)
+  --now                   Abort the in-flight nodes too: SIGINT to the run's process. Their
+                          trees are quarantined as they stand and their receipts written.
+
 Landing: verified work is published as node/<id> branches; \`pleach land\` merges
 the plan's sinks onto the branch checked out in --repo-root. It refuses unless
 EVERY plan node is verified, and a merge conflict or non-fast-forward aborts
@@ -92,7 +104,7 @@ Exit codes:
   0  every plan node closed (verified)
   1  one or more nodes failed / partial / blocked / skipped (summary on stdout says which)
   2  usage error, unreadable or invalid plan
-  3  another conductor holds the lock for this (repo, source)
+  3  lock: another conductor holds this (repo, source) — or, for \`stop\`, no run holds it
 
 Receipts: every close and quarantine mints a sealed receipt (facts frozen at
 classify time, sha256 pinned as a receipt-sha256 trailer in the node's commit,
@@ -106,6 +118,7 @@ interface Flags {
   repoRoot: string;
   maxConcurrency?: number;
   timeoutMs?: number;
+  idleMs: number;
   journal?: string;
   umbelBin: string;
   tendModule?: string;
@@ -113,9 +126,16 @@ interface Flags {
   permissionMode?: string;
   config?: string;
   land: boolean;
+  now: boolean;
   quiet: boolean;
   runnerKind?: 'umbel' | 'direct-cli';
 }
+
+// The conductor's idle policy (D16): a worker quiet this long has stopped
+// working, whatever its attempt clock says. Ten minutes is long enough for a
+// slow tool call and short enough that nobody watches a wedged worker for half
+// an hour. Per-run override: --idle-ms.
+const DEFAULT_IDLE_MS = 10 * 60 * 1000;
 
 class UsageError extends Error {
   readonly name = 'UsageError';
@@ -125,8 +145,10 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
   const positionals: string[] = [];
   const flags: Flags = {
     repoRoot: process.cwd(),
+    idleMs: DEFAULT_IDLE_MS,
     umbelBin: process.env.PLEACH_UMBEL_BIN ?? 'umbel',
     land: false,
+    now: false,
     quiet: false,
   };
   if (process.env.PLEACH_TEND_MODULE !== undefined) {
@@ -161,6 +183,10 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         flags.timeoutMs = takeNumber(arg, next);
         i += 1;
         break;
+      case '--idle-ms':
+        flags.idleMs = takeNumber(arg, next);
+        i += 1;
+        break;
       case '--journal':
         flags.journal = takeValue(arg, next);
         i += 1;
@@ -187,6 +213,9 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         break;
       case '--land':
         flags.land = true;
+        break;
+      case '--now':
+        flags.now = true;
         break;
       case '--quiet':
         flags.quiet = true;
@@ -264,6 +293,7 @@ export function summaryExitCode(summary: RunSummary): number {
     summary.failed.length === 0 &&
     summary.partial.length === 0 &&
     summary.blocked.length === 0 &&
+    summary.aborted.length === 0 &&
     summary.skipped.length === 0;
   return clean ? 0 : 1;
 }
@@ -318,6 +348,7 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     // The contract's conductor default when neither flag nor plan caps it:
     // cores−2, floored at 1 (the loop stays environment-free).
     defaultConcurrency: Math.max(1, cpus().length - 2),
+    idleMs: flags.idleMs,
     ...(flags.maxConcurrency !== undefined ? { maxConcurrency: flags.maxConcurrency } : {}),
     ...(flags.timeoutMs !== undefined ? { defaultTimeoutMs: flags.timeoutMs } : {}),
   });
@@ -369,6 +400,24 @@ async function verbLand(planPath: string, flags: Flags): Promise<number> {
   const land = await landPlan(plan, deps, { repoRoot: flags.repoRoot });
   process.stderr.write(`pleach: landed ${land.landed.join(', ')} on '${land.branch}'\n`);
   process.stdout.write(`${JSON.stringify(land)}\n`);
+  return 0;
+}
+
+// D16: drain a running plan. The marker goes beside the run's lock — through the
+// seam, which owns that path and the pid it names — so the run's very next
+// launch decision sees it: nothing more starts, in-flight nodes settle. --now
+// adds the hard abort on top, which is the aborted path (receipt + quarantine),
+// not a kill. The face never signals by itself.
+async function verbStop(planPath: string, flags: Flags): Promise<number> {
+  const { source } = await readPlan(planPath);
+  const pid = await requestStop(flags.repoRoot, source);
+  process.stdout.write(
+    `stop requested for '${source}' — run pid ${pid} launches no more nodes; in-flight nodes settle\n`,
+  );
+  if (flags.now) {
+    await signalRun(flags.repoRoot, source, 'SIGINT');
+    process.stdout.write(`SIGINT sent to run pid ${pid} — in-flight nodes abort\n`);
+  }
   return 0;
 }
 
@@ -429,6 +478,8 @@ export async function runCli(argv: readonly string[]): Promise<number> {
         return await verbRun(planPath, flags);
       case 'land':
         return await verbLand(planPath, flags);
+      case 'stop':
+        return await verbStop(planPath, flags);
       case 'validate':
         return await verbValidate(planPath);
       default:
@@ -444,7 +495,7 @@ export async function runCli(argv: readonly string[]): Promise<number> {
       process.stderr.write(`pleach: ${detail}\n`);
       return 2;
     }
-    if (err instanceof LockHeldError) {
+    if (err instanceof LockHeldError || err instanceof NoRunError) {
       process.stderr.write(`pleach: ${err.message}\n`);
       return 3;
     }

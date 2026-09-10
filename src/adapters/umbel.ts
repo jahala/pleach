@@ -154,6 +154,7 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
     async function wait(waitOpts?: {
       timeoutMs?: number;
       signal?: AbortSignal;
+      idleMs?: number;
     }): Promise<WorkerResult> {
       const argv: string[] = [bin, 'wait', '--json'];
 
@@ -163,6 +164,14 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
 
       if (waitOpts?.timeoutMs !== undefined) {
         argv.push('--timeout', `${waitOpts.timeoutMs}ms`);
+      }
+
+      // The conductor's idle policy (D16). umbel ends a quiet wait with
+      // `{"reason":"idle"}` — which already maps to blocked — but only when it
+      // is asked to watch; unasked, a wedged worker rides the attempt clock.
+      // The number is never invented here: no idleMs, no flag.
+      if (waitOpts?.idleMs !== undefined) {
+        argv.push('--idle-timeout', `${waitOpts.idleMs}ms`);
       }
 
       argv.push(name);
@@ -179,6 +188,17 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
         // dispose) must never ride the signal that triggered them.
         ...(waitOpts?.signal !== undefined ? { signal: waitOpts.signal } : {}),
       });
+
+      // The run's own signal fired: the exec seam SIGKILLed `umbel wait`, so the
+      // non-zero exit below reports our teardown, not the worker. This adapter is
+      // the only layer that knows its signal fired — it answers `aborted` so the
+      // loop hands the tree back instead of reading a stop as a seam failure
+      // (ledger D16). Nothing is gathered: read/actions/diff would ride the
+      // process tree we just killed. sinceMtime is left as the send set it — no
+      // stop was consumed, so a later wait must keep that baseline.
+      if (waitOpts?.signal?.aborted === true) {
+        return gatherWorkerResult(name, cwd, 'aborted', undefined);
+      }
 
       if (result.exitCode !== 0) {
         throw new WorkerSeamError(`wait exited ${result.exitCode}: ${result.output.trim()}`);

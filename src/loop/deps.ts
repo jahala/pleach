@@ -120,7 +120,12 @@ export interface Worker {
   send(text: string): Promise<void>;
   // signal (D12): the conductor is tearing down — end the wait promptly (the
   // session is killed by the caller as usual; only the WAIT is interrupted).
-  wait(opts?: { timeoutMs?: number; signal?: AbortSignal }): Promise<WorkerResult>;
+  // idleMs (D16): end the wait when the worker has been quiet that long — the
+  // conductor's idle policy, passed down so a wedged worker (an auditor idle
+  // on a 404) ends here instead of riding the attempt clock with the operator
+  // as the idle detector. A runner that cannot detect idleness ignores it and
+  // the attempt clock still bounds the wait.
+  wait(opts?: { timeoutMs?: number; signal?: AbortSignal; idleMs?: number }): Promise<WorkerResult>;
   kill(): Promise<void>;
 }
 
@@ -143,6 +148,17 @@ export interface LockSeam {
   // O_EXCL pid lockfile per (repoRoot, source). Throws LockHeldError when a
   // live process holds it; takes over a stale lock (ledger B4).
   acquire(repoRoot: string, source: string): Promise<LockHandle>;
+  // Is a drain outstanding for this run (ledger D16)? The stop marker lives
+  // beside the lock because that is where the (repoRoot, source) path is
+  // known. It is a marker and not a signal because a signal cannot be made
+  // race-free against a scheduler that launches in the same tick as a close:
+  // the scheduler asks this as part of every launch decision, so a stop
+  // written at any moment is seen by the very next launch. Presence is the
+  // whole request — there is nothing else to read.
+  stopRequested(repoRoot: string, source: string): Promise<boolean>;
+  // Consume the marker, so the run that drained does not leave the next one
+  // stopped before it starts. Nothing to consume is an answer, not a failure.
+  clearStop(repoRoot: string, source: string): Promise<void>;
 }
 
 export interface JournalSeam {
@@ -194,9 +210,14 @@ export interface RunSummary {
   // 'blocked'). The session is terminated and the prompt text recorded as
   // blockedReason — fix the permission mode / allowlist and re-run.
   blocked: string[];
-  // Failed or blocked nodes whose worktree still held changes: the evidence is
-  // committed to quarantine/<id> before dispose (never node/<id> — nothing
-  // verified). Blocked work is unfinished, not wrong — but worth keeping (D11).
+  // Nodes the run's own signal interrupted mid-wait (Verdict status 'aborted',
+  // D16). They did not fail — the run stopped holding them: the receipt is
+  // written and the tree quarantined as it stands, so a re-run rebuilds from
+  // evidence rather than from nothing. Not clean, but not a defeat either.
+  aborted: string[];
+  // Failed, blocked or aborted nodes whose worktree still held changes: the
+  // evidence is committed to quarantine/<id> before dispose (never node/<id> —
+  // nothing verified). Unfinished work is not wrong — it is worth keeping (D11).
   quarantined: string[];
   // Nodes already verified in the ledger before this run — skipped, not re-run.
   // Re-running a plan resumes: only unbuilt or previously-failed nodes execute.

@@ -26,7 +26,7 @@ tolerate unknown events and unknown fields.
 | `phase-commit` | `node`, `phase` (`red`), `sha`, `files` (the sealed set) | the red phase sealed as its own commit the moment the RED gate passed, before the impl prompt was sent — `node/<id>` reads base → red → verified, so the failing-test state is checkoutable (D13) |
 | `set-aside` | `node`, `paths` (what was removed, as the worker named it) | collection dropped paths that are not delivery before staging — `.loop-scratch/**`, `.plotplot/friction/**`, anything outside the worktree, anything git ignores. The node stages what remains and proceeds: a set-aside path can never fail it (D14) |
 | `audit-egress-unparseable` | `node`, `reaudit` (the bounded attempt), `egress` (the auditor's raw final message, capped 2000 chars) | the audit worker's message did not parse as an `AuditResult` — only the auditor re-runs; the raw message is kept because it is the one artifact that diagnoses an egress failure |
-| `verdict` | `node`, `status`, `attempts`, `telemetry` (worker-reported, e.g. `tokens`), `durationMs` (wall clock), `provider` (resolved — never absent), `model?`, `gate?` (`ran`, `exitCode`, `outputTail?` — the failing gate's actual output, capped 2000 chars), `blockedReason?`, `paneTail?`/`processExit?` (what the runner saw at an abnormal end, when it could see anything — D11) | a node reached its terminal verdict |
+| `verdict` | `node`, `status` (`done`\|`failed`\|`dead`\|`timeout`\|`rejected`\|`aborted`\|`blocked`), `attempts`, `telemetry` (worker-reported, e.g. `tokens`), `durationMs` (wall clock), `provider` (resolved — never absent), `model?`, `gate?` (`ran`, `exitCode`, `outputTail?` — the failing gate's actual output, capped 2000 chars), `blockedReason?`, `paneTail?`/`processExit?` (what the runner saw at an abnormal end, when it could see anything — D11) | a node reached its terminal verdict — `aborted` is the run's own signal cutting the node off mid-wait (D16): its receipt is written and its tree quarantined as it stands, and it is never counted as a failure |
 | `closed` | `node`, `sha`, `degraded?` (string[] — only when non-empty) | verified close — `node/<id>` published at `sha`; `degraded` lists checks the plan never configured (`smoke:unconfigured`, `audit:unconfigured`): no coverage is not coverage, visible at close time |
 | `not-closed` | `node` | ledger declined to verify-close (branch published, not verified) |
 | `quarantined` | `node`, `branch` (`quarantine/<id>`), `sha` | failed OR blocked work preserved for inspection (D11 — unfinished is not wrong) |
@@ -39,8 +39,9 @@ tolerate unknown events and unknown fields.
 | `rebuild-required` | `node` | a verified branch moved since close — refusing to trust it |
 | `sha-mismatch` | `node`, `recordedSha`, `foundSha` | ledger SHA disagrees with the branch |
 | `dispose-failed` | `node`, `detail` | worktree cleanup failure (diagnostic) |
-| `run-end` | the `RunSummary` fields (`closed`, `failed`, `partial`, `skipped`, `blocked`, `quarantined`, `alreadyVerified`, …) | the run settled |
+| `run-end` | the `RunSummary` fields (`closed`, `failed`, `partial`, `skipped`, `blocked`, `aborted`, `quarantined`, `alreadyVerified`, …) | the run settled — `aborted` names the nodes the run's own signal cut off mid-wait (D16): settled with `status: "aborted"`, receipt written, tree quarantined, never counted as failures |
 | `run-aborted` | — | SIGINT/SIGTERM teardown (D12): no new launches; in-flight waits interrupted, their nodes settle with evidence; `run-end` still follows |
+| `run-stopped` | — | `pleach stop` drained the run (D16): the marker beside the run's lock is read in the same tick as every launch decision, so nothing further launched; in-flight nodes settled normally and kept their work, the marker is consumed, and the nodes that never started are `skipped` in the `run-end` that follows |
 | `land-start` | `goal` | landing began |
 | `land-setup` | `commands[]` | stack provisioning: the sinks' deduped setup commands run in the gate worktree before their smokes (D9 — a fresh stack has no environment) |
 | `land-setup-failed` | `command`, `exitCode`, `outputTail` | provisioning failed — an ENVIRONMENT refusal, never a composition culprit; the bisect does not run |
@@ -74,7 +75,7 @@ profile's names:
 
 | kind | lines | mirrors |
 |---|---|---|
-| `run.lifecycle` | the run and the landing, beginning to end: `run-start`, `run-end`, `run-aborted`, `land-start`, `land-setup`, `land-bisect`, `land-culprit`, `land-integrity-failed`, `land-blocked`, `land-conflict`, `landed` | — |
+| `run.lifecycle` | the run and the landing, beginning to end: `run-start`, `run-end`, `run-aborted`, `run-stopped`, `land-start`, `land-setup`, `land-bisect`, `land-culprit`, `land-integrity-failed`, `land-blocked`, `land-conflict`, `landed` | — |
 | `node.lifecycle` | one node's passage, and every record kept or refused along the way: `node-start`, `blocked`, `phase-commit`, `set-aside`, `audit-egress-unparseable`, `verdict`, `closed`, `not-closed`, `quarantined`, `quarantine-failed`, `receipt`, `gate-artifact`, `receipt-write-failed`, `acceptance-changed`, `acceptance-cascade`, `rebuild-required`, `sha-mismatch`, `dispose-failed` | `plotplot.node` |
 | `gate.result` | a gate said yes or no: `gate-fail`, `gate-flaky`, `land-gate`, `land-gate-retry`, `land-setup-failed` | `plotplot.gate`, `plotplot.node` (`null` on land-level lines, which belong to no node) |
 | `gate.retry` | an exec gate's one same-tree re-run: `gate-retry` | `plotplot.node`, `plotplot.gate` |

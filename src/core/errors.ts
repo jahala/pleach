@@ -32,6 +32,19 @@ export class LockHeldError extends Error {
   }
 }
 
+// ledger: D16 — `pleach stop` found no run to drain: no lockfile for this
+// (repoRoot, source), or the pid it names is dead. Nothing is written when this
+// throws — a marker no run will ever read is a trap for the next one.
+export class NoRunError extends Error {
+  readonly name = 'NoRunError';
+  readonly source: string;
+
+  constructor(source: string) {
+    super(`no run holds the lock for ${source}`);
+    this.source = source;
+  }
+}
+
 export class IsolateCatastrophicError extends Error {
   readonly name = 'IsolateCatastrophicError';
   readonly ref: string;
