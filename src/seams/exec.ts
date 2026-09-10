@@ -29,6 +29,14 @@ export const exec: ExecFn = async (argv, opts) => {
       env: mergedEnv,
       stdout: 'pipe',
       stderr: 'pipe',
+      // Its own process group, so the interrupt below can reap the whole tree
+      // (ledger D16). A child that inherits OUR group is not a group leader, so
+      // `kill(-pid)` names no group: the command dies, the `sleep` it forked
+      // lives on holding the pipe, and the drain — hence the abort — waits out
+      // the very work it is tearing down. It also makes teardown the seam's
+      // alone: a terminal's Ctrl-C reaches pleach, which quarantines and
+      // records, instead of also felling every gate command behind its back.
+      detached: true,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -58,8 +66,9 @@ export const exec: ExecFn = async (argv, opts) => {
 
   const drainDone = Promise.all([drainStream(proc.stdout, true), drainStream(proc.stderr, false)]);
 
-  // Kill the process group to reap any children spawned by the command; fall
-  // back to the process itself (no permission / already exited).
+  // Kill the process group — the child leads its own (see spawn above), so this
+  // reaps everything the command forked; fall back to the process itself (no
+  // permission / already exited).
   const killTree = () => {
     try {
       process.kill(-proc.pid, 'SIGKILL');

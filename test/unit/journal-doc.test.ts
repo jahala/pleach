@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { KINDS } from '../../src/core/journal-envelope.ts';
+import { VerdictSchema } from '../../src/core/plan.ts';
 
 // ---------------------------------------------------------------------------
 // ledger: D13 — the journal is a published read surface: docs/journal.md's
@@ -152,5 +153,129 @@ describe('journal doc — kinds', () => {
       .map((name) => `${name}: doc says ${stated.get(name) ?? 'nothing'}, pinned ${KINDS[name]}`)
       .sort();
     expect(wrong).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ledger: D16 — halting a run has a vocabulary, and it is published in four
+// places an operator reads: the journal's `verdict` row (the status a halted
+// node settles in), its `run-end` row (the bucket that names the node), the
+// CLI help and the README (the verb and the flag that halt a run in the first
+// place). Each is pinned to its own source — the status list to the contract's
+// enum, the run-end fields to `RunSummary`, the help to the verbs and flags the
+// CLI really dispatches and parses, the README's usage block to the help. A
+// control that exists in code and nowhere an operator looks is a control
+// nobody can find; none of these lists is hand-kept.
+// ---------------------------------------------------------------------------
+const CLI_SRC = new URL('../../src/faces/cli.ts', import.meta.url).pathname;
+const DEPS_SRC = new URL('../../src/loop/deps.ts', import.meta.url).pathname;
+const README = new URL('../../README.md', import.meta.url).pathname;
+
+/** A table row's cells; `\|` is content inside a cell, not a separator. */
+function rowCells(row: string): string[] {
+  return row.split(/(?<!\\)\|/).map((cell) => cell.trim());
+}
+
+/** The vocabulary a row's fields cell states for one field: `` `f` (`a`\|`b`) ``. */
+function statedVocabulary(row: string, field: string): string[] {
+  const fields = rowCells(row)[2] ?? '';
+  const at = fields.indexOf(`\`${field}\` (`);
+  if (at === -1) return [];
+  const listed = fields.slice(at).match(/\(([^)]*)\)/)?.[1] ?? '';
+  return [...listed.matchAll(/`([a-z]+)`/g)].map(([, name]) => name).sort();
+}
+
+/** The buckets a `RunSummary` reports — every `name: string[]` of the interface. */
+function summaryBuckets(): string[] {
+  const src = readFileSync(DEPS_SRC, 'utf8');
+  const start = src.indexOf('export interface RunSummary {');
+  if (start === -1) throw new Error('No RunSummary interface in src/loop/deps.ts');
+  const body = src.slice(start, src.indexOf('\n}', start));
+  return [...body.matchAll(/^ {2}([A-Za-z]+): string\[\];$/gm)].map(([, name]) => name);
+}
+
+/** The help block the CLI prints, read out of its source. */
+function helpText(): string {
+  const src = readFileSync(CLI_SRC, 'utf8');
+  const open = src.indexOf('const HELP = `');
+  if (open === -1) throw new Error('No HELP block in src/faces/cli.ts');
+  const from = open + 'const HELP = `'.length;
+  const close = src.indexOf('\n`;', from);
+  if (close === -1) throw new Error('Unterminated HELP block in src/faces/cli.ts');
+  return src.slice(from, close);
+}
+
+/** Every verb `runCli` dispatches on — its real comparisons and case labels. */
+function dispatchedVerbs(): string[] {
+  const src = readFileSync(CLI_SRC, 'utf8');
+  const compared = [...src.matchAll(/verb === '([a-z][a-z-]*)'/g)].map(([, verb]) => verb);
+  const cased = [...src.matchAll(/case '([a-z][a-z-]*)':/g)].map(([, verb]) => verb);
+  return [...new Set([...compared, ...cased])].sort();
+}
+
+/** Every long flag `parseFlags` accepts — a flag case is the only `case '--…'`. */
+function parsedFlags(): string[] {
+  const src = readFileSync(CLI_SRC, 'utf8');
+  return [...new Set([...src.matchAll(/case '(--[a-z-]+)':/g)].map(([, flag]) => flag))].sort();
+}
+
+/** The verbs the README's `## Usage` block lists. */
+function usageVerbs(md: string): string[] {
+  const start = md.indexOf('\n## Usage\n');
+  if (start === -1) throw new Error('No "## Usage" section in README.md');
+  const fence = md.indexOf('```', start);
+  const end = md.indexOf('```', fence + 3);
+  if (fence === -1 || end === -1) {
+    throw new Error('No fenced usage block under README.md "## Usage"');
+  }
+  return [...md.slice(fence, end).matchAll(/^pleach ([a-z][a-z-]*)/gm)].map(([, verb]) => verb);
+}
+
+describe('journal doc — the halted-run vocabulary (D16)', () => {
+  const documented = documentedEvents(readFileSync(JOURNAL_DOC, 'utf8'));
+
+  test("the `verdict` row states the contract's whole status vocabulary", () => {
+    const row = documented.get('verdict');
+    expect(row).toBeDefined();
+    expect(statedVocabulary(row ?? '', 'status')).toEqual(
+      [...VerdictSchema.shape.status.options].sort(),
+    );
+  });
+
+  test('the `run-end` row names every bucket a RunSummary reports', () => {
+    const row = documented.get('run-end');
+    expect(row).toBeDefined();
+    const fields = rowCells(row ?? '')[2] ?? '';
+    const unnamed = summaryBuckets().filter((bucket) => !fields.includes(`\`${bucket}\``));
+    expect(unnamed).toEqual([]);
+  });
+});
+
+describe('operator surfaces — the CLI help and the README (D16)', () => {
+  const help = helpText();
+  const readme = readFileSync(README, 'utf8');
+
+  test('both surfaces are read, not vacuously empty', () => {
+    expect(dispatchedVerbs().length).toBeGreaterThan(4);
+    expect(parsedFlags().length).toBeGreaterThan(8);
+    expect(usageVerbs(readme).length).toBeGreaterThan(2);
+  });
+
+  test('the help advertises every verb the CLI dispatches and every flag it parses', () => {
+    const unadvertised = [...dispatchedVerbs().map((verb) => `pleach ${verb}`), ...parsedFlags()]
+      .filter((token) => !help.includes(token))
+      .sort();
+    expect(unadvertised).toEqual([]);
+  });
+
+  test("the README's usage block lists every verb the CLI dispatches", () => {
+    const listed = usageVerbs(readme);
+    const missing = dispatchedVerbs().filter((verb) => !listed.includes(verb));
+    expect(missing).toEqual([]);
+  });
+
+  test('the README names the controls that halt a run (D16)', () => {
+    expect(readme).toContain('pleach stop');
+    expect(readme).toContain('--idle-ms');
   });
 });

@@ -18,6 +18,7 @@ function summary(over: Partial<RunSummary> = {}): RunSummary {
     partial: [],
     skipped: [],
     blocked: [],
+    aborted: [],
     quarantined: [],
     alreadyVerified: [],
     ...over,
@@ -47,5 +48,12 @@ describe('summaryExitCode', () => {
 
   test('a skipped node → 1', () => {
     expect(summaryExitCode(summary({ skipped: ['a'] }))).toBe(1);
+  });
+
+  // D16: the run stopped holding the node rather than the node losing — but
+  // nothing about it verified, so a caller that branches on the exit code must
+  // not read a halted run as a clean one.
+  test('an aborted node → 1', () => {
+    expect(summaryExitCode(summary({ aborted: ['a'] }))).toBe(1);
   });
 });

@@ -262,6 +262,29 @@ checkpoint but have different lifetimes and trust domains.**
   `test/unit/journal-envelope*.test.ts`, `test/integration/journal-envelope.test.ts`,
   `test/unit/journal-doc.test.ts`, `test/e2e/journal-envelope.test.ts`.
 
+- **D16 ⚠ [field] A halted run loses the work it was holding.** Three occurrences in two days
+  (jahala/pleach#61, #67, #72): (1) SIGINT during a node's audit — every earlier gate green, the diff
+  staged — settled it as `failed after 0 attempt(s) — wait exited 137`, wrote NO receipt and disposed
+  the tree with no quarantine: the real umbel adapter throws `WorkerSeamError` when the run's own
+  signal kills `umbel wait` (the in-memory runner returns `aborted`, which is why D12's loop test is
+  green while the real path is not), the throw skips the hand-back, and run-node's `finally`
+  disposes. (2) There is no way to stop AFTER the current node: the scheduler launches the next
+  ready node in the same tick as a close, so an operator's SIGINT on the verdict still spawns and
+  kills a worker. (3) The adapter passes no `--idle-timeout` to `umbel wait`, so a wedged worker
+  (a codex auditor idle on a 404) rides to `policy.timeoutMs` — the operator became the idle
+  detector. **Fix:** a wait interrupted by the run's signal returns `reason: 'aborted'` from the
+  adapter; run-node hands the tree back with `Verdict.status: 'aborted'` (the contract has it) and
+  `gate.ran: 'wait:aborted'`; settle writes the receipt and quarantines the tree as it stands
+  (D11: unfinished is not wrong) and `RunSummary.aborted` names the node. `pleach stop <plan>` writes
+  a stop marker beside the run's lock; the scheduler reads it in the same tick as every launch
+  decision, launches nothing more, lets in-flight nodes settle normally, journals `run-stopped` and
+  consumes the marker; `--now` sends SIGINT to the lock's pid for the hard abort. The adapter passes
+  `--idle-timeout` from a conductor default (`--idle-ms`), and `idle` classifies as today (blocked,
+  tree quarantined). Scoped out, recorded in the loop's Tried: resuming FROM a quarantine (#61's
+  second half). Tests: `test/integration/umbel-abort.test.ts`, `test/loop/abort-settles.test.ts`,
+  `test/loop/stop.test.ts`, `test/integration/stop.test.ts`, `test/integration/umbel-idle.test.ts`,
+  `test/unit/journal-doc.test.ts`, `test/e2e/teardown.test.ts`.
+
 ### Verified-sound (attacks refuted — do not relitigate)
 
 `--detach` fan-out (two detached worktrees at one commit are legal); the closed-add-then-dispose-inside-
