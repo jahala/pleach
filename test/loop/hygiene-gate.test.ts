@@ -9,6 +9,11 @@ import { makeHarness } from './harness.ts';
 
 const OPTS = { repoRoot: '/r' };
 
+// A live-shaped AWS key id, assembled from halves so this file's own diff does
+// not trip the battery it tests. Not AWS's documented example: that one is
+// allowlisted (D19).
+const AWS_KEY = ['AKIA', 'Q3VZ7K2MXW9RT4LB'].join('');
+
 function promptPlan(maxAttempts = 1) {
   return PlanSchema.parse({
     goal: 'g',
@@ -33,7 +38,7 @@ describe('the hygiene gate in the ladder (§E)', () => {
     const h = makeHarness({
       changedByNode: { x: ['src/config.ts'] },
       stagedDiffByNode: {
-        x: '+++ b/src/config.ts\n+const k = "AKIAIOSFODNN7EXAMPLE";\n',
+        x: `+++ b/src/config.ts\n+const k = "${AWS_KEY}";\n`,
       },
     });
     const summary = await runPlan(promptPlan(1), h.deps, OPTS);
