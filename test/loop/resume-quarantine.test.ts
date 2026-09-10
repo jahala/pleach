@@ -130,6 +130,31 @@ function sealedFacts(h: Harness, node: string): string {
   return canonicalJson({ ...receiptOf(h, node).facts, durationMs: 0 });
 }
 
+// A phase list whose FIRST entry is not its red one — the shape a plan takes
+// after a phase is inserted ahead of the cycle. An index recorded against the
+// old list cannot name this list's red.
+const MOVED_PHASES = {
+  test: 'runtests',
+  phases: [
+    { phase: 'impl', prompt: 'implement x' },
+    { phase: 'red', prompt: 'write x its failing test' },
+    { phase: 'green', prompt: 'confirm x' },
+  ],
+};
+
+// The phase test command: non-zero the first time (a red must fail), zero the
+// second (a green must pass) — one honest cycle. Everything else passes.
+function redThenGreen(): (argv: readonly string[]) => { output: string; exitCode: number } {
+  let runs = 0;
+  return (argv) => {
+    if (argv[0] !== 'runtests') return { output: '', exitCode: 0 };
+    runs += 1;
+    return runs === 1
+      ? { output: 'FAIL test/x.test.ts', exitCode: 1 }
+      : { output: 'ok 1 x', exitCode: 0 };
+  };
+}
+
 describe('a re-run resumes from the quarantined tree (D17)', () => {
   test('the quarantine is the checkout base, and the close records it forever', async () => {
     const h = harnessFor({ refs: { 'quarantine/x': QSHA } });
@@ -323,6 +348,63 @@ describe('opting out leaves the first run’s behaviour (D17)', () => {
     // And the operator can see the branch was found and not used.
     expect(refusedLines(h)).toHaveLength(1);
     expect(refusedLines(h)[0]).toMatchObject({ node: 'x', sha: QSHA });
+  });
+
+  test('a seal the plan’s phase list has moved past is refused', async () => {
+    // A recorded seal is an index into a list the PLAN owns, and a plan is
+    // edited between runs. This one now opens with the impl phase, so the
+    // index the interrupted close recorded no longer names the red the tree
+    // holds — re-entering after it would skip a phase that never ran. The tree
+    // is kept where it is and the node builds fresh, which is the only reading
+    // of that quarantine the current list supports.
+    const interrupted = mintReceipt({
+      node: 'x',
+      source: SOURCE,
+      status: 'aborted',
+      attempts: 1,
+      provider: 'claude',
+      gates: [],
+      redSealedAt: 0,
+      acceptance: { smoke: SMOKE, audit: AUDIT.command },
+      degraded: [],
+      stagedFiles: 1,
+      telemetry: {},
+      durationMs: 1,
+      pleachVersion: '0.0.1-test',
+    });
+    const h = harnessFor(
+      { refs: { 'quarantine/x': QSHA } },
+      {
+        receiptsSeed: {
+          x: {
+            ...interrupted,
+            refs: { quarantineBranch: 'quarantine/x', quarantineSha: QSHA },
+          },
+        },
+        changedByNode: { x: ['test/x.test.ts'] },
+        execScript: redThenGreen(),
+      },
+    );
+    const seen = bases(h);
+
+    const summary = await runPlan(
+      PlanSchema.parse({
+        goal: 'g',
+        source: SOURCE,
+        nodes: [nodeSpec('x', { work: MOVED_PHASES })],
+      }),
+      h.deps,
+      OPTS,
+    );
+
+    expect(summary.closed).toEqual(['x']);
+    expect(seen).toEqual([['HEAD']]);
+    expect(resumeLines(h)).toEqual([]);
+    expect(refusedLines(h)).toHaveLength(1);
+    expect(refusedLines(h)[0]).toMatchObject({ node: 'x', sha: QSHA });
+    expect(receiptOf(h, 'x').facts.base).toBeUndefined();
+    // Every phase ran, the one a stale index would have skipped included.
+    expect(prompts(h, 'x')).toEqual(['implement x', 'write x its failing test', 'confirm x']);
   });
 
   test('a node with no quarantine ref is untouched by any of it', async () => {

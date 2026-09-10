@@ -233,9 +233,33 @@ async function runUnderLock(
       });
       return undefined;
     }
+    // How far through a phased list that tree got (D13), from the same receipt
+    // that vouched for it. What a quarantine HOLDS is trusted by no gate, but
+    // where the phase ladder left off is not a claim about the work — it is
+    // what the tree is, and an attempt re-entering at a phase the tree already
+    // sealed can only remake that seal as a lie or over nothing.
+    const redSealedAt = receipt?.facts.redSealedAt;
+    // The index belongs to the list the PLAN carries now, and a plan is edited
+    // between runs. If it no longer names a red phase, the seal it recorded is
+    // not this list's, and re-entering after it would skip a phase that never
+    // ran — a verified close over a cycle that did not happen. Refuse the seed:
+    // the tree stays where it is, and the node builds its own.
+    if (redSealedAt !== undefined && !sealsRed(node, redSealedAt)) {
+      await deps.journal.append({
+        event: 'resume-refused',
+        node: node.id,
+        sha,
+        detail: `the plan's phase ${redSealedAt} is no longer the red the tree sealed — the work list moved`,
+      });
+      return undefined;
+    }
     const stat = await deps.isolate.commitStat(opts.repoRoot, sha);
     await deps.journal.append({ event: 'resumed-from-quarantine', node: node.id, sha });
-    return { sha, ...(stat !== null ? { stat } : {}) };
+    return {
+      sha,
+      ...(stat !== null ? { stat } : {}),
+      ...(redSealedAt !== undefined ? { redSealedAt } : {}),
+    };
   }
 
   // Run one node to its terminal effect on closed/failed/partial/blocked/aborted.
@@ -787,6 +811,13 @@ export async function resolveBaseRef(
   return null;
 }
 
+// Does the node's work list still call phase `index` a red? The seal a close
+// recorded is an index into the list that close ran; only the plan says what
+// that index means now.
+function sealsRed(node: Node, index: number): boolean {
+  return 'phases' in node.work && node.work.phases[index]?.phase === 'red';
+}
+
 // A node's isolate base refs: baseRefs[0] is the checkout, the rest merge onto
 // it. The resolved ref of each closed need, in order; a node with no needs
 // isolates from repo HEAD. A resumed node (D17) checks out the quarantined tree
@@ -849,6 +880,9 @@ function buildFacts(
     // sealed inside the envelope, so a resumed close is distinguishable from a
     // fresh one for as long as the receipt exists.
     ...(resumed !== undefined ? { base: { kind: 'quarantine' as const, sha: resumed.sha } } : {}),
+    // Where the phase ladder left off in the tree this close held (D13) — the
+    // one thing a later attempt seeded from that tree needs from this one.
+    ...(outcome.redSealedAt !== undefined ? { redSealedAt: outcome.redSealedAt } : {}),
     acceptance: acceptanceOf(node),
     degraded: computeDegraded(node),
     stagedFiles: outcome.stagedFiles?.length ?? 0,

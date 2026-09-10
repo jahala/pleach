@@ -262,6 +262,13 @@ describe('pleach audit — re-adjudicating a quarantined node (D17)', () => {
       'fail',
     );
     expect(audit.code).toBe(1);
+    // The verb's own answer, not merely a non-zero exit: a refusal — and a
+    // child process that never ran at all — exits 1 too, and either would leave
+    // the close below unwritten and this test reading the run's receipt again.
+    expect(JSON.parse(audit.stdout.trim())).toMatchObject({
+      node: 'app',
+      status: 'quarantined',
+    });
     expect(await branchSha(repo, 'node/app')).toBeNull();
 
     // A second close, not an overwritten one — and the work it judged is still

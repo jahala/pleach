@@ -61,6 +61,17 @@ export interface ReceiptFacts {
   // a ref settled after the freeze; `canonicalJson` drops undefined, so a
   // receipt that built its own tree hashes exactly as it did before the field.
   base?: { kind: 'quarantine'; sha: string };
+  // How far the tree this close held got through a phased work list (D13): the
+  // index of the red phase whose seal is IN that tree's history. A later
+  // attempt standing on that tree — a resumed quarantine, a re-adjudication
+  // (D17) — re-enters the ladder after it, because a tree that already carries
+  // the failing test can never honestly seal it again. Absent for work with no
+  // phases and for a tree that never got a red through. Sealed INSIDE the
+  // envelope for the same reason `base` is: it is a fact of what the close
+  // held, and an index edited afterwards would skip a red phase. `canonicalJson`
+  // drops undefined, so a receipt without it hashes exactly as it did before
+  // the field existed.
+  redSealedAt?: number;
   // The node's acceptance AS RUN — the evolution-invalidation record. A later
   // run whose plan carries different strings must not skip-trust this close.
   acceptance: { smoke?: string; audit?: string };

@@ -143,6 +143,7 @@ async function auditUnderLock(
     deps,
     iso,
     base: { kind: 'quarantine', sha: seed.sha },
+    ...(seed.redSealedAt !== undefined ? { redSealedAt: seed.redSealedAt } : {}),
     gates: [],
     startedAt,
     pleachVersion: opts.pleachVersion ?? '0.0.0-dev',
@@ -235,6 +236,9 @@ interface Settle {
   deps: ConductorDeps;
   iso: Isolation;
   base: { kind: 'quarantine'; sha: string };
+  // What the tree being judged got through of a phased work list (D13), as the
+  // close that kept it recorded — carried, never recomputed.
+  redSealedAt?: number;
   gates: GateRecord[];
   records?: AuditRecord[];
   startedAt: number;
@@ -336,7 +340,7 @@ async function seedFrom(
   node: Node,
   deps: ConductorDeps,
   repoRoot: string,
-): Promise<{ branch: string; sha: string }> {
+): Promise<{ branch: string; sha: string; redSealedAt?: number }> {
   const receipt = await deps.receipts.read(node.id);
   if (receipt === null) {
     throw new AuditRefusedError(
@@ -393,7 +397,11 @@ async function seedFrom(
   if (sha !== recorded) {
     throw new AuditRefusedError(node.id, `${branch} has moved since the close that wrote it`);
   }
-  return { branch, sha };
+  // This close judges the tree that close held, so what that tree got through
+  // of a phased list (D13) is still true of it — and stays on the record, for
+  // the run that resumes this quarantine if the audit refuses it.
+  const { redSealedAt } = receipt.facts;
+  return { branch, sha, ...(redSealedAt !== undefined ? { redSealedAt } : {}) };
 }
 
 // The isolate bases a run would use, with the quarantined tree in front of
@@ -493,6 +501,7 @@ function auditFacts(settle: Settle, verdict: Verdict, durationMs: number): MintF
     gates: settle.gates,
     ...(settle.records !== undefined ? { audit: settle.records } : {}),
     base: settle.base,
+    ...(settle.redSealedAt !== undefined ? { redSealedAt: settle.redSealedAt } : {}),
     acceptance: acceptanceOf(node),
     degraded: computeDegraded(node),
     // The delivery is the build's; this close staged nothing of its own.

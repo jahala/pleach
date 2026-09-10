@@ -37,6 +37,12 @@ import { guardedExec, runWork } from './run-work.ts';
 export interface ResumedFrom {
   sha: string;
   stat?: string;
+  // The red phase index that tree already carries a seal for (D13), when the
+  // close that kept it recorded one. The resumed attempt re-enters the phase
+  // ladder after it: a tree holding the failing test cannot demonstrate it
+  // failing again, and re-running that phase would seal a lie — or, over a tree
+  // nothing changed in, nothing at all.
+  redSealedAt?: number;
 }
 
 export interface RunNodeOpts {
@@ -89,6 +95,11 @@ export interface RunNodeResult {
   // the session it came from is killed moments later. Journal/settle material
   // only, like smokeStdout; absent when the attempt never got a result.
   handback?: string;
+  // The red phase index the tree this attempt hands back has sealed (D13),
+  // when it sealed one. Journal/settle material like `handback`: the receipt
+  // records it, so an attempt later seeded from that tree re-enters the phase
+  // ladder where the tree actually left off instead of where a build starts.
+  redSealedAt?: number;
   // Why the node settled where it did, when the reason is a scheduling
   // decision rather than a gate (D17): an attempt left unspent because the
   // provider that would have run it is the one already known dead, or a
@@ -135,6 +146,7 @@ export async function runNode(
       gates,
       ...(smokeStdout !== undefined ? { smokeStdout } : {}),
       ...(handback !== undefined ? { handback } : {}),
+      ...(redSealedAt !== undefined ? { redSealedAt } : {}),
       ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
       ...(result.stagedFiles === undefined && lastStaged !== undefined
         ? { stagedFiles: lastStaged }
@@ -165,8 +177,9 @@ export async function runNode(
   let iso: Isolation | null = null;
   // The phase the CURRENT tree has sealed a red commit for (D13), if any. It
   // belongs to the tree, not to the node: a retry that reuses the tree re-enters
-  // after that phase, and a re-isolated tree (dead+resume) has sealed nothing
-  // and earns a fresh red.
+  // after that phase, and a re-isolated tree (dead+resume) earns whatever its
+  // base carries — nothing for a build from its dependencies, and for a tree
+  // checked out of a quarantine (D17) the seal that tree already holds.
   let redSealedAt: number | undefined;
   // Evidence threaded into the next attempt's re-prompt (A3). undefined on the
   // first attempt.
@@ -199,7 +212,9 @@ export async function runNode(
       // does not need telling where it came from again.
       let isolated = false;
       if (iso === null) {
-        redSealedAt = undefined;
+        // Every isolation of this node checks out the same baseRefs, so a
+        // resumed node's fresh tree carries the quarantine's seal again.
+        redSealedAt = opts.resumedFrom?.redSealedAt;
         isolated = true;
         try {
           iso = await deps.isolate.isolate(node, baseRefs);
@@ -535,6 +550,7 @@ export async function runNode(
         gates,
         ...(smokeStdout !== undefined ? { smokeStdout } : {}),
         ...(handback !== undefined ? { handback } : {}),
+        ...(redSealedAt !== undefined ? { redSealedAt } : {}),
         ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
       };
     }
