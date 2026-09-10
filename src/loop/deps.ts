@@ -85,6 +85,11 @@ export interface IsolateSeam {
   // Full commit message (subject + body) of `ref`; null when it doesn't
   // resolve. The receipt verb reads the receipt-sha256 trailer from it (§D).
   commitMessageOf(cwd: string, ref: string): Promise<string | null>;
+  // The `--stat` summary of the change `ref` introduced; null when the ref
+  // doesn't resolve or introduced nothing. A resumed node's first prompt names
+  // what the interrupted attempt was holding when its tree was quarantined
+  // (D17) — the worker is about to continue inside that work.
+  commitStat(cwd: string, ref: string): Promise<string | null>;
   // Land verified refs onto the branch checked out in repoRoot (ledger B3).
   // Builds the merges in a throwaway detached worktree; the checkout is only
   // ever touched by a final `merge --ff-only`, so a conflict (LandConflictError),

@@ -10,7 +10,7 @@ import {
 } from '../core/receipt.ts';
 import { DEFAULT_WORKER_PROVIDER, validatePlan } from '../core/validate.ts';
 import type { ArtifactKind, ConductorDeps, Isolation, RunSummary } from './deps.ts';
-import { type RunNodeResult, runNode } from './run-node.ts';
+import { type ResumedFrom, type RunNodeResult, runNode } from './run-node.ts';
 
 // ── run-plan: the scheduler ──────────────────────────────────────────────────
 //
@@ -47,6 +47,10 @@ export interface RunPlanOpts {
   // audit diversity re-checked against it. Absent, a dead attempt settles the
   // node rather than spending another attempt on the same outage.
   fallbackProvider?: string;
+  // `--fresh` (D17): ignore `quarantine/<id>` and isolate every pending node
+  // from its dependencies alone. The default is to resume — a tree an earlier
+  // attempt left behind is work, and rebuilding from nothing throws it away.
+  fresh?: boolean;
 }
 
 export const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes (binding prose).
@@ -73,6 +77,7 @@ export async function runPlan(
       defaultTimeoutMs,
       maxConcurrency,
       pleachVersion: opts.pleachVersion ?? '0.0.0-dev',
+      fresh: opts.fresh === true,
       ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       ...(opts.idleMs !== undefined ? { idleMs: opts.idleMs } : {}),
       ...(opts.fallbackProvider !== undefined ? { fallbackProvider: opts.fallbackProvider } : {}),
@@ -87,6 +92,7 @@ interface ResolvedOpts {
   defaultTimeoutMs: number;
   maxConcurrency: number;
   pleachVersion: string;
+  fresh: boolean;
   signal?: AbortSignal;
   idleMs?: number;
   fallbackProvider?: string;
@@ -196,10 +202,47 @@ async function runUnderLock(
     return out;
   }
 
+  // The tree an earlier attempt left behind, when this node has one to stand on
+  // (D17). A pending node is unverified by definition, so its `quarantine/<id>`
+  // — if it still resolves — is its own interrupted work, and rebuilding from
+  // nothing throws that away. What is IN the tree is trusted by nobody: it was
+  // never gated, so the whole ladder runs over it below. Only its provenance is
+  // recorded — in the journal for the operator, and in the close's sealed facts
+  // so a resumed close stays distinguishable from a fresh one forever.
+  // `--fresh` refuses the seed.
+  async function resumeFrom(node: Node): Promise<ResumedFrom | undefined> {
+    if (opts.fresh) return undefined;
+    const sha = await deps.isolate.refSha(opts.repoRoot, `quarantine/${node.id}`);
+    if (sha === null) return undefined;
+    // Which tree, though, is a question the gates cannot answer. The branch
+    // outlives the close that wrote it: a node that failed, then closed
+    // verified on a later run, still has the failed tree sitting on
+    // `quarantine/<id>`, and standing on THAT would resurrect work its own
+    // verified close already replaced. So the node's latest receipt has to
+    // name this very tree — the same rule `pleach audit` applies before it
+    // re-adjudicates one. A close that published instead, or kept a different
+    // tree, refuses the seed; a node with no receipt at all keeps it, the
+    // quarantine being then the only account of the work there is.
+    const receipt = await deps.receipts.read(node.id);
+    if (receipt !== null && receipt.refs?.quarantineSha !== sha) {
+      await deps.journal.append({
+        event: 'resume-refused',
+        node: node.id,
+        sha,
+        detail: "the node's latest close kept a different tree — the quarantine is superseded",
+      });
+      return undefined;
+    }
+    const stat = await deps.isolate.commitStat(opts.repoRoot, sha);
+    await deps.journal.append({ event: 'resumed-from-quarantine', node: node.id, sha });
+    return { sha, ...(stat !== null ? { stat } : {}) };
+  }
+
   // Run one node to its terminal effect on closed/failed/partial/blocked/aborted.
   // Never rejects.
   async function runOne(node: Node): Promise<void> {
-    const baseRefs = baseRefsFor(node, baseRefForClosed);
+    const resumed = await resumeFrom(node);
+    const baseRefs = baseRefsFor(node, baseRefForClosed, resumed?.sha);
     await deps.journal.append({ event: 'node-start', node: node.id });
     const startedAt = Date.now();
 
@@ -210,6 +253,7 @@ async function runUnderLock(
         signal: opts.signal,
         idleMs: opts.idleMs,
         fallbackProvider: opts.fallbackProvider,
+        resumedFrom: resumed,
       });
     } catch (err) {
       // A node promise must never reject — map a surprise to a failed verdict.
@@ -228,7 +272,7 @@ async function runUnderLock(
       return;
     }
 
-    await settle(node, outcome, startedAt);
+    await settle(node, outcome, startedAt, resumed);
   }
 
   // A gate's findings log and the tree's own friction journal (D14), and the
@@ -326,7 +370,12 @@ async function runUnderLock(
   // Commit-before-emit + dual-close, then dispose — all inside this promise so
   // the closed.set happens-before dispose, and dispose happens-before any
   // dependent's isolate (the scheduler only schedules dependents after closed).
-  async function settle(node: Node, outcome: RunNodeResult, startedAt: number): Promise<void> {
+  async function settle(
+    node: Node,
+    outcome: RunNodeResult,
+    startedAt: number,
+    resumed: ResumedFrom | undefined,
+  ): Promise<void> {
     const { verdict, iso } = outcome;
     const durationMs = Date.now() - startedAt;
     // Record the full diagnostic shape — a failed run must be explainable from
@@ -392,7 +441,9 @@ async function runUnderLock(
         failed.add(node.id);
       }
       await deps.ledger.emitVerdict(verdict, plan.source);
-      const receipt = mintReceipt(buildFacts(plan, node, outcome, durationMs, opts.pleachVersion));
+      const receipt = mintReceipt(
+        buildFacts(plan, node, outcome, durationMs, opts.pleachVersion, resumed),
+      );
       // A failed strict gate wrote the log that says why — exactly the log the
       // calibration folds want, so the quarantine path keeps it too.
       const artifacts = await keepArtifactsOrJournal(node, iso, outcome, receipt);
@@ -430,7 +481,9 @@ async function runUnderLock(
       // Freeze point (§D): facts seal BEFORE the commit exists, so the commit
       // SHA never lives inside the hashed envelope — the trailer rides in the
       // commit whose SHA is the diffRef, and git binds them.
-      receipt = mintReceipt(buildFacts(plan, node, outcome, durationMs, opts.pleachVersion));
+      receipt = mintReceipt(
+        buildFacts(plan, node, outcome, durationMs, opts.pleachVersion, resumed),
+      );
       const { sha: committed } = await deps.isolate.commitBranch(
         iso.cwd,
         `node/${node.id}`,
@@ -734,11 +787,19 @@ export async function resolveBaseRef(
   return null;
 }
 
-// A node's isolate base refs: the resolved ref of each closed need, in order.
-// A node with no needs isolates from repo HEAD.
-function baseRefsFor(node: Node, baseRefForClosed: Map<string, string>): string[] {
-  if (node.needs.length === 0) return [ROOT_BASE_REF];
-  return node.needs.map((d) => baseRefForClosed.get(d) ?? `node/${d}`);
+// A node's isolate base refs: baseRefs[0] is the checkout, the rest merge onto
+// it. The resolved ref of each closed need, in order; a node with no needs
+// isolates from repo HEAD. A resumed node (D17) checks out the quarantined tree
+// instead and merges the same dependencies onto it — the tree already descends
+// from HEAD, so there is nothing to put behind it.
+function baseRefsFor(
+  node: Node,
+  baseRefForClosed: Map<string, string>,
+  resumeSha?: string,
+): string[] {
+  const merged = node.needs.map((d) => baseRefForClosed.get(d) ?? `node/${d}`);
+  if (resumeSha !== undefined) return [resumeSha, ...merged];
+  return merged.length === 0 ? [ROOT_BASE_REF] : merged;
 }
 
 function commitMessage(plan: Plan, node: Node, verdict: Verdict): string {
@@ -772,6 +833,7 @@ function buildFacts(
   outcome: RunNodeResult,
   durationMs: number,
   pleachVersion: string,
+  resumed: ResumedFrom | undefined,
 ): MintFacts {
   const { verdict } = outcome;
   return {
@@ -783,6 +845,10 @@ function buildFacts(
     ...(node.worker.model !== undefined ? { model: node.worker.model } : {}),
     gates: gatesWithTailSha(outcome),
     ...(outcome.audit !== undefined ? { audit: outcome.audit } : {}),
+    // What this close stood on when it did not build its own tree (D17) —
+    // sealed inside the envelope, so a resumed close is distinguishable from a
+    // fresh one for as long as the receipt exists.
+    ...(resumed !== undefined ? { base: { kind: 'quarantine' as const, sha: resumed.sha } } : {}),
     acceptance: acceptanceOf(node),
     degraded: computeDegraded(node),
     stagedFiles: outcome.stagedFiles?.length ?? 0,

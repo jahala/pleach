@@ -15,7 +15,7 @@
 // `--fresh` opts out and leaves today's behaviour untouched.
 import { describe, expect, test } from 'bun:test';
 import { PlanSchema } from '../../src/core/plan.ts';
-import { canonicalJson, type Receipt, rehash } from '../../src/core/receipt.ts';
+import { canonicalJson, mintReceipt, type Receipt, rehash } from '../../src/core/receipt.ts';
 import type { RunSummary } from '../../src/loop/deps.ts';
 import { runPlan } from '../../src/loop/run-plan.ts';
 import { type Harness, type HarnessOpts, makeHarness } from './harness.ts';
@@ -116,6 +116,10 @@ function gateLadder(h: Harness, node: string): { gate: string; exitCode: number 
   return receiptOf(h, node).facts.gates.map((g) => ({ gate: g.gate, exitCode: g.exitCode }));
 }
 
+function refusedLines(h: Harness): Record<string, unknown>[] {
+  return h.journal.filter((e) => e.event === 'resume-refused');
+}
+
 function resumeLines(h: Harness): Record<string, unknown>[] {
   return h.journal.filter((e) => e.event === 'resumed-from-quarantine');
 }
@@ -207,6 +211,45 @@ describe('a re-run resumes from the quarantined tree (D17)', () => {
     expect(receiptOf(h, 'x').facts.base).toEqual({ kind: 'quarantine', sha: QSHA });
   });
 
+  test('a second run resumes from the quarantine the first one wrote', async () => {
+    // The whole class in one harness: no seeded ref, no seeded sha. The first
+    // run fails its smoke and quarantines the tree it built; the second finds
+    // that branch, stands on it, and closes green — which is the only thing a
+    // conductor that keeps work can do with it.
+    let attemptRun = 1;
+    const h = makeHarness({
+      // What the interrupted attempt wrote — the tree the quarantine keeps and
+      // the stat the next worker is shown.
+      changedByNode: { x: ['work.out'] },
+      execScript: (argv) =>
+        argv.join(' ') === SMOKE
+          ? { output: 'FAIL test/x.test.ts\n', exitCode: attemptRun === 1 ? 1 : 0 }
+          : { output: '', exitCode: 0 },
+    });
+    const seen = bases(h);
+
+    const first = await runOne(h, { maxAttempts: 1 });
+    expect(first.failed).toEqual(['x']);
+    const quarantined = h.git.refs.get('quarantine/x');
+    expect(quarantined).toBeDefined();
+
+    attemptRun = 2;
+    const second = await runOne(h, { maxAttempts: 1 });
+
+    expect(second.closed).toEqual(['x']);
+    // The first run built from HEAD; the second stood on what it left behind.
+    expect(seen).toEqual([['HEAD'], [quarantined as string]]);
+    expect(resumeLines(h)).toHaveLength(1);
+    expect(receiptOf(h, 'x').facts.base).toEqual({
+      kind: 'quarantine',
+      sha: quarantined as string,
+    });
+    // And the worker that picked it up was told what was in the tree.
+    const prompt = prompts(h, 'x').at(-1) ?? '';
+    expect(prompt).toContain(`resuming work interrupted at ${quarantined}`);
+    expect(prompt).toContain('work.out');
+  });
+
   test('the first prompt carries the interruption as evidence', async () => {
     const h = harnessFor({ refs: { 'quarantine/x': QSHA } });
 
@@ -244,6 +287,42 @@ describe('opting out leaves the first run’s behaviour (D17)', () => {
 
     expect(seen).toEqual([['node/a']]);
     expect(receiptOf(h, 'b').facts.base).toBeUndefined();
+  });
+
+  test('a quarantine the node has already superseded is refused', async () => {
+    // The branch outlives the close that wrote it: this node failed once, then
+    // closed verified, and is pending again only because its acceptance moved.
+    // Its old failed tree is still on `quarantine/x`, and standing on it would
+    // resurrect work its own verified close already replaced.
+    const published = mintReceipt({
+      node: 'x',
+      source: SOURCE,
+      status: 'done',
+      attempts: 1,
+      provider: 'claude',
+      gates: [{ gate: 'smoke', exitCode: 0 }],
+      acceptance: { smoke: SMOKE, audit: AUDIT.command },
+      degraded: [],
+      stagedFiles: 1,
+      telemetry: {},
+      durationMs: 1,
+      pleachVersion: '0.0.1-test',
+    });
+    const h = harnessFor(
+      { refs: { 'quarantine/x': QSHA } },
+      { receiptsSeed: { x: { ...published, refs: { diffRef: ASHA } } } },
+    );
+    const seen = bases(h);
+
+    const summary = await runOne(h, {});
+
+    expect(summary.closed).toEqual(['x']);
+    expect(seen).toEqual([['HEAD']]);
+    expect(resumeLines(h)).toEqual([]);
+    expect(receiptOf(h, 'x').facts.base).toBeUndefined();
+    // And the operator can see the branch was found and not used.
+    expect(refusedLines(h)).toHaveLength(1);
+    expect(refusedLines(h)[0]).toMatchObject({ node: 'x', sha: QSHA });
   });
 
   test('a node with no quarantine ref is untouched by any of it', async () => {

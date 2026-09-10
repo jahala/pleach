@@ -69,6 +69,10 @@ Flags (run):
                           a provider outage, not a red gate. Without it a dead attempt settles
                           the node instead of spending a second attempt on the same outage.
                           The audit diversity rule is re-checked against the fallback.
+  --fresh                 Ignore quarantine/<id> and build every pending node from its
+                          dependencies alone. By default a node that has an unverified tree
+                          from an earlier run resumes from it — the work is the worker's own,
+                          and every gate re-runs over it because it was never gated.
   --journal PATH          Run journal JSONL (default: <git-dir>/pleach/journal.jsonl)
   --runner NAME           Bundled runner for zero-config runs: 'umbel' (default; interactive
                           CLIs over tmux) or 'direct-cli' (headless \`claude -p\` / \`codex exec\` —
@@ -147,6 +151,7 @@ interface Flags {
   allowedTools?: string;
   permissionMode?: string;
   config?: string;
+  fresh: boolean;
   land: boolean;
   now: boolean;
   quiet: boolean;
@@ -169,6 +174,7 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
     repoRoot: process.cwd(),
     idleMs: DEFAULT_IDLE_MS,
     umbelBin: process.env.PLEACH_UMBEL_BIN ?? 'umbel',
+    fresh: false,
     land: false,
     now: false,
     quiet: false,
@@ -236,6 +242,9 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
       case '--permission-mode':
         flags.permissionMode = takeValue(arg, next);
         i += 1;
+        break;
+      case '--fresh':
+        flags.fresh = true;
         break;
       case '--land':
         flags.land = true;
@@ -382,6 +391,7 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     ...(flags.maxConcurrency !== undefined ? { maxConcurrency: flags.maxConcurrency } : {}),
     ...(flags.timeoutMs !== undefined ? { defaultTimeoutMs: flags.timeoutMs } : {}),
     ...(flags.fallbackProvider !== undefined ? { fallbackProvider: flags.fallbackProvider } : {}),
+    ...(flags.fresh ? { fresh: true } : {}),
   });
 
   const code = summaryExitCode(summary);

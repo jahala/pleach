@@ -31,6 +31,14 @@ import { guardedExec, runWork } from './run-work.ts';
 // run-node does NOT commit or emit — it returns the live isolation and the
 // staged file set so run-plan can commit-before-emit then dispose (B2).
 
+// The quarantined tree an attempt stands on (D17): the sha it was taken at,
+// and the stat of what it holds when the seam could show one. run-plan resolves
+// it; run-node hands it to the worker that picks the work up.
+export interface ResumedFrom {
+  sha: string;
+  stat?: string;
+}
+
 export interface RunNodeOpts {
   defaultTimeoutMs: number;
   // Teardown signal (D12) — interrupts worker waits; everything else settles.
@@ -43,6 +51,10 @@ export interface RunNodeOpts {
   // `dead`. Conductor-level, never a plan field — which provider stands in for
   // a dead one is the operator's call for this run, not a fact about the node.
   fallbackProvider?: string;
+  // The quarantined tree baseRefs[0] checks out (D17), when this node resumed
+  // one. Every attempt that isolates lands inside that work, so the worker is
+  // told where it came from before it writes over it. Absent for a fresh build.
+  resumedFrom?: ResumedFrom;
 }
 
 export interface RunNodeResult {
@@ -182,8 +194,13 @@ export async function runNode(
       handback = undefined;
 
       // ── isolate (or reuse the tree for a retryable retry) ───────────────────
+      // Whether THIS attempt built its tree: a retryable retry reuses the one
+      // the last attempt worked in, and a worker already inside a resumed tree
+      // does not need telling where it came from again.
+      let isolated = false;
       if (iso === null) {
         redSealedAt = undefined;
+        isolated = true;
         try {
           iso = await deps.isolate.isolate(node, baseRefs);
         } catch (err) {
@@ -204,7 +221,10 @@ export async function runNode(
         attempts === 1 && iso.conflictFiles.length > 0
           ? `Resolve merge conflicts in: ${iso.conflictFiles.join(', ')}`
           : undefined;
-      const promptEvidence = mergeEvidence(evidence, firstPromptExtra);
+      const promptEvidence = mergeEvidence(
+        evidence,
+        mergeEvidence(isolated ? resumeEvidence(opts.resumedFrom) : undefined, firstPromptExtra),
+      );
 
       // ── setup ───────────────────────────────────────────────────────────────
       if (node.setup) {
@@ -900,6 +920,17 @@ function auditFailEvidence(failing: AuditResult['verdicts']): string {
 function mergeEvidence(a: string | undefined, b: string | undefined): string | undefined {
   if (a && b) return `${a}\n\n${b}`;
   return a ?? b;
+}
+
+// What the tree already holds, for the worker that just landed in it (D17).
+// The work is a worker's own, interrupted before any gate ran over it, and the
+// next one is about to continue inside it — so it is told where the tree came
+// from and what is in it. A quarantine the seam could show no stat for says
+// only where it came from; nothing here is invented.
+function resumeEvidence(resumed: ResumedFrom | undefined): string | undefined {
+  if (resumed === undefined) return undefined;
+  const from = `resuming work interrupted at ${resumed.sha}`;
+  return resumed.stat === undefined ? from : `${from}:\n${resumed.stat}`;
 }
 
 // Why an attempt was left unspent when the run named no second cast (D17).

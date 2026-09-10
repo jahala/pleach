@@ -93,6 +93,11 @@ export class InMemoryGit {
   // branch → last commit message (receipt-trailer assertions, §D), and every
   // commit under its own sha too — a detached phase seal (D13) has no branch.
   readonly commitMessages = new Map<string, string>();
+  // sha → the --stat summary of what that commit introduced: the numstat of
+  // the tree it was made from, rendered the way git renders one. A resumed
+  // node's prompt is built from it (D17), so a commit this git made can be
+  // described later without the tree it came from.
+  readonly commitStats = new Map<string, string>();
   // worktree cwd → set of "changed" files the worker left behind
   readonly changed = new Map<string, string[]>();
   // worktree cwd → marker files present (conflict markers gate)
@@ -104,6 +109,17 @@ export class InMemoryGit {
   // the seam's read has something to choose between (D14).
   readonly friction = new Map<string, Record<string, string>>();
   private shaCounter = 0;
+
+  // git's own shape: one line per file, then the totals.
+  statOf(cwd: string): string | null {
+    const numstat = this.stagedNumstats.get(cwd) ?? [];
+    if (numstat.length === 0) return null;
+    const files = numstat.map((n) => ` ${n.file} | ${n.added + n.deleted}`);
+    const added = numstat.reduce((sum, n) => sum + n.added, 0);
+    const deleted = numstat.reduce((sum, n) => sum + n.deleted, 0);
+    const total = ` ${numstat.length} file(s) changed, ${added} insertion(s)(+), ${deleted} deletion(s)(-)`;
+    return [...files, total].join('\n');
+  }
 
   // A distinct 40-hex-char sha per commit — the padding used to swallow the
   // counter, so every commit in a run shared one sha and no test could tell two
@@ -343,15 +359,19 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     async commit(cwd, message): Promise<{ sha: string }> {
       const sha = git.newSha();
       git.commitMessages.set(sha, message);
+      const stat = git.statOf(cwd);
+      if (stat !== null) git.commitStats.set(sha, stat);
       log.push('commit', undefined, `${cwd}:${sha}`);
       return { sha };
     },
-    async commitBranch(_cwd, branch, message): Promise<{ sha: string }> {
+    async commitBranch(cwd, branch, message): Promise<{ sha: string }> {
       if (opts.commitBranchBusy?.(branch)) {
         log.push('commitBranch-busy', branch);
         throw new Error(`cannot force update the branch '${branch}' used by worktree at /w`);
       }
       const sha = git.newSha();
+      const stat = git.statOf(cwd);
+      if (stat !== null) git.commitStats.set(sha, stat);
       git.refs.set(branch, sha);
       git.commitMessages.set(branch, message);
       git.commitMessages.set(sha, message);
@@ -360,6 +380,12 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     },
     async refSha(_cwd, ref): Promise<string | null> {
       return git.refs.get(ref) ?? null;
+    },
+    // What a commit this git made introduced: known for every commit it made,
+    // and unknown — null, like a ref that does not resolve — for a sha a test
+    // seeded into `refs` without a tree behind it.
+    async commitStat(_cwd, ref): Promise<string | null> {
+      return git.commitStats.get(ref) ?? git.commitStats.get(git.refs.get(ref) ?? '') ?? null;
     },
     async commitMessageOf(_cwd, ref): Promise<string | null> {
       for (const [branch, sha] of git.refs) {
