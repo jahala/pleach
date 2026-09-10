@@ -36,6 +36,29 @@ describe('narrateEvent (W1 narration floor)', () => {
     expect(line).toContain('2');
   });
 
+  // D19: a node settled where no gate says why (a gate that could not run, an
+  // attempt left unspent — D17) carries the reason in `detail`; the operator
+  // reading only stderr must see it, not just that the node failed.
+  test('verdict carries its detail when the journal line has one', () => {
+    const detail =
+      'the environment cannot run the gate; fix the environment, no attempt can: ' +
+      'Executable not found in $PATH: "nope"';
+    const line = narrateEvent({
+      event: 'verdict',
+      node: 'api',
+      status: 'failed',
+      attempts: 1,
+      detail,
+    });
+    expect(line).toContain('✗ api: failed after 1 attempt(s)');
+    expect(line).toContain(detail);
+  });
+
+  test('verdict without a detail is the one line it always was', () => {
+    const line = narrateEvent({ event: 'verdict', node: 'api', status: 'failed', attempts: 2 });
+    expect(line).toBe('✗ api: failed after 2 attempt(s)');
+  });
+
   test('quarantined points at the evidence branch', () => {
     const line = narrateEvent({ event: 'quarantined', node: 'api', branch: 'quarantine/api' });
     expect(line).toContain('quarantine/api');
