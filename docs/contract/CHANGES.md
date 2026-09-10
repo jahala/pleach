@@ -95,3 +95,20 @@
   after the freeze; `canonicalJson` drops undefined, so every receipt already on disk hashes exactly
   as it did and still verifies. `deriveStatus` does not read it: seeding from a quarantine changes
   what a close stood on, never what its facts imply.
+
+- **Receipt, not schema (2026-09-10)** — the close receipt's facts gained `redSealedAt?: number`: the
+  index of the red phase whose seal is in the tree that close held (ledger D13/D17). A `{test, phases}`
+  node resumed from `quarantine/<id>` re-enters its work list after that phase, because a tree that
+  already carries the failing test cannot demonstrate it failing again — re-running the phase either
+  seals a lie or, over a tree nothing changed in, ends the node on a commit with nothing to commit.
+  The fact travels with the tree: `pleach run` reads it from the same receipt that vouched for the
+  quarantine, and `pleach audit` copies it onto the close it writes, the tree it judged being that
+  tree. The index is only ever read against the list the plan carries NOW: one that no longer names a
+  red phase there refuses the seed (`resume-refused`) and the node builds its own tree, because
+  re-entering after a phase the plan has moved would skip a phase that never ran. Additive, and
+  outside the contract: `@agent-contract/plan` is untouched — no schema-block change, no version
+  bump, drift guards unaffected, nothing for tend or umbel to re-vendor. Sealed INSIDE the hashed
+  envelope like `base`, because an index edited afterwards would skip a red phase;
+  `canonicalJson` drops undefined, so every receipt already on disk hashes exactly as it did and
+  still verifies. `deriveStatus` does not read it: where a tree left off changes what an attempt
+  runs next, never what a close's facts imply.
