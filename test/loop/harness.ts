@@ -203,6 +203,10 @@ export interface Harness {
   receipts: Map<string, Receipt>;
   // Kept gate artifacts by the path the store returned (D14).
   artifacts: Map<string, string>;
+  // The drain marker as the lock seam sees it (D16): set `requested` to write
+  // one — before the run, or from inside a wait or a ledger emit to land it
+  // mid-run; `cleared` counts the run's consumption of it.
+  stop: { requested: boolean; cleared: number };
   // concurrency instrumentation
   maxConcurrentWorkers: number;
 }
@@ -450,8 +454,15 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   };
 
   // ── lock ──────────────────────────────────────────────────────────────────
-  const lock: LockSeam = {
-    async acquire(_repoRoot, _source): Promise<LockHandle> {
+  //
+  // The drain marker (D16) lives beside the lock because that is where the
+  // (repoRoot, source) path is known. `pleach stop` writes a file; all the
+  // scheduler ever asks is whether it is there, so in memory it is a flag a
+  // test flips mid-run to land a marker between two closes — and `clearStop`
+  // is the run consuming it.
+  const stopMarker = { requested: false, cleared: 0 };
+  const lockImpl = {
+    async acquire(_repoRoot: string, _source: string): Promise<LockHandle> {
       log.push('lock.acquire');
       return {
         async release() {
@@ -459,7 +470,17 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
         },
       };
     },
+    async stopRequested(_repoRoot: string, _source: string): Promise<boolean> {
+      log.push('lock.stopRequested', undefined, String(stopMarker.requested));
+      return stopMarker.requested;
+    },
+    async clearStop(_repoRoot: string, _source: string): Promise<void> {
+      stopMarker.requested = false;
+      stopMarker.cleared += 1;
+      log.push('lock.clearStop');
+    },
   };
+  const lock: LockSeam = lockImpl;
 
   // ── journal ─────────────────────────────────────────────────────────────────
   const journal: JournalSeam = {
@@ -502,6 +523,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     journal: journalEvents,
     receipts: receiptsStore,
     artifacts: artifactStore,
+    stop: stopMarker,
     get maxConcurrentWorkers() {
       return state.maxConcurrent;
     },
