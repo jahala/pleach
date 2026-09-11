@@ -412,6 +412,57 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     return { sha };
   }
 
+  // ── snapshot ─────────────────────────────────────────────────────────────
+
+  // The quarantine (D21): what is staged, kept on `branch` by plumbing alone.
+  // A repository's hooks gate what it publishes, never whether pleach keeps the
+  // evidence of what failed. write-tree and commit-tree run no hook;
+  // update-ref runs reference-transaction, which can abort it, so it runs with
+  // the hooks path pointed at nothing. The detached HEAD stays where it is.
+  async function snapshot(cwd: string, branch: string, message: string): Promise<{ sha: string }> {
+    // update-ref moves a branch another worktree has checked out; `git branch
+    // -f` refuses that and so must this — the owner's HEAD would jump to a tree
+    // their index and files do not hold (#12). Same words as git's refusal, so
+    // the caller's busy-branch fallback reads both alike.
+    const holder = await checkedOutAt(cwd, branch);
+    if (holder !== null) {
+      throw new IsolateCatastrophicError(
+        branch,
+        `cannot force update the branch '${branch}' used by worktree at '${holder}'`,
+      );
+    }
+    const tree = await gitMust(exec, cwd, 'write-tree');
+    const sha = await gitMust(exec, cwd, 'commit-tree', tree, '-p', 'HEAD', '-m', message);
+    await gitMust(
+      exec,
+      cwd,
+      '-c',
+      'core.hooksPath=/dev/null',
+      'update-ref',
+      `refs/heads/${branch}`,
+      sha,
+    );
+    return { sha };
+  }
+
+  // The worktree that has `branch` checked out, or null. -z keeps any path
+  // intact: every attribute ends in NUL, and `worktree` opens each record.
+  async function checkedOutAt(cwd: string, branch: string): Promise<string | null> {
+    const list = await git(exec, cwd, 'worktree', 'list', '--porcelain', '-z');
+    if (list.exitCode !== 0) {
+      throw new IsolateCatastrophicError(
+        'git worktree list',
+        `exited ${list.exitCode} in ${cwd}:\n${list.output}`,
+      );
+    }
+    let path: string | null = null;
+    for (const attr of list.output.split('\0')) {
+      if (attr.startsWith('worktree ')) path = attr.slice('worktree '.length);
+      else if (attr === `branch refs/heads/${branch}`) return path;
+    }
+    return null;
+  }
+
   // ── refSha ───────────────────────────────────────────────────────────────
 
   async function refSha(cwd: string, ref: string): Promise<string | null> {
@@ -540,6 +591,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     changedFiles,
     commit,
     commitBranch,
+    snapshot,
     refSha,
     commitMessageOf,
     commitStat,

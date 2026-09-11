@@ -39,8 +39,8 @@ describe('quarantine — failed work is preserved before dispose', () => {
     // The branch exists in the in-memory git…
     expect(h.git.refs.has('quarantine/x')).toBe(true);
     // …and was committed BEFORE the tree was disposed.
-    expect(h.log.first('commitBranch', 'quarantine/x')).toBeGreaterThan(-1);
-    expect(h.log.first('commitBranch', 'quarantine/x')).toBeLessThan(h.log.first('dispose', 'x'));
+    expect(h.log.first('snapshot', 'quarantine/x')).toBeGreaterThan(-1);
+    expect(h.log.first('snapshot', 'quarantine/x')).toBeLessThan(h.log.first('dispose', 'x'));
     // Journal names it.
     expect(h.journal.some((e) => e.event === 'quarantined' && e.node === 'x')).toBe(true);
   });

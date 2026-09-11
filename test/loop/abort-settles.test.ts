@@ -81,7 +81,7 @@ describe('an aborted wait settles as aborted and keeps the work (D16)', () => {
     // The tree as it stands: every changed path staged onto quarantine/<id>,
     // committed before the tree is disposed.
     expect(h.git.refs.has('quarantine/x')).toBe(true);
-    const commitAt = h.log.first('commitBranch', 'quarantine/x');
+    const commitAt = h.log.first('snapshot', 'quarantine/x');
     expect(commitAt).toBeGreaterThan(-1);
     const quarantineStage = h.log
       .of('stage')
