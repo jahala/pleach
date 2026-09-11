@@ -109,6 +109,7 @@ async function runUnderLock(
   opts: ResolvedOpts,
 ): Promise<RunSummary> {
   await deps.journal.append({ event: 'run-start', goal: plan.goal, nodes: plan.nodes.length });
+  await journalGapsOrJournal(deps);
 
   // Defensive copy (M3) — never mutate what the seam returned.
   const closed = new Map<string, string | null>(await deps.ledger.readClosed(plan.source));
@@ -673,6 +674,29 @@ async function runUnderLock(
   };
   await deps.journal.append({ event: 'run-end', ...summary });
   return summary;
+}
+
+// The receipts witness the journal (D21). A close is written twice, as a
+// sealed receipt and as a `verdict` line, and the one file that is not
+// guarded can be lost; each latest close with no verdict line is journaled as
+// a gap, so the loss shows the next time anyone runs. The check reports and
+// never decides, so a check that cannot run is journaled and the run goes on.
+async function journalGapsOrJournal(deps: ConductorDeps): Promise<void> {
+  try {
+    const [latest, recorded] = await Promise.all([
+      deps.receipts.list(),
+      deps.journal.verdictNodes(),
+    ]);
+    for (const { node, sha256, closedAt } of latest) {
+      if (recorded.has(node)) continue;
+      await deps.journal.append({ event: 'journal-gap', node, receiptSha256: sha256, closedAt });
+    }
+  } catch (err) {
+    await deps.journal.append({
+      event: 'journal-gap-check-failed',
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
