@@ -104,10 +104,15 @@ Every node builds in a disposable worktree off its verified deps, so conflict ma
 - [x] (code) C1 gate-must-fail-closed: scanMarkers on non-repo path throws IsolateCatastrophicError. (inferred from test/integration/isolate.test.ts lead-review) · test/integration/isolate.test.ts @b18d9e9
 - [x] (code) S1/C2 changedFiles: modified tracked + untracked-unignored listed; gitignored files excluded. (inferred from test/integration/isolate.test.ts lead changedFiles) · test/integration/isolate.test.ts @888fd83
 
+- [x] (code) `resolveGitDir` returns an absolute git dir for a relative repo root, for a plain clone and for a linked worktree alike — under `--repo-root .` on a plain clone the relative `.git` reached the isolate seam, whose `git -C <path>` with `cwd: <path>` resolved it twice and failed with ENOTDIR after the first worker stopped (D22, jahala/pleach#102) · test/unit/gitdir.test.ts @7cec250 · by cli
+
+- [x] (code) A relative `--repo-root` that is not `.`, run from another cwd, closes a node: the face resolves the root once, so the isolate and clean seams' `git -C <root>` with `cwd: <root>` never resolve a relative path twice (D22, jahala/pleach#102) · test/e2e/repo-root-relative.test.ts @988fed1 · by cli
+
 ## For
 #developer #operator
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/isolate-seam.tend.html) by `loop migrate`
+- 2026-09-11 D22 (jahala/pleach#102): conducting umbel's first loop on a plain clone with `--repo-root .` failed every node after the worker stopped — ENOTDIR from a relative git dir resolved twice; fixed by hand during a hold (no workers), test first, and verified with the pinned tend2.
 </script>
 <script src="./loop.js"></script>
