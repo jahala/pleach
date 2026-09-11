@@ -17,7 +17,7 @@ describe('quarantine busy-branch fallback (#12)', () => {
       changedByNode: { x: ['src/broken.ts'] },
       execScript: (argv) =>
         argv[0] === 'failing-tool' ? { output: 'boom', exitCode: 1 } : { output: '', exitCode: 0 },
-      commitBranchBusy: (branch) => branch === 'quarantine/x',
+      branchBusy: (branch) => branch === 'quarantine/x',
     });
     const plan = PlanSchema.parse({
       goal: 'g',

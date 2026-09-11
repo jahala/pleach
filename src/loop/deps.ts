@@ -86,6 +86,11 @@ export interface IsolateSeam {
   commit(cwd: string, message: string): Promise<{ sha: string }>;
   // Commit what is staged and force-point `branch` at the new commit.
   commitBranch(cwd: string, branch: string, message: string): Promise<{ sha: string }>;
+  // Keep what is staged on `branch` without committing (D21): the quarantine.
+  // No hook runs, so no hook can refuse the evidence of what failed; HEAD does
+  // not move. A branch checked out in any worktree is refused like
+  // commitBranch refuses it ('used by worktree') — never moved under its owner.
+  snapshot(cwd: string, branch: string, message: string): Promise<{ sha: string }>;
   // Resolve a ref to a commit SHA in the repo containing `cwd`; null if the
   // ref does not exist (ledger B1 — the baseRef fallback chain).
   refSha(cwd: string, ref: string): Promise<string | null>;

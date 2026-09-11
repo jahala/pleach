@@ -700,15 +700,17 @@ export async function writeReceiptOrJournal(
   }
 }
 
-// Failed work is evidence, not garbage: commit the tree's changes to
+// Failed work is evidence, not garbage: snapshot the tree's changes to
 // quarantine/<id> — never node/<id>, nothing was verified — so the operator can
 // inspect what the agent actually wrote instead of debugging from a 2000-char
-// output tail. Best-effort: a quarantine failure journals and never masks the
-// real verdict. An unchanged tree quarantines nothing, unless the caller says
-// otherwise: a re-adjudication (D17) judges a tree it did not write, and its
-// refusal is a fact about that tree that must reach a commit of its own — no
-// terminal verdict without an artifact (D11). Returns the quarantine refs when
-// a commit landed, undefined otherwise — the caller writes the receipt either way.
+// output tail. A snapshot runs no hook (D21): the repository's hooks gate what
+// it publishes, never what pleach keeps. Best-effort: a quarantine failure
+// journals and never masks the real verdict. An unchanged tree quarantines
+// nothing, unless the caller says otherwise: a re-adjudication (D17) judges a
+// tree it did not write, and its refusal is a fact about that tree that must
+// reach a commit of its own — no terminal verdict without an artifact (D11).
+// Returns the quarantine refs when a snapshot landed, undefined otherwise — the
+// caller writes the receipt either way.
 export async function quarantineTree(
   deps: ConductorDeps,
   plan: Plan,
@@ -731,7 +733,7 @@ export async function quarantineTree(
     let sha = '';
     for (const branch of [base, `${base}.2`, `${base}.3`, `${base}.4`]) {
       try {
-        ({ sha } = await deps.isolate.commitBranch(iso.cwd, branch, message));
+        ({ sha } = await deps.isolate.snapshot(iso.cwd, branch, message));
         landedBranch = branch;
         break;
       } catch (err) {

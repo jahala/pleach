@@ -204,9 +204,10 @@ export interface HarnessOpts {
   // defaults to one-added-line per changed file unless given.
   stagedDiffByNode?: Record<string, string>;
   stagedNumstatByNode?: Record<string, { file: string; added: number; deleted: number }[]>;
-  // Branches whose commitBranch refuses like real git's checked-out-branch
-  // guard (exit 128 'used by worktree') — the #12 quarantine-collision seam.
-  commitBranchBusy?: (branch: string) => boolean;
+  // Branches checked out in another worktree: commitBranch and snapshot refuse
+  // them like real git's guard ('used by worktree') — the #12
+  // quarantine-collision seam.
+  branchBusy?: (branch: string) => boolean;
   // marker files left in cwd, keyed by node id (simulates auditor droppings).
   markersByNode?: Record<string, string[]>;
   // paths the node's tree ignores — the repo's .gitignore, as a fixture (D14).
@@ -281,6 +282,28 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   };
 
   // ── isolate ─────────────────────────────────────────────────────────────────
+  // Keep what is staged in `cwd` on `branch`: commitBranch and snapshot alike.
+  function pointBranch(
+    kind: 'commitBranch' | 'snapshot',
+    cwd: string,
+    branch: string,
+    message: string,
+  ): { sha: string } {
+    if (opts.branchBusy?.(branch)) {
+      log.push(`${kind}-busy`, branch);
+      throw new Error(`cannot force update the branch '${branch}' used by worktree at /w`);
+    }
+    const sha = git.newSha();
+    const stat = git.statOf(cwd);
+    if (stat !== null) git.commitStats.set(sha, stat);
+    git.refs.set(branch, sha);
+    git.commitMessages.set(branch, message);
+    git.commitMessages.set(sha, message);
+    git.index.delete(cwd);
+    log.push(kind, branch, sha);
+    return { sha };
+  }
+
   const isolate: IsolateSeam = {
     async isolate(node: Node, baseRefs): Promise<Isolation> {
       log.push('isolate', node.id, baseRefs.join(','));
@@ -382,19 +405,12 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       return { sha };
     },
     async commitBranch(cwd, branch, message): Promise<{ sha: string }> {
-      if (opts.commitBranchBusy?.(branch)) {
-        log.push('commitBranch-busy', branch);
-        throw new Error(`cannot force update the branch '${branch}' used by worktree at /w`);
-      }
-      const sha = git.newSha();
-      const stat = git.statOf(cwd);
-      if (stat !== null) git.commitStats.set(sha, stat);
-      git.refs.set(branch, sha);
-      git.commitMessages.set(branch, message);
-      git.commitMessages.set(sha, message);
-      git.index.delete(cwd);
-      log.push('commitBranch', branch, sha);
-      return { sha };
+      return pointBranch('commitBranch', cwd, branch, message);
+    },
+    // The quarantine (D21): the same branch move, logged apart so a test can
+    // tell a snapshot from a commit. The in-memory git runs no hooks either way.
+    async snapshot(cwd, branch, message): Promise<{ sha: string }> {
+      return pointBranch('snapshot', cwd, branch, message);
     },
     async refSha(_cwd, ref): Promise<string | null> {
       return git.refs.get(ref) ?? null;
