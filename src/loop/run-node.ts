@@ -988,7 +988,8 @@ const NO_OUTPUT_MARKER =
   '(gate produced no output — the command died before printing, was killed, or never spawned)';
 
 // A gate's output, capped from the end; no output is named, never left blank.
-function outputTail(output: string): string {
+// Exported for run-plan: the verified commit is settle's gate (D21).
+export function outputTail(output: string): string {
   return output.length === 0 ? NO_OUTPUT_MARKER : output.slice(-EVIDENCE_TAIL);
 }
 
