@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>record-survives · garden</title>
+<link rel="stylesheet" href="./loop.css">
+<body>
+<noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
+<script type="text/markdown" id="loop">
+# The record survives what the repository does
+
+**Goal.** A refused commit is a gate verdict like any other: the tree is quarantined by a snapshot no hook can refuse, the receipt carries the hook's own output, and the node settles failed instead of vanishing. The run journal can be lost and still be recovered: a gap between the receipts and the journal is journaled on the next run, and every run leaves a copy of its own lines beside the receipts. A worker that wrote BLOCKED.md has finished and explained: the node settles blocked at once with the file's text, no retry.
+
+Ledger D21; jahala/pleach#96, #97, #93 — the "Nothing is lost" milestone, reopened. A planted repository's pre-commit hook refused every commit in a fresh worktree and pleach kept nothing of a finished build; the stem's journal lost nineteen nodes between two runs while the receipts beside it survived; a node that explained why it could not finish was run again to explain it again.
+
+## How
+
+The quarantine is a snapshot. `IsolateSeam.snapshot(cwd, branch, message)` writes the index and working tree with `git write-tree`, `commit-tree` and `update-ref` — no hook runs — and `quarantineOrJournal` uses it, so evidence never depends on what the repository's hooks allow. The verified commit keeps going through `git commit`: a hook is the repository's own gate, and a hook that refuses a verified tree is a fact. When it refuses, settle no longer disposes and forgets: the node settles failed with `gate.ran: 'commit'` and the hook's output as the tail, the tree is quarantined by snapshot, the receipt is written and names the quarantine.
+
+The journal has a witness. On `run-start`, every receipt whose node has no `verdict` line in the journal is journaled as `journal-gap` {node, receiptSha256, closedAt}, so a vanished file is visible the next time anyone runs. At `run-end`, the run's own lines are copied to `<git-dir>/pleach/receipts/runs/<run-id>.journal.jsonl` and named on the `run-end` line, so the ledger can be rebuilt from what is kept beside the receipts.
+
+BLOCKED.md is a verdict. When an attempt's tree holds `BLOCKED.md` at its root, run-node settles the node `blocked` at once — the file's text as `blockedReason`, the tree quarantined, no retry — and the re-prompt of any retry says in one sentence that it starts from the prompt alone, because a note sent to the previous attempt did not survive it.
+
+## Tests
+- [ ] (code) `IsolateSeam.snapshot` records the index and working tree on a branch through `write-tree`, `commit-tree` and `update-ref`, running no hook — proven against a real repository whose pre-commit hook refuses everything; `quarantineOrJournal` uses it, so a quarantine lands where a commit would have been refused · test/integration/snapshot-quarantine.test.ts
+- [ ] (code) A verified commit the repository's hook refuses settles the node failed with `gate.ran: 'commit'` and the hook's output as the tail, the tree quarantined by snapshot, the receipt written and naming the quarantine, `node/<id>` absent — nothing disposed before it is kept · test/loop/commit-refused.test.ts
+- [ ] (code) On `run-start`, every receipt whose node has no `verdict` line in the journal is journaled as `journal-gap` {node, receiptSha256, closedAt}; a complete journal journals none · test/loop/journal-gap.test.ts
+- [ ] (code) At `run-end` the run's own journal lines are copied to `<git-dir>/pleach/receipts/runs/<run-id>.journal.jsonl` and the `run-end` line names the file; the copy holds exactly the run's lines from `run-start` to `run-end` · test/integration/run-journal-copy.test.ts
+- [ ] (code) An attempt whose tree holds `BLOCKED.md` at its root settles the node `blocked` at once with the file's text as `blockedReason`, the tree quarantined and no retry; a retry's re-prompt states that it starts from the prompt alone · test/loop/blocked-md.test.ts
+- [ ] (code) docs/journal.md documents `journal-gap`, `run-end`'s `journalCopy` and the BLOCKED.md rule; `KINDS` pins the event; README states the three behaviours · test/unit/journal-doc.test.ts
+- [ ] (code) Through the real CLI with real git: a repository whose pre-commit hook refuses commits yields a failed node with a snapshot quarantine and a receipt; a deleted journal is reported as gaps on the next run and the previous run's copy exists beside the receipts; a node that writes BLOCKED.md settles blocked in one attempt · test/e2e/record-survives.test.ts
+
+## Needs
+#nothing-is-lost #teardown-keeps-work #lock-journal
+
+## For
+#operator
+
+## Tried
+- 2026-09-12 shaped from the reopened "Nothing is lost" milestone (jahala/pleach#96, #97, #93), after the stem builder lost a finished build to a pre-commit hook and nineteen nodes' journal lines to a vanished file. Design: quarantine by snapshot (a hook may refuse a commit; it must never refuse the evidence), while the verified commit still runs the hooks (they are the repository's gate); a journal-gap check that reads the receipts as the witness (they are already per close and sealed); a per-run copy beside the receipts rather than a second journal (the ledger reads one shape, twice kept); BLOCKED.md as a verdict rather than a retry. Rejected: skipping hooks for the verified commit too (a repository's own gate is not pleach's to bypass); sealing the run copy under a run receipt (a run has no receipt — the copy is named by the run-end line, which is enough to find it).
+</script>
+<script src="./loop.js"></script>
