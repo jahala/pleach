@@ -208,6 +208,11 @@ export interface HarnessOpts {
   // them like real git's guard ('used by worktree') — the #12
   // quarantine-collision seam.
   branchBusy?: (branch: string) => boolean;
+  // The repository's pre-commit hook refusing the verified commit (D21): the
+  // hook's output. commitBranch throws what the real seam throws when `git
+  // commit` exits non-zero — the output inside the message; snapshot runs no
+  // hook, so a quarantine still lands.
+  commitBranchThrows?: string;
   // marker files left in cwd, keyed by node id (simulates auditor droppings).
   markersByNode?: Record<string, string[]>;
   // paths the node's tree ignores — the repo's .gitignore, as a fixture (D14).
@@ -405,6 +410,13 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       return { sha };
     },
     async commitBranch(cwd, branch, message): Promise<{ sha: string }> {
+      if (opts.commitBranchThrows !== undefined) {
+        log.push('commitBranch-refused', branch);
+        throw new IsolateCatastrophicError(
+          `git commit --allow-empty -m ${message}`,
+          `exited 1 in ${cwd}:\n${opts.commitBranchThrows}`,
+        );
+      }
       return pointBranch('commitBranch', cwd, branch, message);
     },
     // The quarantine (D21): the same branch move, logged apart so a test can
