@@ -355,6 +355,16 @@ checkpoint but have different lifetimes and trust domains.**
   `test/loop/journal-gap.test.ts`, `test/integration/run-journal-copy.test.ts`,
   `test/loop/blocked-md.test.ts`, `test/unit/journal-doc.test.ts`, `test/e2e/record-survives.test.ts`.
 
+- **D22 ⚠ [field] The git dir was as relative as the repo root.** jahala/pleach#102 (2026-09-11).
+  Conducting on a plain clone with `--repo-root .`, the first `git status` after a worker stopped failed
+  with ENOTDIR: `resolveGitDir` joined the relative root to `.git`, the worktree base inherited the
+  relative path, and the isolate seam runs `git -C <path>` with `cwd: <path>`, so the path was resolved
+  once by the cwd and again by `-C` from inside the worktree, where `.git` is a file. No receipt, no
+  quarantine, the node failed after zero attempts; the abort path lost its tree the same way. Eight
+  conducted loops never saw it because a Conductor workspace is a linked worktree whose `.git` file
+  carries an absolute pointer. **Fix:** `resolveGitDir` resolves the root absolute before anything is
+  joined to it, for a plain clone and for a linked worktree alike. Test: `test/unit/gitdir.test.ts`.
+
 ### Verified-sound (attacks refuted — do not relitigate)
 
 `--detach` fan-out (two detached worktrees at one commit are legal); the closed-add-then-dispose-inside-
