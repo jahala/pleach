@@ -18,6 +18,8 @@ tolerate unknown events and unknown fields.
 | event | fields | meaning |
 |---|---|---|
 | `run-start` | `goal`, `nodes` (count) | a run began |
+| `journal-gap` | `node`, `receiptSha256`, `closedAt` (the receipt file's modification time, RFC 3339 UTC — not a sealed fact) | written right after `run-start`, once per node whose latest receipt at `<git-dir>/pleach/receipts/<node>.json` has no `verdict` line anywhere in this journal (D21). The receipts are sealed and kept per close; the journal is one file that can be lost. A gap is the journal missing a close the receipts still hold, whatever plan wrote it. A complete journal writes none |
+| `journal-gap-check-failed` | `detail` | the gap check could not read the receipts or the journal. It reports and never decides, so the run goes on |
 | `node-start` | `node` | a node's attempt ladder began |
 | `resumed-from-quarantine` | `node`, `sha` | a pending node was seeded from `quarantine/<id>` instead of built from nothing (D17) — the sha is the checkout base, its dependencies merge onto it, and the whole gate ladder runs over it: a quarantined tree was never gated. The close records it as `facts.base`; `pleach run --fresh` refuses the seed. A phased node re-enters its work list after the red phase that tree already sealed (`facts.redSealedAt`) — a tree holding the failing test cannot demonstrate it failing again |
 | `resume-refused` | `node`, `sha`, `detail` | a `quarantine/<id>` was found and not used: the node's latest close kept a different tree (or published one), so the branch is an older failure its own verified close already replaced — or the plan's phase list has moved since that close sealed its red, so re-entering after the recorded index would skip a phase that never ran (D17). The node builds from its dependencies as a first run does |
@@ -78,7 +80,7 @@ profile's names:
 
 | kind | lines | mirrors |
 |---|---|---|
-| `run.lifecycle` | the run and the landing, beginning to end: `run-start`, `run-end`, `run-aborted`, `run-stopped`, `land-start`, `land-setup`, `land-bisect`, `land-culprit`, `land-integrity-failed`, `land-blocked`, `land-conflict`, `landed` | — |
+| `run.lifecycle` | the run and the landing, beginning to end: `run-start`, `journal-gap`, `journal-gap-check-failed`, `run-end`, `run-aborted`, `run-stopped`, `land-start`, `land-setup`, `land-bisect`, `land-culprit`, `land-integrity-failed`, `land-blocked`, `land-conflict`, `landed` | — |
 | `node.lifecycle` | one node's passage, and every record kept or refused along the way: `node-start`, `blocked`, `phase-commit`, `set-aside`, `resumed-from-quarantine`, `resume-refused`, `audit-egress-unparseable`, `verdict`, `closed`, `not-closed`, `quarantined`, `quarantine-failed`, `receipt`, `gate-artifact`, `receipt-write-failed`, `acceptance-changed`, `acceptance-cascade`, `rebuild-required`, `sha-mismatch`, `dispose-failed` | `plotplot.node` |
 | `gate.result` | a gate said yes or no: `gate-fail`, `gate-flaky`, `land-gate`, `land-gate-retry`, `land-gate-refused`, `land-setup-failed` | `plotplot.gate`, `plotplot.node` (`null` on land-level lines, which belong to no node) |
 | `gate.retry` | an exec gate's one same-tree re-run: `gate-retry` | `plotplot.node`, `plotplot.gate` |

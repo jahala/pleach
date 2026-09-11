@@ -1,4 +1,4 @@
-import { appendFile, mkdir } from 'node:fs/promises';
+import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { envelope } from '../core/journal-envelope.ts';
 import type { JournalSeam } from '../loop/deps.ts';
@@ -54,5 +54,35 @@ export function createJournal(
         }
       }
     },
+    async verdictNodes(): Promise<Set<string>> {
+      const nodes = new Set<string>();
+      let text: string;
+      try {
+        text = await readFile(path, 'utf8');
+      } catch (err) {
+        // A journal that is not there holds no verdict — the very gap the
+        // receipts witness (D21). Any other failure is the reader's to journal.
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return nodes;
+        throw err;
+      }
+      for (const raw of text.split('\n')) {
+        const line = parseLine(raw);
+        if (line?.event === 'verdict' && typeof line.node === 'string') nodes.add(line.node);
+      }
+      return nodes;
+    },
   };
+}
+
+// One journal line as an object, or null when it is not one.
+function parseLine(raw: string): Record<string, unknown> | null {
+  try {
+    const value: unknown = JSON.parse(raw);
+    return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
+  } catch {
+    // A line this seam did not write whole (a torn append, a hand edit, the
+    // empty tail after the last newline) is not a verdict line. Dropping it
+    // keeps the rest of the record readable, and null is that answer.
+    return null;
+  }
 }

@@ -96,6 +96,7 @@ function landing(repo: string): Landing {
       if (event.event === 'land-start') Object.assign(during, await lockFiles(repo));
       await h.deps.journal.append(event);
     },
+    verdictNodes: () => h.deps.journal.verdictNodes(),
   };
   return { h, deps: { ...h.deps, lock: createLockSeam(), journal: watched }, during };
 }

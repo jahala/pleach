@@ -186,6 +186,18 @@ export interface LockSeam {
 
 export interface JournalSeam {
   append(event: Record<string, unknown>): Promise<void>;
+  // The nodes this journal holds a `verdict` line for, read in one pass — the
+  // receipts' witness at run-start (D21). No journal holds none.
+  verdictNodes(): Promise<Set<string>>;
+}
+
+// A node's latest close as the store holds it (D21). `closedAt` is when the
+// store last wrote that file, its modification time: honest, but not sealed —
+// no receipt fact records when a close happened.
+export interface ReceiptListing {
+  node: string;
+  sha256: string;
+  closedAt: string;
 }
 
 // The receipt store (§D): one JSON file per node under
@@ -207,6 +219,10 @@ export interface ReceiptStore {
   // One named close — how `previousReceiptSha256` is followed back through a
   // node's history. Missing or unreadable is null, exactly like read().
   readAt(node: string, receiptSha256: string): Promise<Receipt | null>;
+  // Every node's latest close, whatever plan wrote it, in node order. An
+  // unreadable file is no record, exactly like read(); a store that cannot be
+  // listed throws.
+  list(): Promise<ReceiptListing[]>;
   // The receipt this artifact belongs to, so the store can keep it under that
   // close's own name. Returns the path it wrote — what the journal records and
   // the receipt file names. Write errors propagate; run-plan owns the

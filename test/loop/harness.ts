@@ -11,6 +11,7 @@ import type {
   LedgerSeam,
   LockHandle,
   LockSeam,
+  ReceiptListing,
   RunnerSeam,
   Worker,
   WorkerResult,
@@ -234,6 +235,9 @@ export interface HarnessOpts {
   // Make the receipt store's writeArtifact throw (fault injection for the
   // never-fail-a-close rule at settle, D14).
   writeArtifactThrows?: Error;
+  // Make the receipt store's list() throw (fault injection for the run-start
+  // gap check, which must never fail the run, D21).
+  receiptsListThrows?: Error;
 }
 
 export interface Harness {
@@ -589,6 +593,13 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     async append(event): Promise<void> {
       journalEvents.push(event);
     },
+    async verdictNodes(): Promise<Set<string>> {
+      const nodes = new Set<string>();
+      for (const e of journalEvents) {
+        if (e.event === 'verdict' && typeof e.node === 'string') nodes.add(e.node);
+      }
+      return nodes;
+    },
   };
 
   // ── receipts ────────────────────────────────────────────────────────────────
@@ -597,6 +608,10 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   // keyed the way it names it.
   const closeStore = new Map<string, Receipt>();
   for (const [node, seeded] of receiptsStore) closeStore.set(ownName(node, seeded.sha256), seeded);
+  // When each node's latest was written: the real store's file mtime (D21). A
+  // receipt that never went through write() was there when the store was made.
+  const storeMadeAt = new Date().toISOString();
+  const writtenAt = new Map<string, string>();
   const artifactStore = new Map<string, string>();
   const receipts = {
     async writeArtifact(
@@ -625,6 +640,17 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       const kept = JSON.parse(JSON.stringify(receipt)) as Receipt;
       closeStore.set(ownName(node, receipt.sha256), kept);
       receiptsStore.set(node, kept);
+      writtenAt.set(node, new Date().toISOString());
+    },
+    async list(): Promise<ReceiptListing[]> {
+      if (opts.receiptsListThrows) throw opts.receiptsListThrows;
+      return [...receiptsStore]
+        .sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))
+        .map(([node, receipt]) => ({
+          node,
+          sha256: receipt.sha256,
+          closedAt: writtenAt.get(node) ?? storeMadeAt,
+        }));
     },
     async read(node: string): Promise<Receipt | null> {
       return receiptsStore.get(node) ?? null;
