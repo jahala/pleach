@@ -189,6 +189,10 @@ export interface JournalSeam {
   // The nodes this journal holds a `verdict` line for, read in one pass — the
   // receipts' witness at run-start (D21). No journal holds none.
   verdictNodes(): Promise<Set<string>>;
+  // The lines from the `run-start` carrying `runId` to the end, verbatim as
+  // the journal holds them — the run's own copy at run-end (D21). A journal
+  // that no longer holds that run-start throws JournalRunMissingError.
+  linesSince(runId: string): Promise<string[]>;
 }
 
 // A node's latest close as the store holds it (D21). `closedAt` is when the
@@ -237,6 +241,12 @@ export interface ReceiptStore {
   // — never an earlier close's, which its own receipt seals. Nothing to forget
   // is an answer, not a failure; other errors propagate like writeArtifact's.
   discardArtifact(node: string, kind: ArtifactKind, receiptSha256: string): Promise<void>;
+  // Where a run's copy of its own journal lines is kept (D21): known before
+  // the lines are, because the `run-end` line names it and is its last line.
+  runJournalPath(runId: string): string;
+  // Keep the run's lines, one per line, at runJournalPath(runId). Write errors
+  // propagate; run-plan owns the never-fail-a-run rule.
+  writeRunJournal(runId: string, lines: readonly string[]): Promise<void>;
 }
 
 export interface ConductorDeps {

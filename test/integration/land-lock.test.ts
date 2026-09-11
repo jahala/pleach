@@ -97,6 +97,7 @@ function landing(repo: string): Landing {
       await h.deps.journal.append(event);
     },
     verdictNodes: () => h.deps.journal.verdictNodes(),
+    linesSince: (runId) => h.deps.journal.linesSince(runId),
   };
   return { h, deps: { ...h.deps, lock: createLockSeam(), journal: watched }, during };
 }

@@ -30,6 +30,10 @@ const ARTIFACT_EXTENSION: Record<ArtifactKind, string> = {
   handback: '.handback.md',
 };
 
+// Each run's copy of its own journal lines (D21), beside the closes it made.
+// A directory, so list() — which reads only `.json` files — never sees one.
+const RUNS = 'runs';
+
 // The close's own name; `<node><suffix>` is the same thing for the latest.
 function ownName(node: string, receiptSha256: string, suffix: string): string {
   return `${node}.${receiptPrefix(receiptSha256)}${suffix}`;
@@ -74,6 +78,10 @@ export function createReceiptStore(dir: string): ReceiptStore {
       dirReady = mkdir(dir, { recursive: true }).then(() => undefined);
     }
     return dirReady;
+  }
+
+  function runJournalPath(runId: string): string {
+    return join(dir, RUNS, `${runId}.journal.jsonl`);
   }
 
   return {
@@ -138,6 +146,11 @@ export function createReceiptStore(dir: string): ReceiptStore {
       }
       // In node order, never the directory's: `a.b.json` sorts before `a.json`.
       return latest.sort((x, y) => (x.node < y.node ? -1 : x.node > y.node ? 1 : 0));
+    },
+    runJournalPath,
+    async writeRunJournal(runId: string, lines: readonly string[]): Promise<void> {
+      await mkdir(join(dir, RUNS), { recursive: true });
+      await writeFile(runJournalPath(runId), lines.map((l) => `${l}\n`).join(''), 'utf8');
     },
   };
 }
