@@ -403,6 +403,12 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       if (months.length === 0) return null;
       return months.map((p) => tree[p] ?? '').join('');
     },
+    // BLOCKED.md at the tree root, as the worker wrote it (writeBlocked), or
+    // null — the file the loop reads as the attempt's verdict (D21).
+    async readBlocked(cwd): Promise<string | null> {
+      log.push('readBlocked', undefined, cwd);
+      return git.blocked.get(cwd) ?? null;
+    },
     async stage(cwd, files): Promise<void> {
       log.push('stage', undefined, `${cwd}:${files.join(',')}`);
       const changed = git.changed.get(cwd) ?? [];

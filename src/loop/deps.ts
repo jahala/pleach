@@ -64,6 +64,11 @@ export interface IsolateSeam {
   // directory aside), so settle keeps it beside the receipt before the tree
   // goes — the last moment it can be read at all.
   readFriction(cwd: string): Promise<string | null>;
+  // The text of BLOCKED.md at the worktree root, or null when there is no such
+  // file (D21). The work order tells a worker to write it when the plan cannot
+  // be finished here; the loop reads it as the attempt's verdict. Only the
+  // root counts — a BLOCKED.md elsewhere is ordinary work.
+  readBlocked(cwd: string): Promise<string | null>;
   // Scoped staging — only the given paths, never `git add -A` (ledger S1).
   stage(cwd: string, files: readonly string[]): Promise<void>;
   // The staged diff's text and per-file numstat — the hygiene gate's raw
