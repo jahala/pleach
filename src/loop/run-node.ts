@@ -164,6 +164,31 @@ export async function runNode(
     return live === null ? out : { ...out, iso: live };
   }
 
+  // A worker that wrote BLOCKED.md at the root has finished and explained
+  // (D21), however its attempt then ended — a stop, a red command, a prompt it
+  // sat at, the clock: no gate runs over the explanation, and no retry asks for
+  // it again in the very tree that holds it. The live tree goes back like
+  // every blocked hand-back (D11), so settle quarantines it — BLOCKED.md
+  // included, because it is the evidence. Null when the tree holds no file.
+  async function settleIfBlocked(
+    cwd: string,
+    telemetry: Verdict['telemetry'],
+    extra: Pick<RunNodeResult, 'runnerDetail'> = {},
+  ): Promise<RunNodeResult | null> {
+    const text = await deps.isolate.readBlocked(cwd);
+    if (text === null) return null;
+    const base = baseVerdict(node, attempts);
+    return handBack({
+      verdict: {
+        ...base,
+        status: 'blocked',
+        evidence: { ...base.evidence, blockedReason: blockedReasonOf(text) },
+        telemetry,
+      },
+      ...extra,
+    });
+  }
+
   // Resolved-provider diversity preflight (binding prose) — before any spawn.
   const preflight = auditDiversityRefusal(node, node.worker.provider ?? DEFAULT_WORKER_PROVIDER);
   if (preflight !== undefined) throw new PlanInvalidError([preflight]);
@@ -294,6 +319,7 @@ export async function runNode(
             await sealRedPhase(node, cwd, deps, red, exitCode);
             redSealedAt = phaseIndex;
           },
+          wroteBlocked: async () => (await deps.isolate.readBlocked(cwd)) !== null,
         });
       } catch (err) {
         await worker?.kill();
@@ -310,6 +336,8 @@ export async function runNode(
           );
         }
         if (err instanceof GateFailedError) {
+          const blocked = await settleIfBlocked(cwd, {});
+          if (blocked !== null) return blocked;
           const decision = handleGate(node, attempts, maxAttempts, err);
           if (decision.settle) return handBack(decision.settle);
           evidence = decision.evidence;
@@ -333,6 +361,12 @@ export async function runNode(
           ...(result.processExit !== undefined ? { processExit: result.processExit } : {}),
         };
         const detail = Object.keys(runnerDetail).length > 0 ? { runnerDetail } : {};
+        // A dead end is about the provider (D17) and an aborted one about the
+        // run (D16); every other end left the work's own tree to read.
+        if (klass !== 'dead' && reason !== 'aborted') {
+          const blocked = await settleIfBlocked(cwd, result.telemetry, detail);
+          if (blocked !== null) return blocked;
+        }
         if (klass === 'blocked') {
           // Hand the tree back (D11): workers edit files mid-turn — 9m40s of
           // work once died with the "nothing worth keeping" theory here.
@@ -423,6 +457,10 @@ export async function runNode(
           ...detail,
         });
       }
+
+      // ── BLOCKED.md (D21) — before any gate runs over the explanation ───────
+      const blocked = await settleIfBlocked(cwd, result.telemetry);
+      if (blocked !== null) return blocked;
 
       // ── marker gate (ledger C1) ─────────────────────────────────────────────
       const markers = await deps.isolate.scanMarkers(cwd);
@@ -988,8 +1026,19 @@ const NO_OUTPUT_MARKER =
   '(gate produced no output — the command died before printing, was killed, or never spawned)';
 
 // A gate's output, capped from the end; no output is named, never left blank.
-function outputTail(output: string): string {
+// Exported for run-plan: the verified commit is settle's gate (D21).
+export function outputTail(output: string): string {
   return output.length === 0 ? NO_OUTPUT_MARKER : output.slice(-EVIDENCE_TAIL);
+}
+
+const BLOCKED_REASON_CAP = 4000;
+const EMPTY_BLOCKED_MARKER = '(BLOCKED.md is empty — the worker wrote no explanation)';
+
+// BLOCKED.md's text as the verdict's reason (D21). Unlike a gate log, it is
+// prose read from the top, so the opening is kept; an empty file is named,
+// never left blank.
+function blockedReasonOf(text: string): string {
+  return text.trim().length === 0 ? EMPTY_BLOCKED_MARKER : text.slice(0, BLOCKED_REASON_CAP);
 }
 
 function gateEvidence(gate: string, exitCode: number, output: string): string {

@@ -729,3 +729,128 @@ describe('operator surfaces — faults refused before spend (D19)', () => {
     expect(unsaid(readme, 'cannot run', cannotRunFacts)).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// ledger: D21 — the record survives what the repository does, and each part of
+// that has a surface a reader finds it on. The journal rows D21 wrote or widened
+// name every field their appends really carry, and the `blocked` row names the
+// file a worker writes to explain itself, with the cap its text is kept under;
+// the kinds table pins the new events. The README states the three behaviours
+// an operator meets: a commit the repository's hook refuses settles failed and
+// keeps the tree, a lost journal is reported and recoverable, and BLOCKED.md
+// settles its node at once. The file name, the cap, the gate a refusal names
+// and where a run's copy is kept are read from the code, never listed here.
+// ---------------------------------------------------------------------------
+const ISOLATE_SRC = new URL('../../src/seams/isolate.ts', import.meta.url).pathname;
+
+// The rows D21 wrote, and the rows whose meaning it widened.
+const RECORD_ROWS = [
+  'run-start',
+  'journal-gap',
+  'journal-gap-check-failed',
+  'run-end',
+  'journal-copy-failed',
+  'blocked',
+];
+
+// The run-level events D21 added.
+const RECORD_EVENTS = ['journal-gap', 'journal-gap-check-failed', 'journal-copy-failed'];
+
+/** One capture out of a source file, or a loud failure naming what is missing. */
+function sourced(path: string, pattern: RegExp, what: string): string {
+  const found = readFileSync(path, 'utf8').match(pattern)?.[1];
+  if (found === undefined) throw new Error(`No ${what} in ${path}`);
+  return found;
+}
+
+/** The file a worker writes at the tree's root when the plan cannot be finished. */
+function blockedFile(): string {
+  return sourced(ISOLATE_SRC, /^const BLOCKED_FILE = '([^']+)';$/m, 'BLOCKED_FILE constant');
+}
+
+/** How much of that file's text the verdict keeps. */
+function blockedReasonCap(): string {
+  return sourced(RUN_NODE_SRC, /^const BLOCKED_REASON_CAP = (\d+);$/m, 'BLOCKED_REASON_CAP');
+}
+
+/** Where a run's copy of its own lines is kept, as `receipts/<dir>/` and its suffix. */
+function runCopyPlace(): { dir: string; suffix: string } {
+  return {
+    dir: `receipts/${sourced(RECEIPTS_SRC, /^const RUNS = '([^']+)';$/m, 'RUNS constant')}/`,
+    suffix: sourced(RECEIPTS_SRC, /\$\{runId\}(\.[a-z.]+)`/, 'run journal suffix'),
+  };
+}
+
+/** The gate a refused verified commit settles its node under. */
+function refusedCommitGate(): string {
+  return sourced(
+    RUN_PLAN_SRC,
+    /err instanceof GateFailedError \? err\.gate : '([a-z]+)'/,
+    'refused-commit gate',
+  );
+}
+
+describe('journal doc — the record survives (D21)', () => {
+  const documented = documentedEvents(readFileSync(JOURNAL_DOC, 'utf8'));
+  const literals = new Map(RECORD_ROWS.map((event) => [event, appendLiterals(event)]));
+
+  test('the record appends are read, not vacuously empty', () => {
+    for (const event of RECORD_ROWS) expect(literals.get(event)?.length ?? 0).toBeGreaterThan(0);
+    expect(lineFields(literals.get('run-end') ?? []).has('journalCopy')).toBe(true);
+    expect(lineFields(literals.get('run-start') ?? []).has('runId')).toBe(true);
+  });
+
+  test('each row names every field its appends really carry', () => {
+    const unnamed = RECORD_ROWS.flatMap((event) => {
+      const fieldsCell = rowCells(documented.get(event) ?? '')[2] ?? '';
+      return [...lineFields(literals.get(event) ?? []).keys()]
+        .filter((f) => !fieldsCell.includes(`\`${f}\``))
+        .map((f) => `${event}.${f}`);
+    }).sort();
+    expect(unnamed).toEqual([]);
+  });
+
+  test('the `run-end` row names where the run keeps its copy', () => {
+    const row = documented.get('run-end') ?? '';
+    const { dir, suffix } = runCopyPlace();
+    expect([dir, suffix].filter((part) => !row.includes(part))).toEqual([]);
+  });
+
+  test('the `blocked` row names the file a worker explains itself in, and its cap', () => {
+    const row = documented.get('blocked') ?? '';
+    expect([`\`${blockedFile()}\``, blockedReasonCap()].filter((f) => !row.includes(f))).toEqual(
+      [],
+    );
+  });
+
+  test('the kinds table pins the events that witness the journal', () => {
+    for (const name of RECORD_EVENTS) expect(KINDS[name]).toBe('run.lifecycle');
+    expect(KINDS.blocked).toBe('node.lifecycle');
+  });
+});
+
+describe('operator surfaces — the record survives (D21)', () => {
+  const readme = readFileSync(README, 'utf8');
+  const { dir, suffix } = runCopyPlace();
+
+  test('the facts are read from the code, not vacuously empty', () => {
+    expect(blockedFile()).toBe('BLOCKED.md');
+    expect(Number(blockedReasonCap())).toBeGreaterThan(0);
+    expect(refusedCommitGate()).toBe('commit');
+    expect(suffix).toContain('journal');
+  });
+
+  test("the README says a hook's refusal settles the node failed and keeps its tree", () => {
+    const facts = [refusedCommitGate(), 'failed', 'snapshot', 'quarantine/<id>', 'receipt'];
+    expect(unsaid(readme, 'hook', facts)).toEqual([]);
+  });
+
+  test('the README says a lost journal is reported, and where each run keeps its copy', () => {
+    expect(unsaid(readme, 'journal-gap', ['run-start', 'run-end', dir, suffix])).toEqual([]);
+  });
+
+  test('the README says BLOCKED.md settles its node blocked at once, with no retry', () => {
+    const facts = ['blocked', 'blockedReason', 'quarantine/<id>', 'no retry'];
+    expect(unsaid(readme, blockedFile(), facts)).toEqual([]);
+  });
+});

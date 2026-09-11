@@ -1,4 +1,9 @@
-import { GateFailedError, QuarantineBusyError, RebuildRequiredError } from '../core/errors.ts';
+import {
+  GateFailedError,
+  IsolateCatastrophicError,
+  QuarantineBusyError,
+  RebuildRequiredError,
+} from '../core/errors.ts';
 import type { Node, Plan, Verdict } from '../core/plan.ts';
 import {
   computeDegraded,
@@ -10,7 +15,7 @@ import {
 } from '../core/receipt.ts';
 import { DEFAULT_WORKER_PROVIDER, validatePlan } from '../core/validate.ts';
 import type { ArtifactKind, ConductorDeps, Isolation, RunSummary } from './deps.ts';
-import { type ResumedFrom, type RunNodeResult, runNode } from './run-node.ts';
+import { outputTail, type ResumedFrom, type RunNodeResult, runNode } from './run-node.ts';
 
 // ── run-plan: the scheduler ──────────────────────────────────────────────────
 //
@@ -103,7 +108,16 @@ async function runUnderLock(
   deps: ConductorDeps,
   opts: ResolvedOpts,
 ): Promise<RunSummary> {
-  await deps.journal.append({ event: 'run-start', goal: plan.goal, nodes: plan.nodes.length });
+  // When the run began, RFC 3339 with ':' as '-' so it can name a file: the
+  // key its copy of the journal is kept under at run-end (D21).
+  const runId = new Date().toISOString().replaceAll(':', '-');
+  await deps.journal.append({
+    event: 'run-start',
+    goal: plan.goal,
+    nodes: plan.nodes.length,
+    runId,
+  });
+  await journalGapsOrJournal(deps);
 
   // Defensive copy (M3) — never mutate what the seam returned.
   const closed = new Map<string, string | null>(await deps.ledger.readClosed(plan.source));
@@ -400,18 +414,67 @@ async function runUnderLock(
     }
   }
 
+  // The done path's own gate (D21): markers an auditor left after the in-node
+  // gate, then the verified commit, which runs the repository's hooks — they
+  // are its gate, not pleach's to skip. Freeze point (§D): facts seal BEFORE
+  // the commit exists, so the commit SHA never lives inside the hashed
+  // envelope — the trailer rides in the commit whose SHA is the diffRef, and
+  // git binds them. A refusal of either is a gate verdict like any other: it
+  // answers the failed outcome settle records instead, so the tree it refused
+  // is kept before it goes.
+  async function commitVerified(
+    node: Node,
+    outcome: RunNodeResult,
+    iso: Isolation,
+    durationMs: number,
+    resumed: ResumedFrom | undefined,
+  ): Promise<
+    | { kind: 'committed'; sha: string; receipt: Receipt }
+    | { kind: 'refused'; gate: string; outcome: RunNodeResult }
+  > {
+    try {
+      const lateMarkers = await deps.isolate.scanMarkers(iso.cwd);
+      if (lateMarkers.length > 0) {
+        throw new GateFailedError('marker', lateMarkers.join('\n'), -1); // N/A: marker scan has no exit code
+      }
+      const receipt = mintReceipt(
+        buildFacts(plan, node, outcome, durationMs, opts.pleachVersion, resumed),
+      );
+      const { sha } = await deps.isolate.commitBranch(
+        iso.cwd,
+        `node/${node.id}`,
+        `${commitMessage(plan, node, outcome.verdict)}\n\nreceipt-sha256: ${receipt.sha256}`,
+      );
+      return { kind: 'committed', sha, receipt };
+    } catch (err) {
+      const gate = err instanceof GateFailedError ? err.gate : 'commit';
+      return { kind: 'refused', gate, outcome: refusedOutcome(outcome, gate, refusal(err)) };
+    }
+  }
+
   // Commit-before-emit + dual-close, then dispose — all inside this promise so
   // the closed.set happens-before dispose, and dispose happens-before any
   // dependent's isolate (the scheduler only schedules dependents after closed).
   async function settle(
     node: Node,
-    outcome: RunNodeResult,
+    ran: RunNodeResult,
     startedAt: number,
     resumed: ResumedFrom | undefined,
     spawned: boolean,
   ): Promise<void> {
-    const { verdict, iso } = outcome;
     const durationMs = Date.now() - startedAt;
+    // A done tree is not verified until its commit lands. A refusal settles the
+    // node failed through the same path as every other failure — journaled
+    // once, the tree kept, the receipt written — never as a done that vanished.
+    const commit =
+      ran.verdict.status === 'done' && ran.iso !== undefined
+        ? await commitVerified(node, ran, ran.iso, durationMs, resumed)
+        : undefined;
+    if (commit?.kind === 'refused') {
+      await deps.journal.append({ event: 'gate-fail', node: node.id, gate: commit.gate });
+    }
+    const outcome = commit?.kind === 'refused' ? commit.outcome : ran;
+    const { verdict, iso } = outcome;
     // Record the full diagnostic shape — a failed run must be explainable from
     // the journal alone (the worktrees and sessions are gone by then).
     await deps.journal.append({
@@ -455,7 +518,7 @@ async function runUnderLock(
         : {}),
     });
 
-    if (verdict.status !== 'done' || iso === undefined) {
+    if (commit === undefined || commit.kind === 'refused' || iso === undefined) {
       // blocked / failed / dead / timeout — emit for the record; no node/<id>
       // publish. No terminal verdict without an artifact (D11): the receipt
       // ALWAYS writes; quarantine refs attach only when a commit landed.
@@ -497,85 +560,45 @@ async function runUnderLock(
     }
 
     // ── done: commit-before-emit, dispose-before-visibility ─────────────────
-    // The worktree work (markers, commit, emit) happens first; then the tree is
-    // FULLY disposed; only then do closed/failed mutate. A dependent woken by
+    // The worktree work (commit, emit) happens first; then the tree is FULLY
+    // disposed; only then do closed/failed mutate. A dependent woken by
     // another node's resolution can therefore never see this node as closed
     // while its worktree still exists (ordering invariant under concurrency).
-    let sha: string | undefined;
-    let decision: { closed: boolean } | undefined;
-    let receipt: Receipt | undefined;
-    let failure: unknown;
-    try {
-      // Pre-commit marker safety — the auditor shares the cwd and may have
-      // written markers after the in-node gate. A dirty tree FAILS, no commit.
-      const lateMarkers = await deps.isolate.scanMarkers(iso.cwd);
-      if (lateMarkers.length > 0) {
-        throw new GateFailedError('marker', lateMarkers.join('\n'), -1); // N/A: marker scan has no exit code
-      }
+    const { sha, receipt } = commit;
+    const closingVerdict: Verdict = {
+      ...verdict,
+      evidence: { ...verdict.evidence, diffRef: sha },
+    };
+    // A1 dual close: audit nodes defer to tend; non-audit nodes the conductor
+    // closes itself (tend has nothing to decide). Both commit first (B2).
+    const decision = await deps.ledger
+      .emitVerdict(closingVerdict, plan.source)
+      .catch(() => undefined);
 
-      // Freeze point (§D): facts seal BEFORE the commit exists, so the commit
-      // SHA never lives inside the hashed envelope — the trailer rides in the
-      // commit whose SHA is the diffRef, and git binds them.
-      receipt = mintReceipt(
-        buildFacts(plan, node, outcome, durationMs, opts.pleachVersion, resumed),
-      );
-      const { sha: committed } = await deps.isolate.commitBranch(
-        iso.cwd,
-        `node/${node.id}`,
-        `${commitMessage(plan, node, verdict)}\n\nreceipt-sha256: ${receipt.sha256}`,
-      );
-      sha = committed;
-      const closingVerdict: Verdict = {
-        ...verdict,
-        evidence: { ...verdict.evidence, diffRef: committed },
-      };
-
-      // A1 dual close: audit nodes defer to tend; non-audit nodes the conductor
-      // closes itself (tend has nothing to decide). Both commit first (B2).
-      decision = await deps.ledger.emitVerdict(closingVerdict, plan.source);
-    } catch (err) {
-      failure = err;
-    }
-
-    // Before the tree goes. A close that never committed writes no receipt, so
+    // Before the tree goes. A close the ledger never took writes no receipt, so
     // it keeps nothing either — there would be no receipt to name the file.
     const artifacts =
-      receipt !== undefined && failure === undefined
+      decision !== undefined
         ? await keepArtifactsOrJournal(node, iso, outcome, receipt)
         : undefined;
 
     await disposeOrJournal(deps, iso, node.id);
 
-    if (failure !== undefined || sha === undefined || decision === undefined) {
-      const err = failure;
+    if (decision === undefined) {
       failed.add(node.id);
-      const failVerdict: Verdict = {
-        ...verdict,
-        status: 'failed',
-        evidence:
-          err instanceof GateFailedError
-            ? { ...verdict.evidence, gate: { ran: err.gate, exitCode: err.exitCode } }
-            : verdict.evidence,
-      };
-      await deps.journal.append({
-        event: 'gate-fail',
-        node: node.id,
-        gate: err instanceof GateFailedError ? err.gate : 'commit',
-      });
-      await deps.ledger.emitVerdict(failVerdict, plan.source);
+      await deps.journal.append({ event: 'gate-fail', node: node.id, gate: 'commit' });
+      await deps.ledger.emitVerdict({ ...verdict, status: 'failed' }, plan.source);
       return;
     }
 
     // The receipt file is written whenever the mint's trailer reached a
     // published commit — even when tend declines the close (partial), the
     // pinned hash must stay resolvable to its facts.
-    if (receipt !== undefined) {
-      await writeReceiptOrJournal(deps, node.id, {
-        ...receipt,
-        refs: { diffRef: sha },
-        ...(artifacts !== undefined ? { artifacts } : {}),
-      });
-    }
+    await writeReceiptOrJournal(deps, node.id, {
+      ...receipt,
+      refs: { diffRef: sha },
+      ...(artifacts !== undefined ? { artifacts } : {}),
+    });
 
     const shouldClose = node.accept.audit ? decision.closed : true;
     if (shouldClose) {
@@ -657,8 +680,55 @@ async function runUnderLock(
     quarantined: [...quarantined],
     alreadyVerified,
   };
-  await deps.journal.append({ event: 'run-end', ...summary });
+  // The run-end names the copy before the copy is made, so the copy holds it.
+  const journalCopy = deps.receipts.runJournalPath(runId);
+  await deps.journal.append({ event: 'run-end', ...summary, journalCopy });
+  await copyRunJournalOrJournal(deps, runId, journalCopy);
   return summary;
+}
+
+// Every run leaves a copy of its own lines beside the receipts (D21): the
+// journal is one file that can be lost, and the receipts are kept. Like the
+// gap check, the copy reports and never decides, so a copy that cannot be
+// made — the journal lost this run's start, the store refused the write — is
+// journaled after run-end and the run's summary stands.
+async function copyRunJournalOrJournal(
+  deps: ConductorDeps,
+  runId: string,
+  journalCopy: string,
+): Promise<void> {
+  try {
+    await deps.receipts.writeRunJournal(runId, await deps.journal.linesSince(runId));
+  } catch (err) {
+    await deps.journal.append({
+      event: 'journal-copy-failed',
+      journalCopy,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+// The receipts witness the journal (D21). A close is written twice, as a
+// sealed receipt and as a `verdict` line, and the one file that is not
+// guarded can be lost; each latest close with no verdict line is journaled as
+// a gap, so the loss shows the next time anyone runs. The check reports and
+// never decides, so a check that cannot run is journaled and the run goes on.
+async function journalGapsOrJournal(deps: ConductorDeps): Promise<void> {
+  try {
+    const [latest, recorded] = await Promise.all([
+      deps.receipts.list(),
+      deps.journal.verdictNodes(),
+    ]);
+    for (const { node, sha256, closedAt } of latest) {
+      if (recorded.has(node)) continue;
+      await deps.journal.append({ event: 'journal-gap', node, receiptSha256: sha256, closedAt });
+    }
+  } catch (err) {
+    await deps.journal.append({
+      event: 'journal-gap-check-failed',
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -700,15 +770,17 @@ export async function writeReceiptOrJournal(
   }
 }
 
-// Failed work is evidence, not garbage: commit the tree's changes to
+// Failed work is evidence, not garbage: snapshot the tree's changes to
 // quarantine/<id> — never node/<id>, nothing was verified — so the operator can
 // inspect what the agent actually wrote instead of debugging from a 2000-char
-// output tail. Best-effort: a quarantine failure journals and never masks the
-// real verdict. An unchanged tree quarantines nothing, unless the caller says
-// otherwise: a re-adjudication (D17) judges a tree it did not write, and its
-// refusal is a fact about that tree that must reach a commit of its own — no
-// terminal verdict without an artifact (D11). Returns the quarantine refs when
-// a commit landed, undefined otherwise — the caller writes the receipt either way.
+// output tail. A snapshot runs no hook (D21): the repository's hooks gate what
+// it publishes, never what pleach keeps. Best-effort: a quarantine failure
+// journals and never masks the real verdict. An unchanged tree quarantines
+// nothing, unless the caller says otherwise: a re-adjudication (D17) judges a
+// tree it did not write, and its refusal is a fact about that tree that must
+// reach a commit of its own — no terminal verdict without an artifact (D11).
+// Returns the quarantine refs when a snapshot landed, undefined otherwise — the
+// caller writes the receipt either way.
 export async function quarantineTree(
   deps: ConductorDeps,
   plan: Plan,
@@ -731,7 +803,7 @@ export async function quarantineTree(
     let sha = '';
     for (const branch of [base, `${base}.2`, `${base}.3`, `${base}.4`]) {
       try {
-        ({ sha } = await deps.isolate.commitBranch(iso.cwd, branch, message));
+        ({ sha } = await deps.isolate.snapshot(iso.cwd, branch, message));
         landedBranch = branch;
         break;
       } catch (err) {
@@ -842,6 +914,32 @@ function baseRefsFor(
   const merged = node.needs.map((d) => baseRefForClosed.get(d) ?? `node/${d}`);
   if (resumeSha !== undefined) return [resumeSha, ...merged];
   return merged.length === 0 ? [ROOT_BASE_REF] : merged;
+}
+
+// What a refusal said, in its own words: a gate's evidence, or git's — the exit
+// code, the tree and the hook's output — without the ref it was attempting,
+// which carries the whole commit message.
+function refusal(err: unknown): string {
+  if (err instanceof GateFailedError) return err.evidence;
+  if (err instanceof IsolateCatastrophicError) return err.detail;
+  return err instanceof Error ? err.message : String(err);
+}
+
+// A done outcome its last gate refused (D21): failed, the refusing gate last in
+// the ladder and on the verdict, its output the tail the journal keeps and the
+// receipt's pointer hashes. -1: neither a marker scan nor a refused commit
+// hands back an exit code of its own — the hook's is inside its output.
+function refusedOutcome(outcome: RunNodeResult, gate: string, output: string): RunNodeResult {
+  return {
+    ...outcome,
+    verdict: {
+      ...outcome.verdict,
+      status: 'failed',
+      evidence: { ...outcome.verdict.evidence, gate: { ran: gate, exitCode: -1 } },
+    },
+    gates: [...(outcome.gates ?? []), { gate, exitCode: -1 }],
+    gateOutputTail: outputTail(output),
+  };
 }
 
 function commitMessage(plan: Plan, node: Node, verdict: Verdict): string {

@@ -258,3 +258,18 @@ export class JournalEventUnknownError extends Error {
     this.event = event;
   }
 }
+
+// The run's own `run-start` is not in the journal its lines are copied from
+// (D21): the file was lost or replaced while the run went on, so no copy can
+// hold the run from its start. run-plan journals it, and the run stands.
+export class JournalRunMissingError extends Error {
+  readonly name = 'JournalRunMissingError';
+  readonly path: string;
+  readonly runId: string;
+
+  constructor(path: string, runId: string) {
+    super(`no run-start for run ${runId} in ${path}: the journal lost this run's start`);
+    this.path = path;
+    this.runId = runId;
+  }
+}

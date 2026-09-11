@@ -64,6 +64,11 @@ export interface IsolateSeam {
   // directory aside), so settle keeps it beside the receipt before the tree
   // goes — the last moment it can be read at all.
   readFriction(cwd: string): Promise<string | null>;
+  // The text of BLOCKED.md at the worktree root, or null when there is no such
+  // file (D21). The work order tells a worker to write it when the plan cannot
+  // be finished here; the loop reads it as the attempt's verdict. Only the
+  // root counts — a BLOCKED.md elsewhere is ordinary work.
+  readBlocked(cwd: string): Promise<string | null>;
   // Scoped staging — only the given paths, never `git add -A` (ledger S1).
   stage(cwd: string, files: readonly string[]): Promise<void>;
   // The staged diff's text and per-file numstat — the hygiene gate's raw
@@ -86,6 +91,11 @@ export interface IsolateSeam {
   commit(cwd: string, message: string): Promise<{ sha: string }>;
   // Commit what is staged and force-point `branch` at the new commit.
   commitBranch(cwd: string, branch: string, message: string): Promise<{ sha: string }>;
+  // Keep what is staged on `branch` without committing (D21): the quarantine.
+  // No hook runs, so no hook can refuse the evidence of what failed; HEAD does
+  // not move. A branch checked out in any worktree is refused like
+  // commitBranch refuses it ('used by worktree') — never moved under its owner.
+  snapshot(cwd: string, branch: string, message: string): Promise<{ sha: string }>;
   // Resolve a ref to a commit SHA in the repo containing `cwd`; null if the
   // ref does not exist (ledger B1 — the baseRef fallback chain).
   refSha(cwd: string, ref: string): Promise<string | null>;
@@ -181,6 +191,22 @@ export interface LockSeam {
 
 export interface JournalSeam {
   append(event: Record<string, unknown>): Promise<void>;
+  // The nodes this journal holds a `verdict` line for, read in one pass — the
+  // receipts' witness at run-start (D21). No journal holds none.
+  verdictNodes(): Promise<Set<string>>;
+  // The lines from the `run-start` carrying `runId` to the end, verbatim as
+  // the journal holds them — the run's own copy at run-end (D21). A journal
+  // that no longer holds that run-start throws JournalRunMissingError.
+  linesSince(runId: string): Promise<string[]>;
+}
+
+// A node's latest close as the store holds it (D21). `closedAt` is when the
+// store last wrote that file, its modification time: honest, but not sealed —
+// no receipt fact records when a close happened.
+export interface ReceiptListing {
+  node: string;
+  sha256: string;
+  closedAt: string;
 }
 
 // The receipt store (§D): one JSON file per node under
@@ -202,6 +228,10 @@ export interface ReceiptStore {
   // One named close — how `previousReceiptSha256` is followed back through a
   // node's history. Missing or unreadable is null, exactly like read().
   readAt(node: string, receiptSha256: string): Promise<Receipt | null>;
+  // Every node's latest close, whatever plan wrote it, in node order. An
+  // unreadable file is no record, exactly like read(); a store that cannot be
+  // listed throws.
+  list(): Promise<ReceiptListing[]>;
   // The receipt this artifact belongs to, so the store can keep it under that
   // close's own name. Returns the path it wrote — what the journal records and
   // the receipt file names. Write errors propagate; run-plan owns the
@@ -216,6 +246,12 @@ export interface ReceiptStore {
   // — never an earlier close's, which its own receipt seals. Nothing to forget
   // is an answer, not a failure; other errors propagate like writeArtifact's.
   discardArtifact(node: string, kind: ArtifactKind, receiptSha256: string): Promise<void>;
+  // Where a run's copy of its own journal lines is kept (D21): known before
+  // the lines are, because the `run-end` line names it and is its last line.
+  runJournalPath(runId: string): string;
+  // Keep the run's lines, one per line, at runJournalPath(runId). Write errors
+  // propagate; run-plan owns the never-fail-a-run rule.
+  writeRunJournal(runId: string, lines: readonly string[]): Promise<void>;
 }
 
 export interface ConductorDeps {
