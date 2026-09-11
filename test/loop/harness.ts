@@ -81,6 +81,7 @@ export interface SpawnCtx {
   node: string;
   role: 'build' | 'audit';
   spawnIndex: number; // 0-based per (node, role)
+  cwd: string; // the tree this worker was spawned in — where it writes
 }
 
 export type WaitScript = (ctx: SpawnCtx, waitIndex: number) => WorkerResult | Promise<WorkerResult>;
@@ -118,7 +119,18 @@ export class InMemoryGit {
   // directory as it really is: month files beside the ledger's own state, so
   // the seam's read has something to choose between (D14).
   readonly friction = new Map<string, Record<string, string>>();
+  // worktree cwd → the text of the BLOCKED.md at its root (D21), the file the
+  // work order tells a worker to write when the plan cannot be finished here.
+  readonly blocked = new Map<string, string>();
   private shaCounter = 0;
+
+  // A worker writing BLOCKED.md at the root of its tree: the file is there to
+  // read, and the tree shows it changed like any file a worker writes.
+  writeBlocked(cwd: string, text: string): void {
+    this.blocked.set(cwd, text);
+    const changed = this.changed.get(cwd) ?? [];
+    if (!changed.includes('BLOCKED.md')) this.changed.set(cwd, [...changed, 'BLOCKED.md']);
+  }
 
   // git's own shape: one line per file, then the totals.
   statOf(cwd: string): string | null {
@@ -494,7 +506,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       const roleKey = role === 'build' ? `${nodeId}:build` : `${nodeId}:audit`;
       const spawnIndex = spawnCounters.get(roleKey) ?? 0;
       spawnCounters.set(roleKey, spawnIndex + 1);
-      const ctx: SpawnCtx = { node: nodeId, role, spawnIndex };
+      const ctx: SpawnCtx = { node: nodeId, role, spawnIndex, cwd: spec.cwd };
 
       liveWorkers += 1;
       if (liveWorkers > state.maxConcurrent) state.maxConcurrent = liveWorkers;
