@@ -17,7 +17,7 @@ tolerate unknown events and unknown fields.
 
 | event | fields | meaning |
 |---|---|---|
-| `run-start` | `goal`, `nodes` (count) | a run began |
+| `run-start` | `goal`, `nodes` (count), `runId` (when the run began, RFC 3339 UTC with `:` written `-` so it can name a file) | a run began |
 | `journal-gap` | `node`, `receiptSha256`, `closedAt` (the receipt file's modification time, RFC 3339 UTC — not a sealed fact) | written right after `run-start`, once per node whose latest receipt at `<git-dir>/pleach/receipts/<node>.json` has no `verdict` line anywhere in this journal (D21). The receipts are sealed and kept per close; the journal is one file that can be lost. A gap is the journal missing a close the receipts still hold, whatever plan wrote it. A complete journal writes none |
 | `journal-gap-check-failed` | `detail` | the gap check could not read the receipts or the journal. It reports and never decides, so the run goes on |
 | `node-start` | `node` | a node's attempt ladder began |
@@ -43,7 +43,8 @@ tolerate unknown events and unknown fields.
 | `rebuild-required` | `node` | a verified branch moved since close — refusing to trust it |
 | `sha-mismatch` | `node`, `recordedSha`, `foundSha` | ledger SHA disagrees with the branch |
 | `dispose-failed` | `node`, `detail` | worktree cleanup failure (diagnostic) |
-| `run-end` | the `RunSummary` fields (`closed`, `failed`, `partial`, `skipped`, `blocked`, `aborted`, `quarantined`, `alreadyVerified`, …) | the run settled — `aborted` names the nodes the run's own signal cut off mid-wait (D16): settled with `status: "aborted"`, receipt written, tree quarantined, never counted as failures |
+| `run-end` | the `RunSummary` fields (`closed`, `failed`, `partial`, `skipped`, `blocked`, `aborted`, `quarantined`, `alreadyVerified`, …), `journalCopy` (the path of this run's copy of its own lines) | the run settled — `aborted` names the nodes the run's own signal cut off mid-wait (D16): settled with `status: "aborted"`, receipt written, tree quarantined, never counted as failures. Right after this line, the journal's lines from this run's `run-start` through this `run-end` are copied verbatim to `journalCopy`, `<git-dir>/pleach/receipts/runs/<runId>.journal.jsonl`, so the run's record is kept beside its receipts when the journal is lost (D21). A run of another plan in the same repository at the same time appends to the same journal, and its lines in that span are copied too |
+| `journal-copy-failed` | `journalCopy`, `detail` | the copy named by the `run-end` just before could not be made: the journal no longer holds this run's `run-start`, or the store could not write it. No partial copy is kept. It reports and never decides, so the run's summary stands |
 | `run-aborted` | — | SIGINT/SIGTERM teardown (D12): no new launches; in-flight waits interrupted, their nodes settle with evidence; `run-end` still follows |
 | `run-stopped` | — | `pleach stop` drained the run (D16): the marker beside the run's lock is read in the same tick as every launch decision, so nothing further launched; in-flight nodes settled normally and kept their work, the marker is consumed, and the nodes that never started are `skipped` in the `run-end` that follows |
 | `land-start` | `goal`, `sinks` | landing began; `sinks` are the ids being landed (the `--sinks` subset, else the plan's own) |
@@ -80,7 +81,7 @@ profile's names:
 
 | kind | lines | mirrors |
 |---|---|---|
-| `run.lifecycle` | the run and the landing, beginning to end: `run-start`, `journal-gap`, `journal-gap-check-failed`, `run-end`, `run-aborted`, `run-stopped`, `land-start`, `land-setup`, `land-bisect`, `land-culprit`, `land-integrity-failed`, `land-blocked`, `land-conflict`, `landed` | — |
+| `run.lifecycle` | the run and the landing, beginning to end: `run-start`, `journal-gap`, `journal-gap-check-failed`, `run-end`, `journal-copy-failed`, `run-aborted`, `run-stopped`, `land-start`, `land-setup`, `land-bisect`, `land-culprit`, `land-integrity-failed`, `land-blocked`, `land-conflict`, `landed` | — |
 | `node.lifecycle` | one node's passage, and every record kept or refused along the way: `node-start`, `blocked`, `phase-commit`, `set-aside`, `resumed-from-quarantine`, `resume-refused`, `audit-egress-unparseable`, `verdict`, `closed`, `not-closed`, `quarantined`, `quarantine-failed`, `receipt`, `gate-artifact`, `receipt-write-failed`, `acceptance-changed`, `acceptance-cascade`, `rebuild-required`, `sha-mismatch`, `dispose-failed` | `plotplot.node` |
 | `gate.result` | a gate said yes or no: `gate-fail`, `gate-flaky`, `land-gate`, `land-gate-retry`, `land-gate-refused`, `land-setup-failed` | `plotplot.gate`, `plotplot.node` (`null` on land-level lines, which belong to no node) |
 | `gate.retry` | an exec gate's one same-tree re-run: `gate-retry` | `plotplot.node`, `plotplot.gate` |

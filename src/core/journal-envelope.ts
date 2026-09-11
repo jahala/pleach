@@ -36,6 +36,7 @@ export const KINDS: Record<string, Kind> = {
   'journal-gap': 'run.lifecycle',
   'journal-gap-check-failed': 'run.lifecycle',
   'run-end': 'run.lifecycle',
+  'journal-copy-failed': 'run.lifecycle',
   'run-aborted': 'run.lifecycle',
   'run-stopped': 'run.lifecycle',
   'land-start': 'run.lifecycle',

@@ -1,5 +1,6 @@
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { JournalRunMissingError } from '../core/errors.ts';
 import { envelope } from '../core/journal-envelope.ts';
 import type { JournalSeam } from '../loop/deps.ts';
 
@@ -70,6 +71,15 @@ export function createJournal(
         if (line?.event === 'verdict' && typeof line.node === 'string') nodes.add(line.node);
       }
       return nodes;
+    },
+    async linesSince(runId: string): Promise<string[]> {
+      const lines = (await readFile(path, 'utf8')).split('\n').filter((raw) => raw !== '');
+      // The latest start carrying the id: the run asking is the newest one.
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = parseLine(lines[i] as string);
+        if (line?.event === 'run-start' && line.runId === runId) return lines.slice(i);
+      }
+      throw new JournalRunMissingError(path, runId);
     },
   };
 }

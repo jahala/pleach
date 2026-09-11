@@ -1,4 +1,9 @@
-import { IsolateCatastrophicError, LockHeldError, type LockKind } from '../../src/core/errors.ts';
+import {
+  IsolateCatastrophicError,
+  JournalRunMissingError,
+  LockHeldError,
+  type LockKind,
+} from '../../src/core/errors.ts';
 import type { Node, Verdict } from '../../src/core/plan.ts';
 import { type Receipt, receiptPrefix } from '../../src/core/receipt.ts';
 import type {
@@ -146,6 +151,8 @@ const NO_COMMIT = '0'.repeat(40);
 // the in-memory one mirrors both so a loop test reads the same paths the
 // conductor journals. The real `<git-dir>` resolution is proven in e2e.
 const RECEIPT_DIR = '/r/.git/pleach/receipts';
+// The journal the in-memory one stands for, named in what it throws.
+const JOURNAL_PATH = '/r/.git/pleach/journal.jsonl';
 // Where the friction ledger writes inside a worktree (docs/plans/friction-ledger.md §5).
 const FRICTION_DIR = '.plotplot/friction/';
 
@@ -249,6 +256,8 @@ export interface Harness {
   receipts: Map<string, Receipt>;
   // Kept gate artifacts by the path the store returned (D14).
   artifacts: Map<string, string>;
+  // Each run's copy of its own journal lines, by the path the store names (D21).
+  runJournals: Map<string, string[]>;
   // The drain marker as the lock seam sees it (D16): set `requested` to write
   // one — before the run, or from inside a wait or a ledger emit to land it
   // mid-run; `cleared` counts the run's consumption of it.
@@ -600,6 +609,15 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       }
       return nodes;
     },
+    async linesSince(runId: string): Promise<string[]> {
+      for (let i = journalEvents.length - 1; i >= 0; i--) {
+        const e = journalEvents[i];
+        if (e?.event === 'run-start' && e.runId === runId) {
+          return journalEvents.slice(i).map((line) => JSON.stringify(line));
+        }
+      }
+      throw new JournalRunMissingError(JOURNAL_PATH, runId);
+    },
   };
 
   // ── receipts ────────────────────────────────────────────────────────────────
@@ -613,6 +631,8 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   const storeMadeAt = new Date().toISOString();
   const writtenAt = new Map<string, string>();
   const artifactStore = new Map<string, string>();
+  const runJournals = new Map<string, string[]>();
+  const runJournalPath = (runId: string): string => `${RECEIPT_DIR}/runs/${runId}.journal.jsonl`;
   const receipts = {
     async writeArtifact(
       node: string,
@@ -658,6 +678,10 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     async readAt(node: string, receiptSha256: string): Promise<Receipt | null> {
       return closeStore.get(ownName(node, receiptSha256)) ?? null;
     },
+    runJournalPath,
+    async writeRunJournal(runId: string, lines: readonly string[]): Promise<void> {
+      runJournals.set(runJournalPath(runId), [...lines]);
+    },
   };
 
   const deps: ConductorDeps = { exec, isolate, runner, ledger, lock, journal, receipts };
@@ -670,6 +694,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     journal: journalEvents,
     receipts: receiptsStore,
     artifacts: artifactStore,
+    runJournals,
     stop: stopMarker,
     get maxConcurrentWorkers() {
       return state.maxConcurrent;

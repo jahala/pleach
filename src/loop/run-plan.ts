@@ -108,7 +108,15 @@ async function runUnderLock(
   deps: ConductorDeps,
   opts: ResolvedOpts,
 ): Promise<RunSummary> {
-  await deps.journal.append({ event: 'run-start', goal: plan.goal, nodes: plan.nodes.length });
+  // When the run began, RFC 3339 with ':' as '-' so it can name a file: the
+  // key its copy of the journal is kept under at run-end (D21).
+  const runId = new Date().toISOString().replaceAll(':', '-');
+  await deps.journal.append({
+    event: 'run-start',
+    goal: plan.goal,
+    nodes: plan.nodes.length,
+    runId,
+  });
   await journalGapsOrJournal(deps);
 
   // Defensive copy (M3) — never mutate what the seam returned.
@@ -672,8 +680,32 @@ async function runUnderLock(
     quarantined: [...quarantined],
     alreadyVerified,
   };
-  await deps.journal.append({ event: 'run-end', ...summary });
+  // The run-end names the copy before the copy is made, so the copy holds it.
+  const journalCopy = deps.receipts.runJournalPath(runId);
+  await deps.journal.append({ event: 'run-end', ...summary, journalCopy });
+  await copyRunJournalOrJournal(deps, runId, journalCopy);
   return summary;
+}
+
+// Every run leaves a copy of its own lines beside the receipts (D21): the
+// journal is one file that can be lost, and the receipts are kept. Like the
+// gap check, the copy reports and never decides, so a copy that cannot be
+// made — the journal lost this run's start, the store refused the write — is
+// journaled after run-end and the run's summary stands.
+async function copyRunJournalOrJournal(
+  deps: ConductorDeps,
+  runId: string,
+  journalCopy: string,
+): Promise<void> {
+  try {
+    await deps.receipts.writeRunJournal(runId, await deps.journal.linesSince(runId));
+  } catch (err) {
+    await deps.journal.append({
+      event: 'journal-copy-failed',
+      journalCopy,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 // The receipts witness the journal (D21). A close is written twice, as a

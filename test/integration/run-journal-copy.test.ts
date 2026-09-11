@@ -8,7 +8,7 @@
 // the receipts. Real git in a tmp dir, the seams wired the way the CLI wires
 // them; the worker is a real RunnerSeam that writes its delivery and stops.
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { gitLedger } from '../../src/adapters/git.ts';
 import { PlanSchema } from '../../src/core/plan.ts';
@@ -124,4 +124,45 @@ test('two runs back to back leave two copies, each exactly its own run-start to 
     `${firstId}.journal.jsonl`,
     `${secondId}.journal.jsonl`,
   ]);
+});
+
+// ledger: D21 — the loss the copy exists for can happen mid-run. A journal
+// that no longer holds this run's run-start cannot be copied from it: a copy
+// without its start would claim a whole run it never saw. So no copy is made,
+// the line after run-end says so, and the run's closes stand.
+test('a journal lost mid-run leaves no copy, a journal-copy-failed line after run-end, and the run stands', async () => {
+  const pleachDir = join(resolveGitDir(repo), 'pleach');
+  const journalPath = join(pleachDir, 'journal.jsonl');
+  const losing: RunnerSeam = {
+    async spawnWorker(spec) {
+      const worker = await writingRunner().spawnWorker(spec);
+      return {
+        ...worker,
+        async wait(opts) {
+          await unlink(journalPath);
+          return worker.wait(opts);
+        },
+      };
+    },
+  };
+  const deps = buildDeps({ repoRoot: repo, runner: losing, ledger: gitLedger({ repo }) });
+
+  const summary = await runPlan(planFor('first'), deps, {
+    repoRoot: repo,
+    defaultTimeoutMs: 60_000,
+  });
+
+  expect(summary.closed).toEqual(['first']);
+  const events = (await readFile(journalPath, 'utf8'))
+    .split('\n')
+    .filter((l) => l !== '')
+    .map((l) => JSON.parse(l) as Record<string, unknown>);
+  expect(events.some((e) => e.event === 'run-start')).toBe(false);
+  const end = events.findIndex((e) => e.event === 'run-end');
+  expect(end).toBeGreaterThan(-1);
+  const failed = events.slice(end + 1);
+  expect(failed.map((e) => e.event)).toEqual(['journal-copy-failed']);
+  expect(failed[0]?.journalCopy).toBe(events[end]?.journalCopy);
+  expect(failed[0]?.detail).toContain('run-start');
+  expect(await readdir(join(pleachDir, 'receipts', 'runs')).catch(() => [])).toEqual([]);
 });
