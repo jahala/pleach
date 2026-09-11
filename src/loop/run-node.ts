@@ -294,6 +294,7 @@ export async function runNode(
             await sealRedPhase(node, cwd, deps, red, exitCode);
             redSealedAt = phaseIndex;
           },
+          wroteBlocked: async () => (await deps.isolate.readBlocked(cwd)) !== null,
         });
       } catch (err) {
         await worker?.kill();
@@ -421,6 +422,24 @@ export async function runNode(
             gate: { ran: `wait:${reason}`, exitCode: -1 },
           }),
           ...detail,
+        });
+      }
+
+      // ── BLOCKED.md (D21) ────────────────────────────────────────────────────
+      // A worker that wrote BLOCKED.md at the root has finished and explained:
+      // no gate runs over the explanation, and no retry asks for it again. The
+      // live tree goes back like every blocked hand-back (D11), so settle
+      // quarantines it — BLOCKED.md included, because it is the evidence.
+      const blockedText = await deps.isolate.readBlocked(cwd);
+      if (blockedText !== null) {
+        const base = baseVerdict(node, attempts);
+        return handBack({
+          verdict: {
+            ...base,
+            status: 'blocked',
+            evidence: { ...base.evidence, blockedReason: blockedReasonOf(blockedText) },
+            telemetry: result.telemetry,
+          },
         });
       }
 
@@ -991,6 +1010,16 @@ const NO_OUTPUT_MARKER =
 // Exported for run-plan: the verified commit is settle's gate (D21).
 export function outputTail(output: string): string {
   return output.length === 0 ? NO_OUTPUT_MARKER : output.slice(-EVIDENCE_TAIL);
+}
+
+const BLOCKED_REASON_CAP = 4000;
+const EMPTY_BLOCKED_MARKER = '(BLOCKED.md is empty — the worker wrote no explanation)';
+
+// BLOCKED.md's text as the verdict's reason (D21). Unlike a gate log, it is
+// prose read from the top, so the opening is kept; an empty file is named,
+// never left blank.
+function blockedReasonOf(text: string): string {
+  return text.trim().length === 0 ? EMPTY_BLOCKED_MARKER : text.slice(0, BLOCKED_REASON_CAP);
 }
 
 function gateEvidence(gate: string, exitCode: number, output: string): string {

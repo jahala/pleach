@@ -71,11 +71,11 @@ function lastEmitted(h: Harness, node: string): Verdict {
   return v;
 }
 
-// The prompts sent to x's builders, in order.
-function buildPrompts(h: Harness): string[] {
+// The prompts sent to a node's builders, in order.
+function buildPrompts(h: Harness, node: string): string[] {
   return h.log
     .of('send')
-    .filter((e) => e.node === 'x' && e.detail?.startsWith('build:'))
+    .filter((e) => e.node === node && e.detail?.startsWith('build:'))
     .map((e) => (e.detail ?? '').slice('build:'.length));
 }
 
@@ -191,6 +191,67 @@ describe('BLOCKED.md at the root of the tree is a verdict (D21)', () => {
   });
 
   // ledger: D21
+  test('an empty BLOCKED.md still settles blocked, and the reason says it was empty', async () => {
+    const h = harness('  \n', () => true);
+
+    const summary = await runPlan(plan(), h.deps, OPTS);
+
+    expect(summary.blocked).toEqual(['x']);
+    expect(h.log.count('spawn:build', 'x')).toBe(1);
+    // Absence of an explanation is named, never left blank.
+    const reason = lastEmitted(h, 'x').evidence.blockedReason ?? '';
+    expect(reason).toContain('BLOCKED.md');
+    expect(reason).toContain('empty');
+    expect(h.journal.find((e) => e.event === 'blocked' && e.node === 'x')?.reason).toBe(reason);
+  });
+
+  // ledger: D21 — the field case (docs/dogfood/*.md): a phased node's worker
+  // finds no honest red to write, explains it in BLOCKED.md and stops. The red
+  // gate would refuse the phase as already green and retry it; the phases
+  // after it would build on the explanation. The node settles before either.
+  test('a phased worker that writes BLOCKED.md in its red phase settles before the red gate', async () => {
+    const h: Harness = makeHarness({
+      changedByNode: { p: [] },
+      // The suite already passes: a red gate that ran would refuse the phase.
+      execScript: () => ({ output: '1 pass', exitCode: 0 }),
+      waitScript: (ctx) => {
+        h.git.writeBlocked(ctx.cwd, EXPLANATION);
+        return stop({ finalMessage: 'No honest red exists here — see BLOCKED.md.' });
+      },
+    });
+    const phased = PlanSchema.parse({
+      goal: 'g',
+      source: 's',
+      nodes: [
+        {
+          id: 'p',
+          work: {
+            test: 'runtests',
+            phases: [
+              { phase: 'red', prompt: 'write the failing test' },
+              { phase: 'impl', prompt: 'make it pass' },
+            ],
+          },
+          policy: { maxAttempts: 3 },
+        },
+      ],
+    });
+
+    const summary = await runPlan(phased, h.deps, OPTS);
+
+    expect(summary.blocked).toEqual(['p']);
+    expect(summary.quarantined).toEqual(['p']);
+    const verdict = lastEmitted(h, 'p');
+    expect(verdict.status).toBe('blocked');
+    expect(verdict.evidence.blockedReason).toBe(EXPLANATION);
+    expect(verdict.attempts).toBe(1);
+    expect(h.log.count('spawn:build', 'p')).toBe(1);
+    expect(buildPrompts(h, 'p')).toEqual(['write the failing test']);
+    expect(h.log.of('exec').filter((e) => e.detail === 'runtests').length).toBe(0);
+    expect(h.journal.some((e) => e.event === 'phase-commit')).toBe(false);
+  });
+
+  // ledger: D21
   test('a normal stop is unchanged, and a BLOCKED.md below the root is ordinary work', async () => {
     const h = harness(EXPLANATION, () => false, {
       changedByNode: { x: ['src/feature.ts', 'docs/BLOCKED.md'] },
@@ -217,7 +278,7 @@ describe('a retry starts from the prompt alone (D21)', () => {
     const summary = await runPlan(plan(), h.deps, OPTS);
 
     expect(summary.closed).toContain('x');
-    const [first, retry] = buildPrompts(h);
+    const [first, retry] = buildPrompts(h, 'x');
     expect(first).toBe('build x');
     expect(retry).toStartWith(
       'build x\n\n--- previous attempt failed; fix this and continue ---\n',

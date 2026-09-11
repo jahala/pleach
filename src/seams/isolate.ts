@@ -9,6 +9,9 @@ import { resolveGitDir } from './gitdir.ts';
 // Where the friction ledger writes inside a worktree, as path segments
 // (docs/plans/friction-ledger.md §5).
 const FRICTION_DIR = ['.plotplot', 'friction'];
+// What the work order tells a worker to write at the repo root when the plan
+// cannot be finished here (D21).
+const BLOCKED_FILE = 'BLOCKED.md';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -262,6 +265,23 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     if (months.length === 0) return null;
     const text = await Promise.all(months.map((name) => readFile(join(dir, name), 'utf8')));
     return text.join('');
+  }
+
+  // ── readBlocked ──────────────────────────────────────────────────────────
+
+  async function readBlocked(cwd: string): Promise<string | null> {
+    try {
+      return await readFile(join(cwd, BLOCKED_FILE), 'utf8');
+    } catch (err) {
+      // No file at the root — or a directory by that name — is the common
+      // answer: the worker did not say it was blocked.
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT' || code === 'EISDIR') return null;
+      throw new IsolateCatastrophicError(
+        `read ${BLOCKED_FILE}`,
+        `${err instanceof Error ? err.message : String(err)} in ${cwd}`,
+      );
+    }
   }
 
   // ── stage ────────────────────────────────────────────────────────────────
@@ -584,6 +604,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     scanMarkers,
     ignored,
     readFriction,
+    readBlocked,
     stage,
     stagedDiff,
     stagedNumstat,
