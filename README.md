@@ -192,8 +192,10 @@ after `run-end`, the run's lines from its `run-start` through its `run-end` are 
 
 **A worker that writes BLOCKED.md has finished, and is not asked again.** A worker that cannot
 finish the plan in its tree writes `BLOCKED.md` at the tree's root: what it tried, what stopped
-it, what a fix needs. pleach reads that file before any gate runs. The node settles `blocked` at
-once, with the file's text as the verdict's `blockedReason` and the tree kept on
+it, what a fix needs. pleach reads that file when the attempt ends, before any gate runs, however
+the attempt ended: a stop, a command that exits non-zero, a worker left at its prompt or out of
+time. Only a provider that died or a run that halted keeps its own verdict. The node settles
+`blocked` at once, with the file's text as the verdict's `blockedReason` and the tree kept on
 `quarantine/<id>`, `BLOCKED.md` included. There is no retry, because a retry would only ask the
 worker to explain again.
 

@@ -10,6 +10,7 @@
 // attempt did not survive it.
 import { describe, expect, test } from 'bun:test';
 import { PlanSchema, type Verdict } from '../../src/core/plan.ts';
+import type { WorkerResult } from '../../src/loop/deps.ts';
 import { runPlan } from '../../src/loop/run-plan.ts';
 import { type Harness, type HarnessOpts, makeHarness, stop } from './harness.ts';
 
@@ -286,5 +287,98 @@ describe('a retry starts from the prompt alone (D21)', () => {
     expect(retry).toContain(FRESH_START);
     // Beside the failure's own evidence, never instead of it.
     expect(retry).toContain('boom');
+  });
+});
+
+// ledger: D21 — the file is the verdict, whatever ended the attempt that wrote
+// it. A script that explains and exits non-zero, or a worker that explains and
+// then sits at its prompt or runs out the clock, has explained all the same; a
+// retry would reuse the very tree that holds the explanation. Only an end that
+// is about the provider (dead, D17) or the run (aborted, D16) keeps its own
+// verdict — neither says anything about the work.
+describe('BLOCKED.md settles the attempt however it ended (D21)', () => {
+  const PROMPT_TAIL = '❯ waiting for input';
+
+  // A builder that writes BLOCKED.md and then ends the way `end` says.
+  function endsAfterExplaining(end: WorkerResult): Harness {
+    const h: Harness = makeHarness({
+      changedByNode: { x: ['src/feature.ts'] },
+      waitScript: (ctx) => {
+        if (ctx.role === 'audit') return stop({ finalMessage: PASSING_AUDIT });
+        h.git.writeBlocked(ctx.cwd, EXPLANATION);
+        return end;
+      },
+    });
+    return h;
+  }
+
+  // ledger: D21
+  test('a command that writes BLOCKED.md and exits non-zero settles blocked, not retried', async () => {
+    const h: Harness = makeHarness({
+      changedByNode: { c: [] },
+      execScript: (argv, cwd) => {
+        if (argv.join(' ') !== 'build-c') return { output: '', exitCode: 0 };
+        h.git.writeBlocked(cwd, EXPLANATION);
+        return { output: 'cannot reach the vendor API', exitCode: 3 };
+      },
+    });
+    const commandPlan = PlanSchema.parse({
+      goal: 'g',
+      source: 's',
+      nodes: [{ id: 'c', work: { command: 'build-c' }, policy: { maxAttempts: 3 } }],
+    });
+
+    const summary = await runPlan(commandPlan, h.deps, OPTS);
+
+    expect(summary.blocked).toEqual(['c']);
+    expect(summary.failed).toEqual([]);
+    expect(summary.quarantined).toEqual(['c']);
+    const verdict = lastEmitted(h, 'c');
+    expect(verdict.status).toBe('blocked');
+    expect(verdict.evidence.blockedReason).toBe(EXPLANATION);
+    expect(verdict.attempts).toBe(1);
+    expect(h.log.of('exec').filter((e) => e.detail === 'build-c').length).toBe(1);
+  });
+
+  // ledger: D21
+  test.each([
+    ['idle', 'idle'],
+    ['input', 'input'],
+  ] as const)('a worker that explains and then ends %s is blocked with the file’s text, not the runner’s', async (_, reason) => {
+    const h = endsAfterExplaining(stop({ reason, message: PROMPT_TAIL }));
+
+    const summary = await runPlan(plan(), h.deps, OPTS);
+
+    expect(summary.blocked).toEqual(['x']);
+    const verdict = lastEmitted(h, 'x');
+    expect(verdict.evidence.blockedReason).toBe(EXPLANATION);
+    expect(verdict.attempts).toBe(1);
+  });
+
+  // ledger: D21
+  test('a worker that explains and then times out is not given another attempt', async () => {
+    const h = endsAfterExplaining(stop({ reason: 'timeout', finalMessage: '' }));
+
+    const summary = await runPlan(plan(), h.deps, OPTS);
+
+    expect(summary.blocked).toEqual(['x']);
+    expect(summary.quarantined).toEqual(['x']);
+    const verdict = lastEmitted(h, 'x');
+    expect(verdict.status).toBe('blocked');
+    expect(verdict.evidence.blockedReason).toBe(EXPLANATION);
+    expect(verdict.attempts).toBe(1);
+    expect(h.log.count('spawn:build', 'x')).toBe(1);
+  });
+
+  // ledger: D21 — a dead provider says nothing about the work (D17): its tree
+  // is nobody's to vouch for, so it is re-cast on the fallback as before.
+  test('a provider that dies after the file was written keeps the dead verdict', async () => {
+    const h = endsAfterExplaining(stop({ reason: 'dead', finalMessage: '' }));
+
+    const summary = await runPlan(plan(), h.deps, { ...OPTS, fallbackProvider: 'opencode' });
+
+    expect(summary.blocked).toEqual([]);
+    expect(h.log.count('isolate', 'x')).toBe(2);
+    expect(lastEmitted(h, 'x').status).toBe('dead');
   });
 });
