@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { cpus } from 'node:os';
+import { resolve } from 'node:path';
 import {
   AuditRefusedError,
   ConfigError,
@@ -230,7 +231,10 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
     const next = argv[i + 1];
     switch (arg) {
       case '--repo-root':
-        flags.repoRoot = takeValue(arg, next);
+        // Resolved once here so no seam ever sees a relative root: the isolate
+        // and clean seams run `git -C <root>` with `cwd: <root>`, which resolves
+        // a relative path twice (ledger D22).
+        flags.repoRoot = resolve(takeValue(arg, next));
         i += 1;
         break;
       case '--max-concurrency':

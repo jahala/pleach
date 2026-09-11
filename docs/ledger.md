@@ -363,7 +363,9 @@ checkpoint but have different lifetimes and trust domains.**
   quarantine, the node failed after zero attempts; the abort path lost its tree the same way. Eight
   conducted loops never saw it because a Conductor workspace is a linked worktree whose `.git` file
   carries an absolute pointer. **Fix:** `resolveGitDir` resolves the root absolute before anything is
-  joined to it, for a plain clone and for a linked worktree alike. Test: `test/unit/gitdir.test.ts`.
+  joined to it, for a plain clone and for a linked worktree alike, and the face resolves `--repo-root`
+  once so the isolate and clean seams (`git -C <root>` with `cwd: <root>`) never see a relative root
+  either. Tests: `test/unit/gitdir.test.ts`, `test/e2e/repo-root-relative.test.ts`.
 
 ### Verified-sound (attacks refuted — do not relitigate)
 
