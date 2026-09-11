@@ -175,6 +175,30 @@ marker scan through smoke and the cross-provider audit, and the close records `f
 resumed close stays distinguishable from a fresh one forever. `--fresh` refuses the seed and builds
 every pending node from its dependencies alone.
 
+**A hook that refuses a verified commit fails the node and keeps its work.** The verified commit
+on `node/<id>` runs your repository's hooks, because a hook is the repository's own gate. A
+refused commit is a gate verdict like any other: the node settles `failed` under the `commit`
+gate, with the hook's output as the output tail in the journal and hashed into the receipt. The
+tree is kept on `quarantine/<id>` and the receipt is written. That quarantine is a snapshot
+(`write-tree`, `commit-tree`, `update-ref`), so no hook runs on it and no hook can refuse it.
+
+**A lost journal is reported, and every run keeps a copy of its own lines.** The journal at
+`<git-dir>/pleach/journal.jsonl` is one file, and the receipts beside it are kept per close. Right
+after `run-start`, every node whose latest receipt has no `verdict` line in the journal is
+journaled as `journal-gap`, so a journal that lost lines says so the next time anyone runs. Right
+after `run-end`, the run's lines from its `run-start` through its `run-end` are copied to
+`<git-dir>/pleach/receipts/runs/<runId>.journal.jsonl`, and the `run-end` line names that file as
+`journalCopy`. The record can be rebuilt from what is kept beside the receipts.
+
+**A worker that writes BLOCKED.md has finished, and is not asked again.** A worker that cannot
+finish the plan in its tree writes `BLOCKED.md` at the tree's root: what it tried, what stopped
+it, what a fix needs. pleach reads that file when the attempt ends, before any gate runs, however
+the attempt ended: a stop, a command that exits non-zero, a worker left at its prompt or out of
+time. Only a provider that died or a run that halted keeps its own verdict. The node settles
+`blocked` at once, with the file's text as the verdict's `blockedReason` and the tree kept on
+`quarantine/<id>`, `BLOCKED.md` included. There is no retry, because a retry would only ask the
+worker to explain again.
+
 Two operational facts worth knowing before your first run:
 
 - **Claude Code workers need the repo trusted.** Trust follows the *main checkout*

@@ -81,6 +81,11 @@ export interface RunWorkOpts {
   // after that phase instead of remaking a seal the tree can no longer
   // honestly produce.
   redSealedAt?: number;
+  // Whether the tree now holds BLOCKED.md at its root (D21). Asked after each
+  // phase's worker stops: a phase that wrote it ends the ladder there, before
+  // its gate runs over the explanation or a later phase builds on it. run-node
+  // supplies it and reads the file itself once the attempt returns.
+  wroteBlocked?: () => Promise<boolean>;
 }
 
 // The base worker prompt for a node, plus an optional clearly-delimited
@@ -88,8 +93,13 @@ export interface RunWorkOpts {
 // no single base prompt; their per-phase prompts are sent inside runWork, so
 // promptFor returns just the evidence framing for those shapes (used only when
 // run-node re-prompts — which only happens for {prompt} and {test,phases}).
+// Each attempt is a fresh worker, so the section says what it starts from: a
+// note sent to the previous attempt went with that worker (D21).
+const FRESH_START =
+  'This attempt starts from the prompt and this evidence alone; notes sent to a previous attempt did not survive it.';
+
 function withEvidence(base: string, evidence: string): string {
-  return `${base}\n\n--- previous attempt failed; fix this and continue ---\n${evidence}`;
+  return `${base}\n\n--- previous attempt failed; fix this and continue ---\n${FRESH_START}\n${evidence}`;
 }
 
 export function promptFor(node: Node, evidence?: string): string {
@@ -175,6 +185,7 @@ export async function runWork(
       await w.send(text);
       last = await w.wait({ timeoutMs: opts.timeoutMs, signal: opts.signal, idleMs: opts.idleMs });
       if (last.reason !== 'stop') return last;
+      if (opts.wroteBlocked !== undefined && (await opts.wroteBlocked())) return last;
 
       if (phase.phase === 'red') {
         const { output, exitCode } = await guardedExec(exec, work.test, {

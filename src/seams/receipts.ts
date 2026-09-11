@@ -1,7 +1,7 @@
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { type Receipt, receiptPrefix } from '../core/receipt.ts';
-import type { ArtifactKind, ReceiptStore } from '../loop/deps.ts';
+import type { ArtifactKind, ReceiptListing, ReceiptStore } from '../loop/deps.ts';
 
 // The node's close records under <git-dir>/pleach/receipts/ (§D). Node ids are
 // refname-safe by schema ([A-Za-z0-9._-]), so the id IS the filename.
@@ -29,6 +29,10 @@ const ARTIFACT_EXTENSION: Record<ArtifactKind, string> = {
   friction: '.friction.jsonl',
   handback: '.handback.md',
 };
+
+// Each run's copy of its own journal lines (D21), beside the closes it made.
+// A directory, so list() — which reads only `.json` files — never sees one.
+const RUNS = 'runs';
 
 // The close's own name; `<node><suffix>` is the same thing for the latest.
 function ownName(node: string, receiptSha256: string, suffix: string): string {
@@ -76,6 +80,10 @@ export function createReceiptStore(dir: string): ReceiptStore {
     return dirReady;
   }
 
+  function runJournalPath(runId: string): string {
+    return join(dir, RUNS, `${runId}.journal.jsonl`);
+  }
+
   return {
     async write(node: string, receipt: Receipt): Promise<void> {
       await ensureDir();
@@ -111,6 +119,38 @@ export function createReceiptStore(dir: string): ReceiptStore {
     },
     async readAt(node: string, receiptSha256: string): Promise<Receipt | null> {
       return readReceiptFile(join(dir, ownName(node, receiptSha256, '.json')));
+    },
+    async list(): Promise<ReceiptListing[]> {
+      let names: string[];
+      try {
+        names = await readdir(dir);
+      } catch (err) {
+        // No store yet: nothing has closed here.
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+        throw err;
+      }
+      const latest: ReceiptListing[] = [];
+      for (const name of names.filter((n) => n.endsWith('.json'))) {
+        const path = join(dir, name);
+        const receipt = await readReceiptFile(path);
+        // Node ids may hold dots, so the name alone cannot tell `<node>.json`
+        // from a close's own `<node>.<prefix>.json`; the node the file records
+        // can. Only the latest is listed — every close has one.
+        if (receipt === null || name !== `${receipt.facts.node}.json`) continue;
+        const { mtime } = await stat(path);
+        latest.push({
+          node: receipt.facts.node,
+          sha256: receipt.sha256,
+          closedAt: mtime.toISOString(),
+        });
+      }
+      // In node order, never the directory's: `a.b.json` sorts before `a.json`.
+      return latest.sort((x, y) => (x.node < y.node ? -1 : x.node > y.node ? 1 : 0));
+    },
+    runJournalPath,
+    async writeRunJournal(runId: string, lines: readonly string[]): Promise<void> {
+      await mkdir(join(dir, RUNS), { recursive: true });
+      await writeFile(runJournalPath(runId), lines.map((l) => `${l}\n`).join(''), 'utf8');
     },
   };
 }

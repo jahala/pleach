@@ -1,4 +1,9 @@
-import { IsolateCatastrophicError, LockHeldError, type LockKind } from '../../src/core/errors.ts';
+import {
+  IsolateCatastrophicError,
+  JournalRunMissingError,
+  LockHeldError,
+  type LockKind,
+} from '../../src/core/errors.ts';
 import type { Node, Verdict } from '../../src/core/plan.ts';
 import { type Receipt, receiptPrefix } from '../../src/core/receipt.ts';
 import type {
@@ -11,6 +16,7 @@ import type {
   LedgerSeam,
   LockHandle,
   LockSeam,
+  ReceiptListing,
   RunnerSeam,
   Worker,
   WorkerResult,
@@ -75,6 +81,7 @@ export interface SpawnCtx {
   node: string;
   role: 'build' | 'audit';
   spawnIndex: number; // 0-based per (node, role)
+  cwd: string; // the tree this worker was spawned in — where it writes
 }
 
 export type WaitScript = (ctx: SpawnCtx, waitIndex: number) => WorkerResult | Promise<WorkerResult>;
@@ -112,7 +119,18 @@ export class InMemoryGit {
   // directory as it really is: month files beside the ledger's own state, so
   // the seam's read has something to choose between (D14).
   readonly friction = new Map<string, Record<string, string>>();
+  // worktree cwd → the text of the BLOCKED.md at its root (D21), the file the
+  // work order tells a worker to write when the plan cannot be finished here.
+  readonly blocked = new Map<string, string>();
   private shaCounter = 0;
+
+  // A worker writing BLOCKED.md at the root of its tree: the file is there to
+  // read, and the tree shows it changed like any file a worker writes.
+  writeBlocked(cwd: string, text: string): void {
+    this.blocked.set(cwd, text);
+    const changed = this.changed.get(cwd) ?? [];
+    if (!changed.includes('BLOCKED.md')) this.changed.set(cwd, [...changed, 'BLOCKED.md']);
+  }
 
   // git's own shape: one line per file, then the totals.
   statOf(cwd: string): string | null {
@@ -145,6 +163,8 @@ const NO_COMMIT = '0'.repeat(40);
 // the in-memory one mirrors both so a loop test reads the same paths the
 // conductor journals. The real `<git-dir>` resolution is proven in e2e.
 const RECEIPT_DIR = '/r/.git/pleach/receipts';
+// The journal the in-memory one stands for, named in what it throws.
+const JOURNAL_PATH = '/r/.git/pleach/journal.jsonl';
 // Where the friction ledger writes inside a worktree (docs/plans/friction-ledger.md §5).
 const FRICTION_DIR = '.plotplot/friction/';
 
@@ -204,9 +224,15 @@ export interface HarnessOpts {
   // defaults to one-added-line per changed file unless given.
   stagedDiffByNode?: Record<string, string>;
   stagedNumstatByNode?: Record<string, { file: string; added: number; deleted: number }[]>;
-  // Branches whose commitBranch refuses like real git's checked-out-branch
-  // guard (exit 128 'used by worktree') — the #12 quarantine-collision seam.
-  commitBranchBusy?: (branch: string) => boolean;
+  // Branches checked out in another worktree: commitBranch and snapshot refuse
+  // them like real git's guard ('used by worktree') — the #12
+  // quarantine-collision seam.
+  branchBusy?: (branch: string) => boolean;
+  // The repository's pre-commit hook refusing the verified commit (D21): the
+  // hook's output. commitBranch throws what the real seam throws when `git
+  // commit` exits non-zero — the output inside the message; snapshot runs no
+  // hook, so a quarantine still lands.
+  commitBranchThrows?: string;
   // marker files left in cwd, keyed by node id (simulates auditor droppings).
   markersByNode?: Record<string, string[]>;
   // paths the node's tree ignores — the repo's .gitignore, as a fixture (D14).
@@ -228,6 +254,9 @@ export interface HarnessOpts {
   // Make the receipt store's writeArtifact throw (fault injection for the
   // never-fail-a-close rule at settle, D14).
   writeArtifactThrows?: Error;
+  // Make the receipt store's list() throw (fault injection for the run-start
+  // gap check, which must never fail the run, D21).
+  receiptsListThrows?: Error;
 }
 
 export interface Harness {
@@ -239,6 +268,8 @@ export interface Harness {
   receipts: Map<string, Receipt>;
   // Kept gate artifacts by the path the store returned (D14).
   artifacts: Map<string, string>;
+  // Each run's copy of its own journal lines, by the path the store names (D21).
+  runJournals: Map<string, string[]>;
   // The drain marker as the lock seam sees it (D16): set `requested` to write
   // one — before the run, or from inside a wait or a ledger emit to land it
   // mid-run; `cleared` counts the run's consumption of it.
@@ -281,6 +312,28 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   };
 
   // ── isolate ─────────────────────────────────────────────────────────────────
+  // Keep what is staged in `cwd` on `branch`: commitBranch and snapshot alike.
+  function pointBranch(
+    kind: 'commitBranch' | 'snapshot',
+    cwd: string,
+    branch: string,
+    message: string,
+  ): { sha: string } {
+    if (opts.branchBusy?.(branch)) {
+      log.push(`${kind}-busy`, branch);
+      throw new Error(`cannot force update the branch '${branch}' used by worktree at /w`);
+    }
+    const sha = git.newSha();
+    const stat = git.statOf(cwd);
+    if (stat !== null) git.commitStats.set(sha, stat);
+    git.refs.set(branch, sha);
+    git.commitMessages.set(branch, message);
+    git.commitMessages.set(sha, message);
+    git.index.delete(cwd);
+    log.push(kind, branch, sha);
+    return { sha };
+  }
+
   const isolate: IsolateSeam = {
     async isolate(node: Node, baseRefs): Promise<Isolation> {
       log.push('isolate', node.id, baseRefs.join(','));
@@ -350,6 +403,12 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       if (months.length === 0) return null;
       return months.map((p) => tree[p] ?? '').join('');
     },
+    // BLOCKED.md at the tree root, as the worker wrote it (writeBlocked), or
+    // null — the file the loop reads as the attempt's verdict (D21).
+    async readBlocked(cwd): Promise<string | null> {
+      log.push('readBlocked', undefined, cwd);
+      return git.blocked.get(cwd) ?? null;
+    },
     async stage(cwd, files): Promise<void> {
       log.push('stage', undefined, `${cwd}:${files.join(',')}`);
       const changed = git.changed.get(cwd) ?? [];
@@ -382,19 +441,19 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       return { sha };
     },
     async commitBranch(cwd, branch, message): Promise<{ sha: string }> {
-      if (opts.commitBranchBusy?.(branch)) {
-        log.push('commitBranch-busy', branch);
-        throw new Error(`cannot force update the branch '${branch}' used by worktree at /w`);
+      if (opts.commitBranchThrows !== undefined) {
+        log.push('commitBranch-refused', branch);
+        throw new IsolateCatastrophicError(
+          `git commit --allow-empty -m ${message}`,
+          `exited 1 in ${cwd}:\n${opts.commitBranchThrows}`,
+        );
       }
-      const sha = git.newSha();
-      const stat = git.statOf(cwd);
-      if (stat !== null) git.commitStats.set(sha, stat);
-      git.refs.set(branch, sha);
-      git.commitMessages.set(branch, message);
-      git.commitMessages.set(sha, message);
-      git.index.delete(cwd);
-      log.push('commitBranch', branch, sha);
-      return { sha };
+      return pointBranch('commitBranch', cwd, branch, message);
+    },
+    // The quarantine (D21): the same branch move, logged apart so a test can
+    // tell a snapshot from a commit. The in-memory git runs no hooks either way.
+    async snapshot(cwd, branch, message): Promise<{ sha: string }> {
+      return pointBranch('snapshot', cwd, branch, message);
     },
     async refSha(_cwd, ref): Promise<string | null> {
       return git.refs.get(ref) ?? null;
@@ -453,7 +512,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       const roleKey = role === 'build' ? `${nodeId}:build` : `${nodeId}:audit`;
       const spawnIndex = spawnCounters.get(roleKey) ?? 0;
       spawnCounters.set(roleKey, spawnIndex + 1);
-      const ctx: SpawnCtx = { node: nodeId, role, spawnIndex };
+      const ctx: SpawnCtx = { node: nodeId, role, spawnIndex, cwd: spec.cwd };
 
       liveWorkers += 1;
       if (liveWorkers > state.maxConcurrent) state.maxConcurrent = liveWorkers;
@@ -561,6 +620,22 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     async append(event): Promise<void> {
       journalEvents.push(event);
     },
+    async verdictNodes(): Promise<Set<string>> {
+      const nodes = new Set<string>();
+      for (const e of journalEvents) {
+        if (e.event === 'verdict' && typeof e.node === 'string') nodes.add(e.node);
+      }
+      return nodes;
+    },
+    async linesSince(runId: string): Promise<string[]> {
+      for (let i = journalEvents.length - 1; i >= 0; i--) {
+        const e = journalEvents[i];
+        if (e?.event === 'run-start' && e.runId === runId) {
+          return journalEvents.slice(i).map((line) => JSON.stringify(line));
+        }
+      }
+      throw new JournalRunMissingError(JOURNAL_PATH, runId);
+    },
   };
 
   // ── receipts ────────────────────────────────────────────────────────────────
@@ -569,7 +644,13 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   // keyed the way it names it.
   const closeStore = new Map<string, Receipt>();
   for (const [node, seeded] of receiptsStore) closeStore.set(ownName(node, seeded.sha256), seeded);
+  // When each node's latest was written: the real store's file mtime (D21). A
+  // receipt that never went through write() was there when the store was made.
+  const storeMadeAt = new Date().toISOString();
+  const writtenAt = new Map<string, string>();
   const artifactStore = new Map<string, string>();
+  const runJournals = new Map<string, string[]>();
+  const runJournalPath = (runId: string): string => `${RECEIPT_DIR}/runs/${runId}.journal.jsonl`;
   const receipts = {
     async writeArtifact(
       node: string,
@@ -597,12 +678,27 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       const kept = JSON.parse(JSON.stringify(receipt)) as Receipt;
       closeStore.set(ownName(node, receipt.sha256), kept);
       receiptsStore.set(node, kept);
+      writtenAt.set(node, new Date().toISOString());
+    },
+    async list(): Promise<ReceiptListing[]> {
+      if (opts.receiptsListThrows) throw opts.receiptsListThrows;
+      return [...receiptsStore]
+        .sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))
+        .map(([node, receipt]) => ({
+          node,
+          sha256: receipt.sha256,
+          closedAt: writtenAt.get(node) ?? storeMadeAt,
+        }));
     },
     async read(node: string): Promise<Receipt | null> {
       return receiptsStore.get(node) ?? null;
     },
     async readAt(node: string, receiptSha256: string): Promise<Receipt | null> {
       return closeStore.get(ownName(node, receiptSha256)) ?? null;
+    },
+    runJournalPath,
+    async writeRunJournal(runId: string, lines: readonly string[]): Promise<void> {
+      runJournals.set(runJournalPath(runId), [...lines]);
     },
   };
 
@@ -616,6 +712,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     journal: journalEvents,
     receipts: receiptsStore,
     artifacts: artifactStore,
+    runJournals,
     stop: stopMarker,
     get maxConcurrentWorkers() {
       return state.maxConcurrent;

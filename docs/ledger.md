@@ -339,6 +339,21 @@ checkpoint but have different lifetimes and trust domains.**
   `test/loop/gate-cannot-exec.test.ts`, `test/unit/hygiene-allowlist.test.ts`,
   `test/unit/schema-optional.test.ts`, `test/loop/facts-are-facts.test.ts`,
   `test/unit/journal-doc.test.ts`, `test/e2e/fail-before-spend.test.ts`.
+- **D21 ⚠ [field] The record depended on what the repository allowed.** jahala/pleach#96, #97, #93
+  (2026-09-10 to 12). A planted repository's pre-commit hook refused every commit in a fresh worktree;
+  settle's commit failure disposed a finished build with no node branch, no quarantine and no receipt.
+  The stem's run journal lost nineteen nodes between two runs while the receipts beside it survived —
+  one unguarded file was the record of record. A node that wrote BLOCKED.md, the file AGENTS.md tells
+  workers to write when the plan cannot be finished here, was retried to write it again. **Fix:**
+  quarantine by snapshot (`write-tree` + `commit-tree` + `update-ref`, no hook can refuse it) while the
+  verified commit keeps running the repository's hooks; a refused verified commit settles failed with the
+  hook's output, the tree quarantined and the receipt written; `journal-gap` on run-start for every
+  receipt whose node has no verdict line; a per-run journal copy under `receipts/runs/<run-id>.journal
+  .jsonl` named by `run-end`; BLOCKED.md at an attempt's end settles `blocked` at once with the file's
+  text, no retry, and a retry's re-prompt says it starts from the prompt alone. Tests:
+  `test/integration/snapshot-quarantine.test.ts`, `test/loop/commit-refused.test.ts`,
+  `test/loop/journal-gap.test.ts`, `test/integration/run-journal-copy.test.ts`,
+  `test/loop/blocked-md.test.ts`, `test/unit/journal-doc.test.ts`, `test/e2e/record-survives.test.ts`.
 
 ### Verified-sound (attacks refuted — do not relitigate)
 

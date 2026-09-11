@@ -586,6 +586,33 @@ test('readFriction concatenates the month files in name order, and only those', 
   }
 });
 
+// ledger: D21 — BLOCKED.md at the root of the tree settles the node blocked
+// with its text, so the read is proven against a real directory: the file at
+// the root, verbatim; nothing when there is none; a BLOCKED.md anywhere else,
+// or a directory by that name, is not the worker's explanation.
+test('readBlocked reads BLOCKED.md at the tree root, and only there', async () => {
+  const { exec } = await import('../../src/seams/exec.ts');
+  const tree = await mkdtemp(join(tmpdir(), 'pleach-blocked-'));
+  try {
+    const seam = createIsolateSeam(exec, tree);
+    expect(await seam.readBlocked(tree)).toBeNull();
+
+    await mkdir(join(tree, 'docs'), { recursive: true });
+    await writeFile(join(tree, 'docs', 'BLOCKED.md'), 'a doc about blocking\n');
+    expect(await seam.readBlocked(tree)).toBeNull();
+
+    await mkdir(join(tree, 'BLOCKED.md'));
+    expect(await seam.readBlocked(tree)).toBeNull();
+    await rm(join(tree, 'BLOCKED.md'), { recursive: true });
+
+    const text = '# Blocked\n\nStopped by: no sandbox credentials — naïve retry won’t help.\n';
+    await writeFile(join(tree, 'BLOCKED.md'), text);
+    expect(await seam.readBlocked(tree)).toBe(text);
+  } finally {
+    await rm(tree, { recursive: true, force: true });
+  }
+});
+
 // ledger: D17 — a resumed node's prompt names what the interrupted attempt was
 // holding, and that stat comes from real git. Proven against a real quarantine
 // commit: the file list and totals of what THAT commit introduced, never the
