@@ -164,6 +164,31 @@ export async function runNode(
     return live === null ? out : { ...out, iso: live };
   }
 
+  // A worker that wrote BLOCKED.md at the root has finished and explained
+  // (D21), however its attempt then ended — a stop, a red command, a prompt it
+  // sat at, the clock: no gate runs over the explanation, and no retry asks for
+  // it again in the very tree that holds it. The live tree goes back like
+  // every blocked hand-back (D11), so settle quarantines it — BLOCKED.md
+  // included, because it is the evidence. Null when the tree holds no file.
+  async function settleIfBlocked(
+    cwd: string,
+    telemetry: Verdict['telemetry'],
+    extra: Pick<RunNodeResult, 'runnerDetail'> = {},
+  ): Promise<RunNodeResult | null> {
+    const text = await deps.isolate.readBlocked(cwd);
+    if (text === null) return null;
+    const base = baseVerdict(node, attempts);
+    return handBack({
+      verdict: {
+        ...base,
+        status: 'blocked',
+        evidence: { ...base.evidence, blockedReason: blockedReasonOf(text) },
+        telemetry,
+      },
+      ...extra,
+    });
+  }
+
   // Resolved-provider diversity preflight (binding prose) — before any spawn.
   const preflight = auditDiversityRefusal(node, node.worker.provider ?? DEFAULT_WORKER_PROVIDER);
   if (preflight !== undefined) throw new PlanInvalidError([preflight]);
@@ -311,6 +336,8 @@ export async function runNode(
           );
         }
         if (err instanceof GateFailedError) {
+          const blocked = await settleIfBlocked(cwd, {});
+          if (blocked !== null) return blocked;
           const decision = handleGate(node, attempts, maxAttempts, err);
           if (decision.settle) return handBack(decision.settle);
           evidence = decision.evidence;
@@ -334,6 +361,12 @@ export async function runNode(
           ...(result.processExit !== undefined ? { processExit: result.processExit } : {}),
         };
         const detail = Object.keys(runnerDetail).length > 0 ? { runnerDetail } : {};
+        // A dead end is about the provider (D17) and an aborted one about the
+        // run (D16); every other end left the work's own tree to read.
+        if (klass !== 'dead' && reason !== 'aborted') {
+          const blocked = await settleIfBlocked(cwd, result.telemetry, detail);
+          if (blocked !== null) return blocked;
+        }
         if (klass === 'blocked') {
           // Hand the tree back (D11): workers edit files mid-turn — 9m40s of
           // work once died with the "nothing worth keeping" theory here.
@@ -425,23 +458,9 @@ export async function runNode(
         });
       }
 
-      // ── BLOCKED.md (D21) ────────────────────────────────────────────────────
-      // A worker that wrote BLOCKED.md at the root has finished and explained:
-      // no gate runs over the explanation, and no retry asks for it again. The
-      // live tree goes back like every blocked hand-back (D11), so settle
-      // quarantines it — BLOCKED.md included, because it is the evidence.
-      const blockedText = await deps.isolate.readBlocked(cwd);
-      if (blockedText !== null) {
-        const base = baseVerdict(node, attempts);
-        return handBack({
-          verdict: {
-            ...base,
-            status: 'blocked',
-            evidence: { ...base.evidence, blockedReason: blockedReasonOf(blockedText) },
-            telemetry: result.telemetry,
-          },
-        });
-      }
+      // ── BLOCKED.md (D21) — before any gate runs over the explanation ───────
+      const blocked = await settleIfBlocked(cwd, result.telemetry);
+      if (blocked !== null) return blocked;
 
       // ── marker gate (ledger C1) ─────────────────────────────────────────────
       const markers = await deps.isolate.scanMarkers(cwd);
