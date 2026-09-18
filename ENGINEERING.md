@@ -97,13 +97,15 @@ recorded in `docs/contract/CHANGES.md` for the other two repos.
 | Source | kind | Action |
 |---|---|---|
 | worker `reason: 'dead'` | `dead` | `onDead:'resume'` + a fallback provider that is not the dead one → dispose + re-isolate + fresh worker **on the fallback** (audit diversity re-checked against it); no usable fallback → settle dead with the attempt unspent (D17), else fail |
-| worker `reason: 'timeout'` / exec timeout | `retryable` | retry ≤ `maxAttempts`, **reuse tree, re-prompt with evidence** |
+| worker `reason: 'timeout' \| 'provider-error'` / exec timeout | `retryable` | retry ≤ `maxAttempts`, **reuse tree, re-prompt with evidence** |
 | worker `reason: 'input' \| 'idle'` | `blocked` | kill worker + dispose tree; Verdict `status:'blocked'`, prompt text in `blockedReason`; no auto-retry — fix the permission mode / allowlist and re-run |
 | smoke / command non-zero, marker-gate hit | `retryable` | retry ≤ `maxAttempts`, reuse tree, evidence in re-prompt |
 | a gate that cannot run: the no-shell guard's `-1` or the exec seam's `127` (`GateCannotRunError`, `gateFault`) | `terminal` | settle on that attempt — no flaky retry, no re-prompt; `gate.ran` names the command, the verdict's `detail` names the plan or the environment (D19) |
 | audit returned fail verdicts | `retryable` | re-prompt the *builder* with the audit `reasons[]` |
 | `AuditParseError` (bad audit egress) | `reaudit` | re-run **only the audit worker**, bounded separately (default 2) |
 | `aborted` / lockfile held / plan invalid | `terminal` | fail fast, no retry |
+| worker `reason: 'file' \| 'pattern'` (a wait for something other than the worker's stop) | `terminal` | the builder's wait never asks for them; named so the table is the runner contract's (`contracts/runner.md`, D23) |
+| a worker reason the runner contract does not name | `terminal` | journaled `seam-violation` with the runner's text (D23) |
 | unknown error | `terminal` | fail loudly — never default-retry what we can't name |
 
 **Retries always carry evidence.** A re-prompt without the failure's evidence (smoke output tail, audit

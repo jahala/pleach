@@ -4,7 +4,7 @@ import {
   EXPECTED_EGRESS,
   extractAuditJson,
 } from '../core/audit-egress.ts';
-import { classify, type GateFault, gateFault } from '../core/classify.ts';
+import { classify, type GateFault, gateFault, isWorkerReason } from '../core/classify.ts';
 import { partitionDelivery } from '../core/delivery.ts';
 import {
   AuditParseError,
@@ -359,6 +359,16 @@ export async function runNode(
         // A runner that named nothing ended abnormally without saying how —
         // classify has always read that as an abort; the gate string says so too.
         const reason = result.reason ?? 'aborted';
+        // The adapter hands over the string the runner printed; one the
+        // contract does not name falls to terminal and is recorded (D23).
+        if (!isWorkerReason(reason)) {
+          await deps.journal.append({
+            event: 'seam-violation',
+            node: node.id,
+            reason,
+            detail: 'umbel wait returned a reason contracts/runner.md does not name',
+          });
+        }
         const klass = classify({ kind: 'worker', reason });
         // What the runner saw at the abnormal end, when it could see anything
         // (D11) — rides every terminal hand-back below, never fabricated.
@@ -453,7 +463,10 @@ export async function runNode(
         }
         // timeout → retryable (reuse tree); anything else terminal.
         if (klass === 'retryable' && attempts < maxAttempts) {
-          evidence = `previous attempt ended: ${reason}`;
+          evidence =
+            result.message !== undefined
+              ? `previous attempt ended: ${reason}\n${result.message}`
+              : `previous attempt ended: ${reason}`;
           continue;
         }
         return handBack({

@@ -125,7 +125,16 @@ export interface WorkerResult {
   diff?: string;
   filesTouched: string[];
   exitCode?: number;
-  reason?: 'stop' | 'dead' | 'timeout' | 'aborted' | 'input' | 'idle';
+  reason?:
+    | 'stop'
+    | 'file'
+    | 'pattern'
+    | 'provider-error'
+    | 'idle'
+    | 'timeout'
+    | 'dead'
+    | 'input'
+    | 'aborted';
   // What the runner observed when the reason is not stop — the blocking prompt
   // of input/idle (the loop carries it into Verdict.evidence.blockedReason,
   // contract v1.1.1), a provider error's text, a timeout, a death.

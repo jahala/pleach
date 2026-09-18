@@ -27,7 +27,29 @@ export function gateFault(exitCode: number): GateFault | null {
   return null;
 }
 
-export type WorkerReason = 'dead' | 'timeout' | 'input' | 'idle' | 'stop' | 'aborted';
+// Every reason a runner's wait may end with — the table of contracts/runner.md
+// on jahala/plotplot (ledger D23). The umbrella's seam test reads the union in
+// src/loop/deps.ts and the switch below by regex; this list is the one pleach's
+// own code derives from.
+export const WORKER_REASONS = [
+  'stop',
+  'file',
+  'pattern',
+  'provider-error',
+  'idle',
+  'timeout',
+  'dead',
+  'input',
+  'aborted',
+] as const;
+
+export type WorkerReason = (typeof WORKER_REASONS)[number];
+
+// A runner hands over whatever string its wait printed; one the contract does
+// not name is the runner's breach, not a reason.
+export function isWorkerReason(reason: string): reason is WorkerReason {
+  return (WORKER_REASONS as readonly string[]).includes(reason);
+}
 
 export type ClassifyInput =
   | { kind: 'worker'; reason: WorkerReason }
@@ -51,15 +73,20 @@ function classifyWorkerReason(reason: WorkerReason): ClassifyResult {
   switch (reason) {
     case 'dead':
       return 'dead';
+    case 'provider-error':
     case 'timeout':
       return 'retryable';
     case 'input':
     case 'idle':
       return 'blocked';
+    case 'stop':
+    case 'file':
+    case 'pattern':
     case 'aborted':
       return 'terminal';
     default:
-      // 'stop' and any future unknown reasons → terminal
+      // a reason contracts/runner.md does not name → terminal: never
+      // default-retry what cannot be named
       return 'terminal';
   }
 }

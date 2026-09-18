@@ -70,6 +70,7 @@ export const KINDS: Record<string, Kind> = {
   'rebuild-required': 'node.lifecycle',
   'sha-mismatch': 'node.lifecycle',
   'dispose-failed': 'node.lifecycle',
+  'seam-violation': 'node.lifecycle',
 
   // A gate said yes or no.
   'gate-fail': 'gate.result',
