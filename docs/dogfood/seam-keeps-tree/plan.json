@@ -38,7 +38,7 @@
       },
       "policy": {
         "maxAttempts": 2,
-        "timeoutMs": 1800000
+        "timeoutMs": 3600000
       },
       "closes": [
         "seam-keeps-tree:c1"
@@ -81,7 +81,7 @@
       },
       "policy": {
         "maxAttempts": 2,
-        "timeoutMs": 1800000
+        "timeoutMs": 3600000
       },
       "closes": [
         "seam-keeps-tree:c2"
@@ -124,7 +124,7 @@
       },
       "policy": {
         "maxAttempts": 2,
-        "timeoutMs": 1800000
+        "timeoutMs": 3600000
       },
       "closes": [
         "seam-keeps-tree:c3"
@@ -167,7 +167,7 @@
       },
       "policy": {
         "maxAttempts": 2,
-        "timeoutMs": 1800000
+        "timeoutMs": 3600000
       },
       "closes": [
         "seam-keeps-tree:c4"
@@ -202,7 +202,7 @@
       },
       "policy": {
         "maxAttempts": 2,
-        "timeoutMs": 2700000
+        "timeoutMs": 3600000
       },
       "closes": [
         "seam-keeps-tree:c5"
