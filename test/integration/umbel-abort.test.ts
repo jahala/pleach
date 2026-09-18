@@ -87,15 +87,21 @@ function makeSeam(): Seam {
   });
 }
 
-// Is the tmux session behind this worker still there? `umbel status <name>`
-// exits 0 for a live session and non-zero once it is gone.
+// Is the tmux session behind this worker still there? A killed session keeps a
+// tombstone (jahala/umbel#73): `umbel status <name>` still exits 0 and reports
+// it dead, so liveness is read from `--json`'s `alive`, never the exit code.
+// Not found at all (exit 1, after `kill --purge`) is gone too.
 async function sessionAlive(name: string): Promise<boolean> {
-  const probe = await exec([UMBEL_BIN, 'status', name], {
+  const probe = await exec([UMBEL_BIN, 'status', name, '--json'], {
     cwd: '/tmp',
     env: { UMBEL_STATE: stateDir },
     timeoutMs: 10_000,
   });
-  return probe.exitCode === 0;
+  if (probe.exitCode !== 0) return false;
+  const sessions = JSON.parse(probe.stdout) as Array<{ name: string; alive: boolean }>;
+  const session = sessions.find((s) => s.name === name);
+  expect(session).toBeDefined();
+  return session?.alive === true;
 }
 
 // ── suite ────────────────────────────────────────────────────────────────────

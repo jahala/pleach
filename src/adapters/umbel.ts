@@ -200,18 +200,17 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
         return gatherWorkerResult(name, cwd, 'aborted', undefined);
       }
 
-      if (result.exitCode !== 0) {
-        throw new WorkerSeamError(`wait exited ${result.exitCode}: ${result.output.trim()}`);
-      }
-
-      // stdout: {"reason": "...", "message"?: "..."}\n
+      // stdout: {"reason": "...", "message"?: "..."}\n — printed whatever the
+      // exit code (contracts/runner.md, "A non-zero exit with a reason is a
+      // result"): 122 provider-error, 123 idle, 124 timeout, 125 dead and 126
+      // input exit non-zero and still name their reason. The exit code only
+      // matters when no reason parses (ledger D23). stdout alone is parsed so
+      // a warning on stderr cannot hide the reason; errors quote both streams.
       let parsed: unknown;
       try {
-        parsed = JSON.parse(result.output.trim());
+        parsed = JSON.parse(result.stdout.trim());
       } catch {
-        throw new WorkerSeamError(
-          `wait --json produced unparseable output: ${result.output.trim()}`,
-        );
+        parsed = undefined;
       }
 
       if (
@@ -219,7 +218,14 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
         parsed === null ||
         typeof (parsed as Record<string, unknown>).reason !== 'string'
       ) {
-        throw new WorkerSeamError(`wait --json missing reason field: ${result.output.trim()}`);
+        if (result.exitCode !== 0) {
+          throw new WorkerSeamError(`wait exited ${result.exitCode}: ${result.output.trim()}`);
+        }
+        throw new WorkerSeamError(
+          parsed === undefined
+            ? `wait --json produced unparseable output: ${result.output.trim()}`
+            : `wait --json missing reason field: ${result.output.trim()}`,
+        );
       }
 
       const waitJson = parsed as { reason: string; message?: string };
@@ -255,14 +261,11 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
     reason: WorkerResult['reason'],
     message: string | undefined,
   ): Promise<WorkerResult> {
-    // Blocking reasons: worker held at a prompt — carry message, no read/diff.
-    if (reason === 'input' || reason === 'idle') {
-      return { reason, finalMessage: '', filesTouched: [], message, telemetry: {} };
-    }
-
-    // Terminal non-stop: dead / timeout / aborted.
+    // Every non-stop reason carries what the runner observed (contracts/runner.md)
+    // — a blocking prompt, an idle stall, a provider error, a timeout, a death —
+    // and nothing is read or diffed.
     if (reason !== 'stop') {
-      return { reason, finalMessage: '', filesTouched: [], telemetry: {} };
+      return { reason, finalMessage: '', filesTouched: [], message, telemetry: {} };
     }
 
     // ── stop: read + actions + diff ──────────────────────────────────────────
