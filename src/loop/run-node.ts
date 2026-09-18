@@ -230,10 +230,14 @@ export async function runNode(
   // never the auditor's, which is egress the loop parses rather than work a
   // worker produced.
   let handback: string | undefined;
+  // Where the attempt in flight stands on its ladder — the lane a surprise
+  // names when it settles the node (D23).
+  let lane: SeamLane = 'isolate';
 
   try {
     for (;;) {
       attempts += 1;
+      lane = 'isolate';
       gates = [];
       auditRecords = undefined;
       lastStaged = undefined;
@@ -276,6 +280,7 @@ export async function runNode(
       );
 
       // ── setup ───────────────────────────────────────────────────────────────
+      lane = 'setup';
       if (node.setup) {
         const { output, exitCode } = await execGateWithRetry(deps, node.id, 'setup', node.setup, {
           cwd,
@@ -304,6 +309,7 @@ export async function runNode(
       // Command work execs directly (run-work) and never uses a worker; only a
       // {prompt}/{phases} node spawns a build worker — so a command-only plan
       // needs no runner at all.
+      lane = 'worker';
       const worker =
         'command' in node.work ? null : await deps.runner.spawnWorker({ ...cast, cwd });
       if (worker !== null) opts.onSpawn?.();
@@ -462,6 +468,7 @@ export async function runNode(
       const blocked = await settleIfBlocked(cwd, result.telemetry);
       if (blocked !== null) return blocked;
 
+      lane = 'stage';
       // ── marker gate (ledger C1) ─────────────────────────────────────────────
       const markers = await deps.isolate.scanMarkers(cwd);
       gates.push({ gate: 'marker', exitCode: markers.length > 0 ? -1 : 0 });
@@ -508,6 +515,7 @@ export async function runNode(
       }
 
       // ── smoke ────────────────────────────────────────────────────────────────
+      lane = 'smoke';
       if (node.accept.smoke) {
         const { output, stdout, exitCode } = await execGateWithRetry(
           deps,
@@ -549,6 +557,7 @@ export async function runNode(
 
       // ── audit ────────────────────────────────────────────────────────────────
       let output: AuditResult | undefined;
+      lane = 'audit';
       if (node.accept.audit) {
         const ladder = await runAuditLadder(node, cwd, stagedFiles, deps, timeoutMs, {
           signal: opts.signal,
@@ -627,6 +636,18 @@ export async function runNode(
         ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
       };
     }
+  } catch (err) {
+    // A surprise the ladder did not name settles the node (D23): the attempt
+    // in flight counted, the tree handed back for the quarantine, the seam's
+    // text as the failed gate's tail, and the step that picks the work up.
+    const message = err instanceof Error ? err.message : String(err);
+    const gate = `seam:${lane}`;
+    gates.push({ gate, exitCode: -1 });
+    return handBack({
+      verdict: failedVerdict(node, attempts, { gate: { ran: gate, exitCode: -1 } }),
+      gateOutputTail: outputTail(message),
+      verdictDetail: `${message} — next: ${surpriseNextStep(node, lane, iso !== null)}`,
+    });
   } finally {
     // Safety net: any tree still held by a thrown/early path is disposed.
     if (iso !== null) await disposeQuiet(iso);
@@ -1080,6 +1101,18 @@ const NO_FALLBACK =
 function auditDiversityRefusal(node: Node, provider: string): string | undefined {
   if (!node.accept.audit || node.accept.audit.provider !== provider) return undefined;
   return `node '${node.id}': resolved audit provider '${node.accept.audit.provider}' must differ from build provider '${provider}'`;
+}
+
+// The lanes of a node's ladder, in run order (D23).
+type SeamLane = 'isolate' | 'setup' | 'worker' | 'stage' | 'smoke' | 'audit';
+
+// What picks a surprised node's work up (D23). A tree whose work and smoke
+// were green needs its audit alone; any other kept tree is resumed by a re-run
+// (D17); with no tree there is nothing to resume.
+function surpriseNextStep(node: Node, lane: SeamLane, kept: boolean): string {
+  if (!kept) return 're-run the plan';
+  if (lane === 'audit') return `pleach audit <plan.json> ${node.id}`;
+  return `re-run the plan: the node resumes from quarantine/${node.id}`;
 }
 
 function baseVerdict(node: Node, attempts: number): Verdict {
