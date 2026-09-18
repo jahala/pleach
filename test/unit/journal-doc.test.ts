@@ -854,3 +854,129 @@ describe('operator surfaces — the record survives (D21)', () => {
     expect(unsaid(readme, blockedFile(), facts)).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// ledger: D23 — a seam's surprise never costs the tree, and a reader finds how
+// on two surfaces. The journal: the `seam-violation` row names what its appends
+// carry and the kinds table pins it; the `verdict` row names the gate a
+// surprise settles under and the next step its detail states. docs/adapters.md
+// states the runner contract: the reason is read from the wait's JSON whatever
+// the exit code, and each of the nine reasons of `contracts/runner.md` with its
+// exit code and its class. The gate, the lanes, the next step and the reasons
+// are read from the code and the vendored fixture, never listed here.
+// ---------------------------------------------------------------------------
+const ADAPTERS_DOC = new URL('../../docs/adapters.md', import.meta.url).pathname;
+const RUNNER_FIXTURE = new URL('../fixtures/runner-reasons.jsonl', import.meta.url).pathname;
+
+/** The contract's reasons, from the vendored copy of its fixture. */
+function contractReasons(): { reason: string; exitCode: number; classification: string }[] {
+  return readFileSync(RUNNER_FIXTURE, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+}
+
+/** The gate a surprise settles under, as run-node spells it, with `<lane>` for the lane. */
+function surpriseGate(): string {
+  return `${sourced(RUN_NODE_SRC, /const gate = `([a-z]+:)\$\{lane\}`;/, 'surprise gate')}<lane>`;
+}
+
+/** The lanes of a node's ladder a surprise can come from. */
+function seamLanes(): string[] {
+  const union = sourced(RUN_NODE_SRC, /^type SeamLane = ([^;]+);$/m, 'SeamLane type');
+  return [...union.matchAll(/'([a-z]+)'/g)].map(([, lane]) => lane);
+}
+
+/** The step a surprise in the audit lane names, with `<node>` for the node's id. */
+function auditNextStep(): string {
+  const step = sourced(
+    RUN_NODE_SRC,
+    /if \(lane === 'audit'\) return `([^`$]+)\$\{node\.id\}`;/,
+    'audit next step',
+  );
+  return `${step}<node>`;
+}
+
+/** docs/adapters.md's table rows, as `first cell -> the row's cells`. */
+function tableRows(md: string): Map<string, string[]> {
+  const rows = new Map<string, string[]>();
+  for (const line of md.split('\n')) {
+    if (!line.startsWith('|')) continue;
+    const cells = rowCells(line).slice(1, -1);
+    rows.set(cells[0] ?? '', cells);
+  }
+  return rows;
+}
+
+/** The reasons docs/adapters.md's `WorkerResult` block lists for `reason?:`. */
+function documentedUnion(md: string): string[] {
+  const at = md.indexOf('export interface WorkerResult {');
+  if (at === -1) return [];
+  const block = md.slice(at, md.indexOf('\n}', at));
+  const union = block.match(/reason\?:([^;]*);/)?.[1] ?? '';
+  return [...union.matchAll(/'([a-z-]+)'/g)].map(([, reason]) => reason).sort();
+}
+
+describe('journal doc — a surprise settles its node (D23)', () => {
+  const documented = documentedEvents(readFileSync(JOURNAL_DOC, 'utf8'));
+  const violation = appendLiterals('seam-violation');
+
+  test('the facts are read from the code, not vacuously empty', () => {
+    expect(violation.length).toBeGreaterThan(0);
+    expect(surpriseGate()).toBe('seam:<lane>');
+    expect(seamLanes()).toContain('audit');
+    expect(auditNextStep()).toContain('pleach audit');
+  });
+
+  test('the `seam-violation` row names every field its appends carry', () => {
+    const fieldsCell = rowCells(documented.get('seam-violation') ?? '')[2] ?? '';
+    const unnamed = [...lineFields(violation).keys()].filter(
+      (f) => !fieldsCell.includes(`\`${f}\``),
+    );
+    expect(documented.has('seam-violation')).toBe(true);
+    expect(unnamed).toEqual([]);
+  });
+
+  test('the kinds table pins `seam-violation` as a node lifecycle event', () => {
+    expect(KINDS['seam-violation']).toBe('node.lifecycle');
+  });
+
+  test('the `verdict` row names the gate a surprise settles under, its lanes and its next step', () => {
+    const row = documented.get('verdict') ?? '';
+    const facts = [`\`${surpriseGate()}\``, ...seamLanes().map((l) => `\`${l}\``), auditNextStep()];
+    expect(facts.filter((fact) => !row.includes(fact))).toEqual([]);
+    expect(unsaid(row, surpriseGate(), ['re-run', 'quarantine/<id>', 'D23'])).toEqual([]);
+  });
+});
+
+describe('docs/adapters.md — the runner contract (D23)', () => {
+  const md = readFileSync(ADAPTERS_DOC, 'utf8');
+  const reasons = contractReasons();
+  const rows = tableRows(md);
+
+  test('the contract is read from its fixture, not vacuously empty', () => {
+    expect(reasons.length).toBe(9);
+  });
+
+  test('the doc cites contracts/runner.md and says the reason is read whatever the exit code', () => {
+    expect(unsaid(md, 'contracts/runner.md', ['whatever the exit code', 'reason'])).toEqual([]);
+  });
+
+  test('a table names each reason of the contract with its exit code and its class', () => {
+    const wrong = reasons
+      .filter(({ reason, exitCode, classification }) => {
+        const cells = rows.get(`\`${reason}\``);
+        return (
+          cells === undefined ||
+          !cells.some((c) => c === String(exitCode) || c === `\`${exitCode}\``) ||
+          !cells.some((c) => says(c, classification))
+        );
+      })
+      .map(({ reason, exitCode, classification }) => `${reason} (${exitCode}, ${classification})`);
+    expect(wrong).toEqual([]);
+  });
+
+  test("the `WorkerResult` block lists the contract's reasons", () => {
+    expect(documentedUnion(md)).toEqual(reasons.map(({ reason }) => reason).sort());
+  });
+});
