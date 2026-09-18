@@ -182,6 +182,14 @@ gate, with the hook's output as the output tail in the journal and hashed into t
 tree is kept on `quarantine/<id>` and the receipt is written. That quarantine is a snapshot
 (`write-tree`, `commit-tree`, `update-ref`), so no hook runs on it and no hook can refuse it.
 
+**A seam's surprise fails the node and keeps its work.** The runner's reason is read from its
+output whatever its exit code, so a timeout, a provider error or an idle worker settles the way the
+runner contract classifies it. Anything else a seam throws mid-node settles the node `failed` under
+the gate `seam:<lane>`, with the seam's text as the output tail and the attempt counted. The tree is
+kept on `quarantine/<id>` and the receipt is written. The verdict's detail names the next step:
+`pleach audit plan.json <node>` when only the audit threw, otherwise a re-run, which resumes from
+the quarantine.
+
 **A lost journal is reported, and every run keeps a copy of its own lines.** The journal at
 `<git-dir>/pleach/journal.jsonl` is one file, and the receipts beside it are kept per close. Right
 after `run-start`, every node whose latest receipt has no `verdict` line in the journal is
