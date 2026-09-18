@@ -367,6 +367,21 @@ checkpoint but have different lifetimes and trust domains.**
   once so the isolate and clean seams (`git -C <root>` with `cwd: <root>`) never see a relative root
   either. Tests: `test/unit/gitdir.test.ts`, `test/e2e/repo-root-relative.test.ts`.
 
+- **D23 ⚠ [field] A seam's surprise cost the tree.** jahala/pleach#120, #110 (2026-09-18). umbel's `wait`
+  began exiting non-zero for every reason but stop (122 provider-error, 123 idle, 124 timeout, 125 dead,
+  126 input) while still printing the reason as JSON. The adapter threw `WorkerSeamError` on the exit code
+  before parsing the reason, so none of them reached `classify`; run-node's safety net disposed the live
+  tree on the throw; run-plan's catch journaled `failed` and returned before `settle()`, the only writer of
+  the receipt and the quarantine. jahala/quadrat lost four verified trees overnight to a machine's sleep,
+  an attempt clock and a stalled auditor, each `failed after 0 attempt(s)`. provider-error, file and pattern
+  were not in the reason union at all. **Fix:** the adapter reads the reason whatever the exit code and
+  throws only when none parses; a surprise in a node's run settles it — attempt counted, tree quarantined,
+  receipt with the seam's text and the next step — in run-node where the tree is live and in run-plan for
+  the rest; the union and the classifier name all nine reasons of `contracts/runner.md`, provider-error
+  retryable, an unnamed reason terminal and journaled `seam-violation`. Tests:
+  `test/unit/umbel-wait-reasons.test.ts`, `test/loop/surprise-settles.test.ts`,
+  `test/unit/runner-contract.test.ts`, `test/unit/journal-doc.test.ts`, `test/e2e/seam-keeps-tree.test.ts`.
+
 ### Verified-sound (attacks refuted — do not relitigate)
 
 `--detach` fan-out (two detached worktrees at one commit are legal); the closed-add-then-dispose-inside-

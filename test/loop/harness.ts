@@ -216,6 +216,9 @@ export interface HarnessOpts {
   emitDecision?: (v: Verdict) => { closed: boolean };
   // make isolate throw catastrophic for these baseRefs (bad-ref tests).
   badRefs?: Set<string>;
+  // An error isolate throws for a node id, before any tree exists — a surprise
+  // that is not IsolateCatastrophicError (D23).
+  isolateThrows?: Record<string, Error>;
   // conflict files surfaced by isolate for a given node id.
   conflicts?: Record<string, string[]>;
   // changed files a worker leaves in its cwd, keyed by node id.
@@ -342,6 +345,8 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
           throw new IsolateCatastrophicError(ref, 'bad ref (harness)');
         }
       }
+      const surprise = opts.isolateThrows?.[node.id];
+      if (surprise !== undefined) throw surprise;
       const cwd = `/wt/${node.id}/${log.count('isolate', node.id)}`;
       const conflictFiles = opts.conflicts?.[node.id] ?? [];
       // Workers produce something by default (a realistic tree — the hygiene

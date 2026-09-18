@@ -125,9 +125,19 @@ export interface WorkerResult {
   diff?: string;
   filesTouched: string[];
   exitCode?: number;
-  reason?: 'stop' | 'dead' | 'timeout' | 'aborted' | 'input' | 'idle';
-  // The blocking prompt text when reason is input/idle — the loop carries it
-  // into Verdict.evidence.blockedReason (contract v1.1.1).
+  reason?:
+    | 'stop'
+    | 'file'
+    | 'pattern'
+    | 'provider-error'
+    | 'idle'
+    | 'timeout'
+    | 'dead'
+    | 'input'
+    | 'aborted';
+  // What the runner observed when the reason is not stop — the blocking prompt
+  // of input/idle (the loop carries it into Verdict.evidence.blockedReason,
+  // contract v1.1.1), a provider error's text, a timeout, a death.
   message?: string;
   // What the runner saw when the session ended abnormally (D11): the last pane
   // capture and the process exit code, when the runner can supply them. Filled

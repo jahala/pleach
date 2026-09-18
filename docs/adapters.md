@@ -109,8 +109,18 @@ export interface WorkerResult {
   diff?: string;
   filesTouched: string[];
   exitCode?: number;
-  reason?: 'stop' | 'dead' | 'timeout' | 'aborted' | 'input' | 'idle';
-  // The blocking prompt text when reason is input/idle — carried into Verdict.evidence.blockedReason.
+  reason?:
+    | 'stop'
+    | 'file'
+    | 'pattern'
+    | 'provider-error'
+    | 'idle'
+    | 'timeout'
+    | 'dead'
+    | 'input'
+    | 'aborted';
+  // What the runner observed when the reason is not stop — the blocking prompt of
+  // input/idle (carried into Verdict.evidence.blockedReason), a provider error's text.
   message?: string;
   telemetry: { tokens?: number; contextPct?: number; compacted?: boolean };
 }
@@ -126,16 +136,29 @@ drive via a send→wait→kill cycle:
 4. `kill` tears down the session. pleach always calls `kill` after `wait` returns,
    regardless of outcome.
 
-The `reason` field is the full taxonomy of terminal events:
+The `reason` field names how the wait ended, and its values are the nine reasons of the runner
+contract, `contracts/runner.md` on jahala/plotplot. umbel's `wait --json` prints
+`{"reason": …, "message"?: …}` and exits non-zero for every reason but stop, file and pattern; the
+umbel adapter reads the reason from that JSON whatever the exit code, and throws `WorkerSeamError`,
+naming the exit code and the output, only when no reason parses. pleach classifies each reason as the
+contract does (`classifyWorkerReason` in `src/core/classify.ts`; a vendored copy of the contract's
+fixture pins the table in `test/unit/runner-contract.test.ts`):
 
-| `reason` | Meaning | pleach's action |
-|---|---|---|
-| `'stop'` | Agent finished cleanly and produced output | Read `finalMessage`, stage files, run gates |
-| `'dead'` | Agent process exited unexpectedly | Retry or fail per `onDead` policy |
-| `'timeout'` | `wait` timed out | Retryable — reuse tree, re-prompt with evidence |
-| `'aborted'` | Session cancelled | Terminal failure |
-| `'input'` | Agent is waiting at a permission/approval prompt | Kill + dispose; Verdict `status:'blocked'` with the prompt text as `blockedReason` — the operator fixes the permission mode and re-runs |
-| `'idle'` | Agent stalled without a permission prompt | Kill + dispose; Verdict `status:'blocked'` — the operator re-runs |
+| `reason` | umbel exit | class | pleach's action |
+|---|---|---|---|
+| `stop` | 0 | terminal | The worker says it is done: read `finalMessage`, stage files, run gates |
+| `file` | 0 | terminal | Settles failed with `gate.ran` `wait:file` — pleach waits on the stop hook, so this end is not its own |
+| `pattern` | 0 | terminal | Settles failed with `gate.ran` `wait:pattern`, as `file` does |
+| `provider-error` | 122 | retryable | Same-tree retry with evidence while attempts remain, then failed with `gate.ran` `wait:provider-error` |
+| `idle` | 123 | blocked | Verdict `status:'blocked'`, the tree kept in quarantine — the operator re-runs |
+| `timeout` | 124 | retryable | Same-tree retry with evidence while attempts remain, then failed with `gate.ran` `wait:timeout` |
+| `dead` | 125 | dead | Retry on the fallback provider or fail per `onDead` policy |
+| `input` | 126 | blocked | Verdict `status:'blocked'` with the prompt text as `blockedReason`, the tree kept in quarantine — the operator fixes the permission mode and re-runs |
+| `aborted` | 130 | terminal | The wait was interrupted: the node settles `aborted`, its tree kept in quarantine |
+
+A reason the contract does not name falls to terminal and is journaled as `seam-violation` with its
+text. Any other surprise from a seam settles the node failed with its tree kept (see the `verdict` row
+of [`docs/journal.md`](journal.md)).
 
 **Runner post-condition (verified from `src/loop/run-node.ts:191–194`).** When `wait()`
 returns `reason: 'stop'`, the runner is expected to have populated the working tree with
