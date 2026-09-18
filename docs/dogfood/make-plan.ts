@@ -34,9 +34,10 @@ export interface LoopSpec {
   checks: Check[];
 }
 
-// The pinned tend2 master build, by path: the `tend2` on PATH is a global link to whatever
+// This agent's own pinned tend2 master build, by path under /tmp/pleach-agent (the umbrella keeps its
+// own clones elsewhere under /tmp; nobody else's pin is rebuilt from here): the `tend2` on PATH is a global link to whatever
 // worktree last built it, and only the pinned verifier writes a pass.
-const VERIFY = 'node /tmp/tend2-pinned/dist/cli.js';
+const VERIFY = 'node /tmp/pleach-agent/tend/dist/cli.js';
 const WEEDER = '/Users/jahala/.local/bin/weeder';
 const WORKER = { provider: 'claude', model: 'claude-opus-5' };
 // The cross-provider auditor: codex. (opencode + DeepSeek stood in while codex 404'd inside umbel,
@@ -63,7 +64,7 @@ const ENV = `## Your environment
 - Read ENGINEERING.md FIRST and conform to it (it is binding: test-first, no stubs/mocks/TODOs, S.U.P.E.R. layering, typed errors, no bare \`new Error\`, never \`rm\`). Then read docs/ledger.md item ${spec.ledger} and the loop file ${LOOP} including its narrative and Tried — it is your full context and it is READ-ONLY for you (check states belong to the verifier; a Tried line moves the payload pin).
 - Leave your changes in the working tree; do not create branches, commit, or push.
 - \`bun run check\` (typecheck + biome + every test) is the repository's green; it must be green when you finish.
-- Never run \`bun link\`, and never touch /tmp/pleach-pinned or /tmp/tend2-pinned: they are the conductor and the verifier driving you.
+- Never run \`bun link\`, and never touch anything under /tmp/pleach-agent (the conductor and the verifier driving you) or the umbrella's clones /tmp/pleach-pinned and /tmp/tend2-pinned.
 - Probe/scratch files go in \`.loop-scratch/\` only. If genuinely blocked, write BLOCKED.md at the repo root — what you tried, what stopped you, what a fix needs — instead of faking a green.`;
 
 const RULES = `## Rules
