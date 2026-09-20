@@ -13,7 +13,7 @@
 
 Ledger D19; jahala/pleach#64, #69, #75, #68, #73, #81, the "Fail before spend" milestone. In each one the conductor could have named the fault for free, and instead a worker spent the owner's window first: a smoke joined by `&&` that validate accepted and exec refused fifteen minutes later, once the build had finished; a gate that could not exec at all, retried as if the worker had done something wrong; a test quoting an example key refused at close; a schema that told a planner a defaulted field was required; a staged count that counted what the editor touched; a verdict naming a model for a node that never spawned one.
 
-## How
+## Each fault named where it is known
 
 Validation reuses the guard exec has. `validatePlan` (src/core/validate.ts) splits every plan-authored command string (`work.command`, `work.test`, `setup`, `accept.smoke`) with the same `toArgv` and `shellOperatorTokens` the exec path uses (src/core/argv.ts), and refuses a bare operator as a `PlanInvalidError` with the escape hatch named. `pleach validate` exits 2, and `pleach run` refuses before the lock. A gate that cannot run is a fault of the plan or the environment, never of the work: the guard's exit -1, or the exec seam's 127 before any command started. run-node settles the node on that attempt with `gate.ran` naming the command and a `detail` naming the fault. No further attempt is spent, and nobody is re-prompted.
 
@@ -27,7 +27,7 @@ The secret battery (src/core/hygiene.ts) carries the documented example credenti
 - [x] (code) The secret scan allowlists the documented example credentials (AWS, GitHub, Stripe), vendored with provenance: a test quoting one passes hygiene, a live-shaped key is still refused, and the allowlist is exact-match, never a pattern · test/unit/hygiene-allowlist.test.ts @3f151ba · by cli
 - [x] (code) `pleach schema` emits every zod-defaulted field as optional (`policy.maxAttempts`, `onDead`, `reauditWhen`; `worker`, `needs`, `accept`, `policy`, `closes`), and a minimal plan that the validator accepts validates against the emitted schema · test/unit/schema-optional.test.ts @c5f41a2 · by cli
 - [x] (code) `ReceiptFacts.stagedFiles` counts the paths the index holds after staging (the seam answers from the index, not the touched set), and every `verdict` journal line carries `spawned` — `false` for a command node, `true` when a worker spawned — beside the cast it names · test/loop/facts-are-facts.test.ts @13eb15f · by cli
-- [x] (code) docs/journal.md documents `verdict`'s `spawned`; README and the CLI help state that validate refuses shell operators and that a gate that cannot run fails once · test/unit/journal-doc.test.ts @aa9f6da · by cli
+- [x] (code) docs/journal.md documents `verdict`'s `spawned`; README and the CLI help state that validate refuses shell operators and that a gate that cannot run fails once · test/unit/journal-doc.test.ts @d5d1ab0 · by cli
 - [x] (code) Through the real CLI: `pleach validate` on a plan with `&&` in its smoke exits 2 before anything runs; `pleach run` on a plan whose smoke names a missing binary fails the node after one attempt with the fault named and no second worker; `pleach schema` output validates that plan's minimal sibling · test/e2e/fail-before-spend.test.ts @7513f7c · by cli
 
 ## Needs #cli-validate #conductor-loop #audit-egress

@@ -76,19 +76,15 @@ Worktree isolation lets parallel nodes work on independent copies without interf
 
 `dispose` calls `git worktree remove --force` and treats "is not a working tree" and "not found" as success (idempotent for double-dispose). Any other non-zero exit throws `IsolateCatastrophicError`, so an unrecognized failure is never silently swallowed. After the worktree is removed, `dispose` deletes the `mkdtemp` parent directory (`tmpBase`) it owns via `fs.rm`. The [conductor loop](conductor-loop.tend2.html) holds `dispose` until after `emitVerdict` returns, so a waking dependent never sees its dependency's worktree vanish mid-resolve. See [the project bet](pleach.tend2.html) for the project bet.
 
-## Where
-
-src/seams/isolate.ts
-
-## How
+## The git commands, read by exit code
 
 git worktree add --detach in os tmpdir; sequential git merge per baseRef[1..]; conflict exit=1 commits markers in-place; IsolateCatastrophicError on exit>1 or unrelated-histories; git grep -E for marker scan; git add -A -- <files> for scoped stage
 
-## Fit
+## The substrate the loop works against
 
 The git substrate [the conductor loop](conductor-loop.tend2.html) isolates, gates and commits against.
 
-## Impact
+## This seam gives the gate a tree
 
 Every node builds in a disposable worktree off its verified dependencies. The scan that catches a conflict marker before it can reach a verified branch is a gate in [the conductor loop](conductor-loop.tend2.html); this seam is what gives that gate a tree to scan.
 

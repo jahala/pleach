@@ -25,15 +25,15 @@ Two conductors on one repo would race the branches and the ledger. A run nobody 
 
 The [conductor loop](conductor-loop.tend2.html) writes `run-start`, `node-start`, `verdict`, `gate-fail`, `blocked`, `closed` or `not-closed`, and `run-end` as events through this seam. A developer reconstructing a misbehaving run opens the JSONL and reads the full sequence (`run-start` → node verdicts → `closed`/`not-closed` decisions → `run-end` with the bucket summary) without paying for real agents or re-executing anything. The scheduler's retry choices, the stale-lock takeover and the dual-close decision are all in the file. See [the project bet](pleach.tend2.html) for the project bet behind this.
 
-## Where
+## Lock and journal, two seam files
 
 src/seams/lock.ts; src/seams/journal.ts
 
-## Fit
+## Run-safety primitives under the whole run
 
 The run-safety primitives [the conductor loop](conductor-loop.tend2.html) relies on from start to finish.
 
-## Impact
+## Guaranteed exclusivity and a replayable trace
 
 One conductor per (repo, source) is guaranteed, and every run leaves a replayable JSONL trace. The events written to it are [the conductor loop](conductor-loop.tend2.html)'s; this loop owns only the lock and the append.
 

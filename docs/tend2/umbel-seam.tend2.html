@@ -101,19 +101,19 @@ The six `wait` reasons (`stop`, `dead`, `timeout`, `aborted`, `input`, `idle`) s
 
 
 
-## Where
+## The adapter is one file
 
 src/adapters/umbel.ts
 
-## How
+## The umbel commands behind each call
 
 umbel spawn --name --cwd [--provider] [--model] [--allowed-tools] [--permission-mode] [--env K=V]; send --json captures sinceMtime; wait --json --since --timeout; read/actions/diff gathered on stop; WorkerSpawnError/WorkerSeamError on failures
 
-## Fit
+## Provider churn stays behind the runner port
 
 The execution boundary between [the conductor loop](conductor-loop.tend2.html) and the agent providers, keeping umbel and provider churn behind the runner port described in [pluggable-adapters](pluggable-adapters.tend2.html).
 
-## Impact
+## Stochastic agents behind one typed boundary
 
 Stochastic agents are driven through one spawn/send/wait/kill boundary, with dead, timeout and blocked surfaced as typed reasons. What [the conductor loop](conductor-loop.tend2.html) does with each of them is its decision, not this seam's.
 

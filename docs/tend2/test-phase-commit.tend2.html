@@ -13,7 +13,7 @@
 
 Ledger D13. pleach 0.0.1 gated RED-must-fail and GREEN-must-pass in the worktree, then committed the whole tree once at settle. Nothing in history proved a failing test ever existed. `weeder bite` (rule B1, "a test passed without the change it covers") had no commit to check out, and copeca's corpus minting and the slice-coverage rule stand on the same missing commit. The umbrella's law (docs/building-the-garden.md §5) mandates the separate test-phase commit.
 
-## How
+## The seal is a close in miniature
 
 `runWork` (src/loop/run-work.ts) drives the phases. `runNode` (src/loop/run-node.ts) gives it a seal function, which it calls once, after the RED gate passes and before the impl phase's prompt is sent. The seal does what the close does, in miniature. It stages only the red phase's files (`filesTouched` ∪ `changedFiles`), runs the marker scan and the hygiene battery over the staged diff, then commits on the detached HEAD. No branch moves, because `node/<id>` is only ever published at settle. The subject is `pleach: <id> red phase` and the trailer is `pleach-phase: red`. The journal records `phase-commit` with the sha and the sealed files. A red phase that changed no file fails the `red` gate with evidence instead of sealing nothing.
 
@@ -21,7 +21,7 @@ Retries keep the seal honest. Once a red commit exists on the attempt's tree, a 
 
 `pleach validate` warns on a node whose phases end on `impl`, because no green gate ever runs and the combined tree is never proven. The warning appears in the JSON (`warnings[]`) and on stderr. The plan stays valid.
 
-## Impact
+## History shows the failing test first
 
 `weeder bite` is a checkout and a run. Every phased node's history shows the failing test before the change that made it pass. A worker that weakens a test during impl leaves that edit in the impl commit, where `weeder check` judges it against the sealed red.
 
@@ -32,7 +32,7 @@ Retries keep the seal honest. Once a red commit exists on the attempt's tree, a 
 - [x] (code) A retry after a sealed red resumes at the impl phase carrying the evidence — no second red prompt, no second seal; a red-gate failure before any seal restarts at red · test/loop/phase-commit-retry.test.ts @ab21104 · by cli
 - [x] (code) The seal is gated like the close: conflict markers or a secret in the red files fail `marker` / `hygiene:secret` with no commit made · test/loop/phase-commit-hygiene.test.ts @e9113bf · by cli
 - [x] (code) `pleach validate` warns on a node whose phases end on impl: `warnings[]` in the JSON, one stderr line, exit stays 0 · test/unit/validate-phases.test.ts @01a0ece · by cli
-- [x] (code) docs/journal.md documents `phase-commit`, and every event name the source appends is documented there (the stability promise, pinned) · test/unit/journal-doc.test.ts @b9bc0b1 · by cli
+- [x] (code) docs/journal.md documents `phase-commit`, and every event name the source appends is documented there (the stability promise, pinned) · test/unit/journal-doc.test.ts @26492b6 · by cli
 
 ## Needs #conductor-loop #isolate-seam #lock-journal
 

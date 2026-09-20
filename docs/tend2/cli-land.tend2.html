@@ -13,11 +13,11 @@
 
 Ledger B3: the last mile was unspecified. Verified work sat on node/<id> branches, so tend said verified while the working branch lacked the code. Every real adopter met this first.
 
-## How
+## All-or-nothing merges through a throwaway worktree
 
 The policy lives in src/loop/land.ts. It is all-or-nothing, refusing unless EVERY plan node is verified-closed; sinks resolve through the same B1/C5 baseRef chain as isolation. The mechanics live in IsolateSeam.land (src/seams/isolate.ts). Merges build in a throwaway detached worktree, and the user's checkout is only ever touched by a final `merge --ff-only`. A conflict, detached HEAD, moved branch, or overlapping uncommitted edit aborts with the repo byte-identical. Typed errors LandConflictError / LandBlockedError map to exit 1 at the face, and every outcome journals.
 
-## Impact
+## From verified plan to your branch
 
 One command takes an operator from 'plan verified' to 'code on my branch'. There is no hand-merging of node branches, no half-landed plan, and no way to land unverified work.
 

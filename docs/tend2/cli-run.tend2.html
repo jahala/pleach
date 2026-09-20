@@ -35,19 +35,15 @@ Errors outside the loop collapse to typed exits: `LockHeldError` → 3 (another 
 
 Verified work publishes as `node/<id>` branches. Landing them is a separate, deterministic step: `pleach land` merges a plan's sinks onto the checked-out branch, and `pleach run --land` performs that same landing after a fully-verified close. The sibling verbs round out the surface: [pleach validate](cli-validate.tend2.html) checks plan structure without running anything, and `pleach schema` emits the plan contract as JSON Schema for planners. The [conductor loop](conductor-loop.tend2.html) is the engine `run` drives. The [isolate](isolate-seam.tend2.html), [umbel](umbel-seam.tend2.html), and [tend](tend-seam.tend2.html) seams are the bundled adapters it wires into deps (see `docs/adapters.md` for swapping them). The [project bet](pleach.tend2.html) is why those seams exist at all.
 
-## Where
-
-src/faces/cli.ts; src/main.ts
-
-## How
+## Flags in, RunSummary out
 
 parseFlags → readPlan (Zod) → assemble ConductorDeps via buildDeps → runPlan → summaryExitCode; JSON RunSummary on stdout; errors → stderr + typed exit code; a stderr line names already-verified nodes skipped (resume)
 
-## Fit
+## The operator's surface over the loop
 
 pleach's primary entry point: the operator's surface over [the conductor loop](conductor-loop.tend2.html), which owns every scheduling and close decision behind it.
 
-## Impact
+## A plan becomes verified branches
 
 One command turns a plan into verified branches, and the exit code alone says whether to trust the run or intervene. Which branches get published is decided by [the conductor loop](conductor-loop.tend2.html), never here.
 

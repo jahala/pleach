@@ -27,19 +27,19 @@ The generalization keeps the deterministic loop untouched and turns those two co
 
 pleach conducts **local** executors over git worktrees with **automatable** verification. That is the boundary. Cloud-autonomous agents or human-gated approval need an adapter that bridges into the sync send→wait→kill and deterministic-emitVerdict contracts. See `docs/adapters.md` and the [project bet](pleach.tend2.html).
 
-## Where
+## Ports, adapters, config and exports
 
 src/loop/deps.ts; src/adapters/git.ts; src/faces/config.ts; src/core/schema-json.ts; src/index.ts; src/adapters/scripted.ts
 
-## How
+## The mechanics of ports and adapter selection
 
 RunnerSeam/LedgerSeam interfaces (loop/deps.ts) the loop composes but never imports; src/adapters/{umbel,tend,git}.ts bundled bridges + package.json exports ./adapters/* + ./config; resolveSeams precedence (--config | <repoRoot>/pleach.config.ts | defaults: umbelRunner + (tendModule ? tendLedger : gitLedger)); gitLedger reads node/* branches via git for-each-ref; planJsonSchema via z.toJSONSchema; typed ConfigError + LedgerError; buildDeps(opts) assembles a ConductorDeps from the four pleach seams plus an injected runner/ledger; src/index.ts re-exports the public surface and the package '.' export points at it (the bin stays main.ts); scriptedRunner(scenarios) is a deterministic RunnerSeam exported at ./adapters/scripted
 
-## Fit
+## The generalization layer under the loop
 
 The generalization layer: the two ports [the conductor loop](conductor-loop.tend2.html) depends on, the bundled adapters that satisfy them, and the config that selects a pair. [tend-seam](tend-seam.tend2.html) and [umbel-seam](umbel-seam.tend2.html) become the batteries-included default rather than the only mode, and [scripted-runner](scripted-runner.tend2.html) is the runner that needs no live agent.
 
-## Impact
+## What a non-tend adopter gets
 
 A non-tend, non-umbel user runs pleach standalone on git, or wires any runner/ledger via a pleach.config.ts, without forking the engine. tend + umbel become reference adapters rather than requirements. pleach is also usable as a library (import { runPlan, buildDeps } from 'pleach') and runnable with zero external tooling via the scripted runner.
 

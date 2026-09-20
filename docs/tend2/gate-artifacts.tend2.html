@@ -13,7 +13,7 @@
 
 Ledger D14; jahala/pleach#59. Today the receipt proves the smoke gate ran and how it ended (exit code, sha256 of a 2000-character tail). Nothing else survives the tree. When the smoke is `weeder check --strict`, its stdout is a SARIF log, and that log's `suppressions` are the only record of what an agent waved through in that node. The umbrella's calibration folds need those per-rule counts, and most garden work runs under pleach in worktrees nobody keeps.
 
-## How
+## Keeping the gate's stdout, setting scratch aside
 
 The exec seam (src/seams/exec.ts) already drains stdout and stderr separately and interleaves them into `output`. It additionally reports `stdout` alone (additive on `ExecResult`), because a SARIF log is stdout and only stdout. A pure, total `parseSarif` in core recognises a SARIF 2.1.0 log (`version: "2.1.0"`, a `runs` array) and nothing else. In the smoke gate (src/loop/run-node.ts), a stdout that parses is hashed as `artifactSha: sha256(stdout)` on the gate record, sealed at mint like `outputTailSha`. The bytes ride the hand-back to settle (src/loop/run-plan.ts), where the receipt store writes them beside the receipt, the receipt file names them outside the envelope (`artifacts.sarif`), and the journal records one `gate-artifact` {node, gate, path, sha256}. A stdout that is not SARIF keeps nothing and leaves the record byte-identical to today.
 
@@ -23,7 +23,7 @@ The friction journal is a worktree file the profile names (`.plotplot/friction/<
 
 A failed artifact write is journaled as `receipt-write-failed` and never blocks the close, exactly as the receipt file's own write does today.
 
-## Impact
+## The finding log outlives the worktree
 
 A gate's finding log outlives the worktree, bound to the sealed facts by one hash. The calibration ledger can count waved-through rules per node without re-running anything. A friction journal written inside a conducted worktree is no longer lost with the tree.
 

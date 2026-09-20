@@ -74,19 +74,19 @@ When a run restarts, `readClosed` is called before any node is scheduled. The re
 
 Path translation is the other half of resume. `src/adapters/tend.ts:toProjectRoot` strips `/docs/tend/features/` and everything after it from `plan.source`, routing the ingester to the project root the transport expects. A path without that marker is returned unchanged, so the adapter doesn't assume a fixed structure. `src/adapters/tend.ts:createModuleTransport` handles the other failure mode. A bad `--tend-module` path throws `TendTransportError` (not a generic `Error`) before any node runs. That satisfies the developer:1 job (transport validation is ledger-tested) and separates misconfiguration from a real ingester failure at the type level. The adapter is selected by `resolveSeams` when `--tend-module` is given; without it (and no `pleach.config.ts`), pleach uses the bundled `gitLedger` instead. See [the project bet](pleach.tend2.html) for the full system bet.
 
-## Where
+## The tend adapter is a single module
 
 src/adapters/tend.ts
 
-## How
+## Transport, queue, path and shape translation
 
 createModuleTransport: dynamic import + export validation; createTendSeam: FIFO promise chain (tail.then(fn,fn)); toProjectRoot strips /docs/tend/features/ suffix; adaptToMap converts Set to Map&lt;id,null&gt;
 
-## Fit
+## The only writer to tend's polyglots
 
 pleach's bridge to tend's gated ledger, and the only writer to the source polyglots during a run. It satisfies the ledger port described in [pluggable-adapters](pluggable-adapters.tend2.html).
 
-## Impact
+## Claim and artifact stay in lockstep
 
 Verdicts reach tend's ledger through a single serial writer, and resume reads back each verified node's commit, so claim and artifact stay in lockstep. The verdicts themselves are minted by [the conductor loop](conductor-loop.tend2.html); this seam only carries them.
 
