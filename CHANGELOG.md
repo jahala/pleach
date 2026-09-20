@@ -8,9 +8,9 @@ Entries carry the defect-ledger id where one exists (`D8`, `D21`, ...); the ledg
 
 ### Added
 - The deterministic conductor: a Kahn-scheduled DAG runner with a per-node gate ladder (isolate -> setup -> work -> conflict-marker scan -> scoped stage -> smoke -> cross-provider audit -> commit-before-emit) that publishes a `node/<id>` branch only for verified work.
-- Six seams — umbel, tend, isolate, exec, lock, journal — behind a pure, total `core/`.
+- Seven seams — exec, isolate, lock, journal, receipts, clean, gitdir — and two adapter ports (runner, ledger) behind a pure, total `core/`.
 - The `@agent-contract/plan` schema, pinned byte-for-byte to `core/plan.ts` by a drift test.
-- `pleach run` and `pleach validate` CLI faces with typed exit codes.
+- The `pleach` CLI: eight verbs (`run`, `land`, `audit`, `stop`, `validate`, `schema`, `receipt`, `clean`) with typed exit codes (0 all closed, 1 failures, 2 usage or invalid plan, 3 lock held).
 - `pleach land`: merges a verified plan's sinks onto the checked-out branch behind a composition gate that verifies, bisects and refuses all. `--sinks` lands a named subset; `--land-gate CMD` runs on the composed stack before the publish, with `{base}` replaced by the target branch's tip as it stood before the merges. Landing reads the ledger and does not wait on the rest of the run (D18).
 - `pleach receipt`: close receipts and the honesty ledger — every settled node's verdict is hashed and re-checkable after the fact.
 - `pleach stop`: drains a run so nothing new launches and in-flight nodes settle; `--now` aborts them instead. `pleach clean` sweeps a killed run's stale locks and orphaned worktrees (D12).

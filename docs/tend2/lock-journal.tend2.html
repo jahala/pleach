@@ -11,7 +11,7 @@
 
 **Goal.** O_EXCL PID lockfile per (repoRoot, source) with stale-lock takeover (B4) — prevents two pleach processes from running the same plan concurrently. Append-only JSONL run journal records all plan events (run-start, node-start, verdict, gate-fail, closed, run-end) for post-mortem analysis.
 
-Two conductors on one repo would race the branches and the ledger; and a run no one can replay can't be debugged.
+Two conductors on one repo would race the branches and the ledger. A run nobody can replay cannot be debugged.
 
 ## One conductor owns the repo until it releases
 

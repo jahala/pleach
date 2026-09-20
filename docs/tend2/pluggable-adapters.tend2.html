@@ -49,8 +49,8 @@ A non-tend, non-umbel user runs pleach standalone on git, or wires any runner/le
 - [x] (code) A missing (explicit --config) or malformed pleach.config.ts throws the typed ConfigError. · test/integration/config-resolve.test.ts @3d344e9
 - [x] (code) gitLedger.readClosed lists node/* branches → Map<id,sha> (resume record, non-node branches excluded); emitVerdict returns {closed: status==='done'}. · test/integration/git-ledger.test.ts @d8bc07c
 - [x] (code) planJsonSchema() emits the @agent-contract/plan contract as a JSON Schema describing nodes/goal/source — kept OUT of the drift-pinned plan.ts. · test/unit/plan-schema-export.test.ts @ebdb652
-- [x] (code) The package root ('pleach' / src/index.ts) exports the programmatic surface: runPlan, validatePlan, planJsonSchema, buildDeps, the typed errors, and the public types. · test/unit/library-export.test.ts @e99b033
-- [x] (code) buildDeps(opts) assembles a ConductorDeps from the four pleach seams (exec/isolate/lock/journal) plus an injected runner + ledger. · test/unit/library-export.test.ts @938cd88
+- [x] (code) The package root ('pleach' / src/index.ts) exports the programmatic surface: runPlan, validatePlan, planJsonSchema, buildDeps, the typed errors, and the public types. · test/unit/library-export.test.ts @a96af47 · by cli
+- [x] (code) buildDeps(opts) assembles a ConductorDeps from the four pleach seams (exec/isolate/lock/journal) plus an injected runner + ledger. · test/unit/library-export.test.ts @39edcca · by cli
 - [x] (code) The bundled directCliRunner (headless claude -p / codex exec) is selectable with `pleach run --runner direct-cli` and reaches a verified close with no umbel and no tmux; --runner with a config file is a contradiction and errors (no silent fallback). · test/e2e/direct-cli.test.ts @79b2e31
 
 ## For

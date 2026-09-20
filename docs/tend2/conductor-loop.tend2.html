@@ -132,9 +132,9 @@ An operator runs a whole DAG unattended and only verified work publishes a branc
 - [ ] (code) Smoke gate fail evidence: re-prompt on retry contains the smoke output tail. (inferred from test/loop/run-node.test.ts:retry carries evidence A3)
 - [ ] (code) {command} work: exit 0 → synthetic stop WorkerResult; non-zero → GateFailedError(command). (inferred from test/loop/run-work.test.ts:{command})
 - [ ] (code) {test,phases} work: RED must fail (exit 0 throws GateFailedError(red)); GREEN must pass (non-zero throws GateFailedError(green)). (inferred from test/loop/run-work.test.ts:{test,phases})
-- [x] (code) Lazy worker spawn: a {command} node reaches a verified close without the runner ever spawning a worker. · test/loop/run-node.test.ts @183d1e7
+- [x] (code) Lazy worker spawn: a {command} node reaches a verified close without the runner ever spawning a worker. · test/loop/run-node.test.ts @1d3c34b · by cli
 - [x] (code) Resume: a node already verified in the ledger is reported in RunSummary.alreadyVerified and never re-run. · test/loop/run-plan.test.ts @fb9024e
-- [x] (code) accept.audit.model: the cross-provider auditor is spawned at the requested model when the plan pins one. · test/loop/run-node.test.ts @2b6ba15
+- [x] (code) accept.audit.model: the cross-provider auditor is spawned at the requested model when the plan pins one. · test/loop/run-node.test.ts @057c667 · by cli
 
 ## For
 #operator #developer

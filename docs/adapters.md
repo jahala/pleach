@@ -30,7 +30,7 @@ The canonical specification lives in [`docs/contract/plan-schema.md`](contract/p
 Two commands let you check conformance without running the loop:
 
 ```
-pleach validate <plan.json>   # validates and prints precise typed errors; exit 1 on failure
+pleach validate <plan.json>   # validates and prints precise typed errors; exit 2 on an invalid plan
 pleach schema                 # emits the JSON Schema — feed it to an LLM or a codegen tool
 ```
 

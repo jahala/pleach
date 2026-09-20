@@ -24,6 +24,7 @@ pleach is a conductor for **agent-produced code**: it spawns agent workers, runs
 
 - Each node runs in a detached, disposable git worktree merged from its dependencies' verified branches.
 - The gates (conflict-marker scan, smoke, cross-provider audit) and the deterministic loop decide what publishes — agent output is parsed evidence, never trusted control flow.
-- pleach does **not** sandbox the worker itself; isolating the host (containers, VMs, restricted permissions) is the operator's responsibility. The default `--permission-mode bypassPermissions` assumes that external safety is in place.
+- pleach does **not** sandbox the worker itself; isolating the host (containers, VMs, restricted permissions) is the operator's responsibility. Workers spawn `--unattended` by default and no permission mode is set unless you pass
+  `--permission-mode`; either way the assumption is that external safety is in place.
 
 Treat a pleach run like a CI job that executes arbitrary code: give it only the access it needs.

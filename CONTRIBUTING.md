@@ -33,7 +33,7 @@ Enforced in review (and most by CI). Full detail in `ENGINEERING.md`:
 
 They also need `git >= 2.38` and `tmux` on PATH. With the vars unset most of those suites skip — which is exactly how CI runs.
 
-Two exceptions, worth knowing before your first `bun run check`. `test/integration/umbel-abort.test.ts` and `test/integration/umbel-idle.test.ts` fall back to whatever `umbel` is on PATH, so they run for anyone who has the binary installed even with `PLEACH_UMBEL_BIN` unset. Against umbel 0.0.1 built after 2026-09-16 four of their tests fail: umbel's `kill` and `wait` contract moved and pleach's adapter has not followed it yet. That is [issue #118](https://github.com/jahala/pleach/issues/118), not something you broke. CI has no umbel binary, so CI does not see it.
+Two exceptions worth knowing about. `test/integration/umbel-abort.test.ts` and `test/integration/umbel-idle.test.ts` fall back to whatever `umbel` is on PATH, so they run for anyone who has the binary installed, even with `PLEACH_UMBEL_BIN` unset. They drive the real runner, so they go red when umbel's `wait` or `kill` contract moves under them. CI has no umbel binary and never sees this, which means a green CI is not on its own proof that the runner seam still holds. Run them locally against the umbel you actually use.
 
 ## Pull requests
 
