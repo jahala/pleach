@@ -8,14 +8,37 @@
 # archive. Flipping the repository to public publishes all of it. After the flip it is
 # in GitHub's caches, in forks, and in archives, so the scrub has to happen first.
 #
-# Run `prepare` first. It touches nothing published: it takes a backup, rewrites a
-# throwaway mirror, and proves the result against the backup. Read its report, then
-# run `push`.
-#
 #   scripts/scrub-research-history.sh prepare
 #   scripts/scrub-research-history.sh push
 #
+# `prepare` touches nothing published: it backs up the remote, rewrites a throwaway
+# mirror, and proves the result. Read its report, then run `push`.
+#
 # Requires git-filter-repo (brew install git-filter-repo), trash, and gh auth.
+#
+# ── history of this script ───────────────────────────────────────────────────
+# The first version's verification was wrong in three ways and reported five
+# false failures on a rewrite that was in fact correct. All three are fixed here,
+# and the third mattered most:
+#
+#   1. It compared against the backup by fetching it INTO the mirror, then scanned
+#      `--all`. That re-imported the very history it was checking for, so the path
+#      and canary checks could never pass. Verification is now read-only and
+#      cross-repo: nothing is ever fetched into the mirror.
+#   2. It predicted the commit-count drop from content commits alone, ignoring merge
+#      commits that become empty when their whole payload is dropped. The count
+#      prediction is gone, replaced by an audit of git-filter-repo's own commit-map,
+#      which is authoritative: every dropped commit must be confined to the dropped
+#      paths or be a merge that went empty.
+#   3. The fetch in (1) left `refs/backup/*` and `refs/remotes/backup/*` in the
+#      mirror: 100 refs of UNREWRITTEN history. The push was `--force --mirror`,
+#      which pushes every ref, so it would have published the full pre-scrub history
+#      including docs/research. The scrub would have shipped exactly what it exists
+#      to remove. The push is now explicit refspecs for heads and tags only.
+#
+# A mirror clone of a GitHub repo also carries `refs/pull/*` (67 here). Those are
+# rewritten like anything else, but GitHub refuses pushes to them, so they must stay
+# local. The explicit refspecs handle that too.
 
 set -euo pipefail
 
@@ -39,10 +62,10 @@ WORK_ROOT="${PLEACH_SCRUB_ROOT:-$HOME/pleach-history-scrub}"
 BACKUP="$WORK_ROOT/backup-pre-scrub.git"
 MIRROR="$WORK_ROOT/rewritten.git"
 
-# Strings that appear only inside docs/research/. Verified 2026-09-20 against all 1336
-# blobs on every branch and remote: zero hits outside docs/research/. They are the
-# content-level proof that the scrub worked, independent of any path check. Add a
-# canary for any path added to PATHS_TO_DROP above.
+# Strings that occur only inside docs/research/. Verified 2026-09-20 against every
+# blob on every ref: zero hits outside docs/research/. They are the content-level
+# proof that the scrub worked, independent of any path check. Add a canary for any
+# path added to PATHS_TO_DROP above.
 CANARIES=("***REMOVED***" "***REMOVED***" "***REMOVED***")
 
 say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
@@ -66,87 +89,110 @@ is_dropped_path() {
   return 1
 }
 
-# Refuses the push unless the rewrite is both complete and content-neutral.
+# The refs that will actually be published. Everything else in the mirror
+# (refs/pull/* from the clone) stays local and is never pushed.
+publishable_refs() {
+  git -C "$MIRROR" for-each-ref --format='%(refname)' refs/heads refs/tags
+}
+
+# Read-only. Never writes to $MIRROR, never fetches anything into it.
 verify_mirror() {
   local failures=0
-  say "Verifying $MIRROR against $BACKUP"
+  say "Verifying $MIRROR (read-only; the backup is never fetched in)"
 
-  # The backup is the only honest reference for "what did this look like before".
-  git -C "$MIRROR" remote remove backup 2>/dev/null || true
-  git -C "$MIRROR" remote add backup "$BACKUP"
-  git -C "$MIRROR" fetch --quiet backup 'refs/heads/*:refs/backup/*'
+  if git -C "$MIRROR" for-each-ref --format='%(refname)' | grep -q '^refs/\(backup\|remotes\)/'; then
+    die "$MIRROR contains refs/backup or refs/remotes. An older version of this script
+fetched the pre-scrub history into the mirror; pushing it would republish everything
+this scrub removes. Run: trash '$MIRROR' && $0 prepare"
+  fi
+  ok "no pre-scrub refs were imported into the mirror"
 
-  # 1. No commit on any ref still touches the dropped paths.
+  # 1. No publishable commit touches a dropped path. `--branches --tags` selects
+  #    exactly the refs that get pushed; passing an explicit ref list here blew the
+  #    argument limit and silently scanned nothing, which reads as a pass.
   local path_hits
-  path_hits=$(git -C "$MIRROR" log --all --oneline -- "${PATHS_TO_DROP[@]}" 2>/dev/null \
-    | wc -l | tr -d ' ')
-  if [ "$path_hits" = "0" ]; then ok "no commit on any ref touches: ${PATHS_TO_DROP[*]}"
-  else bad "$path_hits commits still touch the dropped paths"; failures=$((failures + 1)); fi
+  path_hits=$(git -C "$MIRROR" log --branches --tags --oneline -- "${PATHS_TO_DROP[@]}" 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$path_hits" = "0" ]; then ok "no publishable commit touches: ${PATHS_TO_DROP[*]}"
+  else bad "$path_hits publishable commits still touch the dropped paths"; failures=$((failures + 1)); fi
 
-  # 2. No blob anywhere still carries the content. A path filter misses a copy that
-  #    was ever committed under a different name, so check the bytes, not the path.
+  # 2. No publishable blob carries the content. A path filter cannot see a copy that
+  #    was ever committed under a different name; the bytes can.
   local blobs
-  blobs=$(git -C "$MIRROR" rev-list --all --objects \
+  blobs=$(git -C "$MIRROR" rev-list --objects --branches --tags \
     | awk '{print $1}' | sort -u \
     | git -C "$MIRROR" cat-file --batch-check='%(objectname) %(objecttype)' 2>/dev/null \
     | awk '$2=="blob" {print $1}')
-  ok "scanning $(printf '%s\n' "$blobs" | wc -l | tr -d ' ') blobs for canaries"
+  ok "scanning $(printf '%s\n' "$blobs" | grep -c . || echo 0) publishable blobs for canaries"
   local canary hits
   for canary in "${CANARIES[@]}"; do
     hits=$(printf '%s\n' "$blobs" | git -C "$MIRROR" cat-file --batch 2>/dev/null \
       | grep -a -c -- "$canary" || true)
-    if [ "$hits" = "0" ]; then ok "absent from every blob: \"$canary\""
+    if [ "$hits" = "0" ]; then ok "absent from every publishable blob: \"$canary\""
     else bad "still present in $hits blob(s): \"$canary\""; failures=$((failures + 1)); fi
   done
 
-  # 3. Content neutrality, branch by branch. Every difference between the backup tip
-  #    and the rewritten tip must be a deletion under a dropped path. Anything else —
-  #    a modification, a deletion elsewhere, an addition — means the rewrite altered
-  #    work it had no business touching, and the push must not happen.
-  local drifted=0 total=0 missing=0 branch line status path
+  # 3. Content neutrality. No dropped path sits at any branch tip, so every rewritten
+  #    tip must hash to exactly the tree it replaced. Compared across repos by reading
+  #    each side independently.
+  local drifted=0 total=0 missing=0 branch before after tipfiles
   while read -r branch; do
     [ -n "$branch" ] || continue
     total=$((total + 1))
-    if ! git -C "$MIRROR" rev-parse --verify --quiet "refs/heads/$branch" >/dev/null; then
+    before=$(git -C "$BACKUP" rev-parse "refs/heads/$branch^{tree}" 2>/dev/null || echo MISSING-BEFORE)
+    after=$(git -C "$MIRROR" rev-parse "refs/heads/$branch^{tree}" 2>/dev/null || echo MISSING-AFTER)
+    if [ "$after" = "MISSING-AFTER" ]; then
       bad "branch lost in rewrite: $branch"; missing=$((missing + 1)); continue
     fi
-    while IFS=$'\t' read -r status path; do
-      [ -n "$status" ] || continue
-      if [ "$status" != "D" ] || ! is_dropped_path "$path"; then
-        bad "$branch: unexpected change $status $path"
+    if [ "$before" != "$after" ]; then
+      # Only legitimate if the branch tip actually carried a dropped path.
+      tipfiles=$(git -C "$BACKUP" ls-tree -r --name-only "refs/heads/$branch" -- "${PATHS_TO_DROP[@]}" 2>/dev/null | grep -c . || true)
+      if [ "$tipfiles" = "0" ]; then
+        bad "$branch: tip tree changed ($before -> $after) but carried no dropped path"
         drifted=$((drifted + 1))
       fi
-    done < <(git -C "$MIRROR" diff --name-status \
-               "refs/backup/$branch" "refs/heads/$branch")
-  done < <(git -C "$MIRROR" for-each-ref --format='%(refname:strip=2)' refs/backup)
+    fi
+  done < <(git -C "$BACKUP" for-each-ref --format='%(refname:strip=2)' refs/heads)
 
   if [ "$missing" = "0" ]; then ok "all $total branches survived the rewrite"
   else failures=$((failures + 1)); fi
-  if [ "$drifted" = "0" ]; then
-    ok "every branch tip differs only by deletions under the dropped paths"
+  if [ "$drifted" = "0" ]; then ok "every branch tip tree is byte-identical to its pre-scrub tree"
   else failures=$((failures + 1)); fi
 
-  # 4. Commit pruning is exactly the commits that held nothing else. Derived from the
-  #    backup, not hardcoded, so it stays honest if PATHS_TO_DROP changes.
-  local expected_pruned=0 c tot res
-  for c in $(git -C "$MIRROR" rev-list refs/backup/master -- "${PATHS_TO_DROP[@]}"); do
-    tot=$(git -C "$MIRROR" show --name-only --format= "$c" | grep -c . || true)
-    res=0
-    while read -r path; do
-      [ -n "$path" ] || continue
-      is_dropped_path "$path" && res=$((res + 1))
-    done < <(git -C "$MIRROR" show --name-only --format= "$c")
-    [ "$tot" = "$res" ] && expected_pruned=$((expected_pruned + 1))
-  done
-  local before after actual
-  before=$(git -C "$MIRROR" rev-list refs/backup/master --count)
-  after=$(git -C "$MIRROR" rev-list refs/heads/master --count)
-  actual=$((before - after))
-  if [ "$actual" = "$expected_pruned" ]; then
-    ok "master $before -> $after commits; exactly the $expected_pruned that held nothing else"
-  else
-    bad "master lost $actual commits, expected to lose $expected_pruned"
+  # 4. Every commit the rewrite DROPPED must be justified. git-filter-repo's commit-map
+  #    is authoritative: old sha -> new sha, or all-zeros when the commit went away.
+  #    A dropped commit is legitimate only if its whole change was inside the dropped
+  #    paths, or it is a merge that became empty once its payload left.
+  local map="$MIRROR/filter-repo/commit-map"
+  if [ ! -f "$map" ]; then
+    bad "no commit-map at $map; cannot audit what was dropped"
     failures=$((failures + 1))
+  else
+    local dropped=0 unexplained=0 c parents total_files dropped_files
+    while read -r c; do
+      [ -n "$c" ] || continue
+      dropped=$((dropped + 1))
+      # Dropped commits may be gone from the mirror; the backup still has them.
+      parents=$(git -C "$BACKUP" rev-list --parents -n1 "$c" 2>/dev/null | wc -w | tr -d ' ')
+      total_files=$(git -C "$BACKUP" log -1 --format= --name-only "$c" 2>/dev/null | grep -c . || true)
+      dropped_files=0
+      while read -r f; do
+        [ -n "$f" ] || continue
+        is_dropped_path "$f" && dropped_files=$((dropped_files + 1))
+      done < <(git -C "$BACKUP" log -1 --format= --name-only "$c" 2>/dev/null)
+      if [ "$parents" -gt 2 ]; then
+        : # a merge that went empty
+      elif [ "$total_files" -gt 0 ] && [ "$total_files" = "$dropped_files" ]; then
+        : # confined to the dropped paths
+      else
+        bad "dropped a commit that was not confined to the dropped paths: $c"
+        unexplained=$((unexplained + 1))
+      fi
+    done < <(awk 'NR>1 && $2 ~ /^0+$/ {print $1}' "$map")
+    if [ "$unexplained" = "0" ]; then
+      ok "all $dropped dropped commits were research-only or merges that went empty"
+    else
+      failures=$((failures + 1))
+    fi
   fi
 
   [ "$failures" = "0" ] || die "$failures check(s) failed. Nothing pushed. Do not push."
@@ -155,8 +201,10 @@ verify_mirror() {
 
 cmd_prepare() {
   require_tools
-  [ -e "$MIRROR" ] && die "$MIRROR exists. trash '$MIRROR' and re-run."
   mkdir -p "$WORK_ROOT"
+
+  # A mirror from an older run may carry imported pre-scrub refs. Never reuse one.
+  [ -e "$MIRROR" ] && die "$MIRROR exists. trash '$MIRROR' and re-run, so the rewrite starts clean."
 
   if [ -e "$BACKUP" ]; then
     say "Reusing the existing backup at $BACKUP"
@@ -170,8 +218,7 @@ cmd_prepare() {
   git clone --mirror "$REMOTE_URL" "$MIRROR"
 
   say "Rewriting: dropping ${PATHS_TO_DROP[*]} from every commit on every ref"
-  local args=()
-  local p
+  local args=() p
   for p in "${PATHS_TO_DROP[@]}"; do args+=(--path "$p"); done
   git -C "$MIRROR" filter-repo "${args[@]}" --invert-paths
 
@@ -184,14 +231,15 @@ Prepared, not pushed. Nothing on GitHub has changed.
   rewritten mirror : $MIRROR
   backup (keep)    : $BACKUP
 
-Commits that held nothing but the dropped paths, and so are gone:
+Commits the rewrite removed, from git-filter-repo's own commit-map:
 
-$(git -C "$MIRROR" log refs/backup/master --format='    %h %s' -- "${PATHS_TO_DROP[@]}")
+$(awk 'NR>1 && $2 ~ /^0+$/ {print $1}' "$MIRROR/filter-repo/commit-map" \
+  | while read -r c; do printf '    %s\n' "$(git -C "$BACKUP" log -1 --format='%h %s' "$c" 2>/dev/null || echo "$c (unreachable)")"; done)
 
 Look for yourself before pushing:
 
-  git -C "$MIRROR" log --all --oneline -- ${PATHS_TO_DROP[*]}   # must print nothing
-  git -C "$MIRROR" diff refs/backup/master master               # must be deletions only
+  git -C "$MIRROR" log --branches --oneline -- ${PATHS_TO_DROP[*]}   # must print nothing
+  git -C "$MIRROR" log --oneline master | head
 
 Then:
 
@@ -207,36 +255,43 @@ cmd_push() {
 
   verify_mirror
 
+  local nheads ntags
+  nheads=$(git -C "$MIRROR" for-each-ref --format='%(refname)' refs/heads | wc -l | tr -d ' ')
+  ntags=$(git -C "$MIRROR" for-each-ref --format='%(refname)' refs/tags | wc -l | tr -d ' ')
+
   cat <<EOF
 
 About to force-push the rewritten history over:
 
   $REMOTE_URL
-  50 branches, master included. Every sha on the remote changes.
+  $nheads branches and $ntags tags. Every sha on the remote changes.
+
+Heads and tags only, by explicit refspec. Not --mirror: a mirror clone also holds
+refs/pull/*, which GitHub refuses, and --mirror pushes every ref it finds.
 
 Consequences, none of them reversible from GitHub's side:
-  - Every merged PR (#1-#122) loses its commit links. GitHub will report those
-    commits as belonging to no branch. Titles, descriptions and review threads live.
+  - Every merged PR loses its commit links. GitHub will report those commits as
+    belonging to no branch. Titles, descriptions and review threads live.
   - Every existing clone and Conductor worktree still holds the old history. Pushing
     from one afterwards puts the research straight back. Re-clone before you do.
-  - The pre-rewrite history then exists only at $BACKUP.
+  - The pre-scrub history then exists only at $BACKUP.
 
 EOF
   printf 'Type exactly "scrub" to proceed: '
   read -r answer
   [ "$answer" = "scrub" ] || die "Aborted. Nothing pushed."
 
-  git -C "$MIRROR" remote remove origin 2>/dev/null || true
-  git -C "$MIRROR" remote add origin "$REMOTE_URL"
-  git -C "$MIRROR" push --force --mirror origin
+  git -C "$MIRROR" push --force "$REMOTE_URL" 'refs/heads/*:refs/heads/*'
+  if [ "$ntags" != "0" ]; then
+    git -C "$MIRROR" push --force "$REMOTE_URL" 'refs/tags/*:refs/tags/*'
+  fi
 
   say "Pushed. Re-cloning from GitHub to confirm the remote is actually clean"
   local check="$WORK_ROOT/verify-after-push.git"
   [ -e "$check" ] && trash "$check"
   git clone --mirror "$REMOTE_URL" "$check"
   local hits
-  hits=$(git -C "$check" log --all --oneline -- "${PATHS_TO_DROP[@]}" 2>/dev/null \
-    | wc -l | tr -d ' ')
+  hits=$(git -C "$check" log --branches --tags --oneline -- "${PATHS_TO_DROP[@]}" 2>/dev/null | wc -l | tr -d ' ')
   if [ "$hits" = "0" ]; then
     ok "GitHub's copy carries no commit touching: ${PATHS_TO_DROP[*]}"
   else
