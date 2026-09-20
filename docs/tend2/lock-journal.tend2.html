@@ -25,21 +25,17 @@ Two conductors on one repo would race the branches and the ledger. A run nobody 
 
 The [conductor loop](conductor-loop.tend2.html) writes `run-start`, `node-start`, `verdict`, `gate-fail`, `blocked`, `closed` or `not-closed`, and `run-end` as events through this seam. A developer reconstructing a misbehaving run opens the JSONL and reads the full sequence (`run-start` → node verdicts → `closed`/`not-closed` decisions → `run-end` with the bucket summary) without paying for real agents or re-executing anything. The scheduler's retry choices, the stale-lock takeover and the dual-close decision are all in the file. See [the project bet](pleach.tend2.html) for the project bet behind this.
 
-## Where
+## Lock and journal, two seam files
 
 src/seams/lock.ts; src/seams/journal.ts
 
-## How
+## Run-safety primitives under the whole run
 
-lock: sha1(source).slice(12) → .git/pleach-{sha}.lock; O_EXCL write of pid; stale: ESRCH → unlink + retry; journal: mkdir -p on first append; JSON.stringify per event + newline
+The run-safety primitives [the conductor loop](conductor-loop.tend2.html) relies on from start to finish.
 
-## Fit
+## Guaranteed exclusivity and a replayable trace
 
-The run-safety primitives the loop relies on from start to finish.
-
-## Impact
-
-One conductor per (repo, source) is guaranteed, and every run leaves a replayable JSONL trace.
+One conductor per (repo, source) is guaranteed, and every run leaves a replayable JSONL trace. The events written to it are [the conductor loop](conductor-loop.tend2.html)'s; this loop owns only the lock and the append.
 
 ## Tests
 - [x] (code) B4: second acquire from same process on same (repoRoot, source) → LockHeldError with holder pid === process.pid. (inferred from test/integration/lock.test.ts — real filesystem) · test/integration/lock.test.ts @399aa8e

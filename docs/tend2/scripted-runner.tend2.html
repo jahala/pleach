@@ -13,19 +13,19 @@
 
 Before this, the only real-process way to run a plan was umbel (interactive, subscription, tmux), so a prospect or contributor could not try pleach and CI could not exercise the loop end to end. The scripted runner makes the conductor runnable and demonstrable by anyone. It also proves the RunnerSeam port is open, because a third-party runner produces the same RunSummary the engine gates on.
 
-## Where
+## The adapter, its examples and tests
 
 src/adapters/scripted.ts; examples/command-dag/; examples/scripted-agent/; test/e2e/examples.test.ts; test/unit/scripted-runner.test.ts
 
-## How
+## Canned files and verdicts, matched first-wins
 
 scriptedRunner(scenarios): RunnerSeam. spawnWorker captures cwd. The worker's wait() writes the matched scenario's files into cwd and returns { reason: 'stop', finalMessage, filesTouched }. Scenarios match first-wins, by spawn provider (which selects the cross-provider auditor) and by a prompt substring (which selects per-node build output). scriptedAuditResult(verdicts) builds the tend-audit-result fence the egress parses. It is a real seam rather than a behaviour mock, because it writes real files the loop gates on. Exported at pleach/adapters/scripted.
 
-## Fit
+## The deterministic counterpart to umbel
 
-A bundled reference adapter alongside umbel/tend/git. It is the deterministic counterpart to umbel for CI, demos and tests, and the proof that "agents produce; code decides" runs without a live agent.
+A bundled reference adapter, the deterministic counterpart to [umbel-seam](umbel-seam.tend2.html) for CI, demos and tests. It satisfies the same runner port described in [pluggable-adapters](pluggable-adapters.tend2.html), which is what lets the whole ladder run with no live agent.
 
-## Impact
+## Onboarding without API keys
 
 Onboarding drops from "install umbel + get API keys" to "bun test". It doubles as a regression target for the gate ladder (isolation, smoke, cross-provider audit, quarantine) and a copy-paste template for writing any RunnerSeam.
 

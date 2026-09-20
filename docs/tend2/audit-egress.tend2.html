@@ -27,21 +27,17 @@ Without an explicit contract, the auditor's natural behavior is to summarize. Th
 
 `AuditParseError` maps to `reaudit` in `src/core/classify.ts`, rather than to `terminal` or `retryable`. The [conductor loop](conductor-loop.tend2.html) reruns only the audit step, and the build work stands. An operator whose run hits a flaky auditor gets a reaudit attempt instead of a node scrapped and rebuilt from scratch. A parse failure cannot silently close a node, and it cannot destroy a node that built cleanly.
 
-## Where
-
-src/core/audit-egress.ts
-
-## How
+## The parse rules in one line
 
 BLOCK_RE regex iterates all matches, last wins; AuditParseError on missing block or invalid JSON; buildAuditPrompt wraps command with verbatim-reproduction instructions
 
-## Fit
+## The contract under the audit gate
 
-The contract that makes the cross-provider audit gate trustworthy.
+The contract that makes the cross-provider audit gate trustworthy. The gate itself, and the retry it drives, belong to [the conductor loop](conductor-loop.tend2.html).
 
-## Impact
+## A bad relay cannot burn a node
 
-The auditor's verdict is recovered verbatim and parsed deterministically, so audit egress can't burn a node that passed its gates.
+The auditor's verdict is recovered verbatim and parsed deterministically, so a bad relay cannot burn a node whose gates were green. What happens to such a node is [the conductor loop](conductor-loop.tend2.html)'s: it quarantines, and `pleach audit` re-adjudicates it.
 
 ## Tests
 - [x] (code) Single fenced tend-audit-result block: JSON parsed and returned correctly. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @10627ce

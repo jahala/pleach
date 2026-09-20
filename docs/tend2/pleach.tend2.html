@@ -91,25 +91,28 @@ Under the loop, each seam owns one concern: [isolate](isolate-seam.tend2.html) g
 
 `docs/contract/plan-schema.md` is the canonical home of `@agent-contract/plan` v1.1.1, the typed vocabulary tend, pleach, and umbel share. `src/core/plan.ts` matches its fenced block byte-for-byte under a drift test, so changing the schema means moving the doc, the source, the drift test, and `docs/contract/CHANGES.md` in one commit. The error taxonomy in `src/core/classify.ts` makes every retry decision a pure function of error type instead of ad-hoc branching. That is the same discipline, one layer down.
 
-## Where
+## Four layers, strict downward dependencies
 
 This repo: faces/ (cli) -> loop/ (run-plan, run-node, run-work) -> seams/ (umbel, tend, isolate, exec, lock, journal) -> core/ (plan, validate, classify, errors). Strict downward dependencies; core pure, seams thin I/O.
 
-## How
+## Pure core, thin seams, composed loop
 
 A pure, total core defines the contract and the classify ladder; thin seams own all I/O; the loop composes injected seams to isolate -> gate -> audit -> commit-before-emit each node, publishing node/<id> only for verified work. Every defect in docs/ledger.md maps to a RED test.
 
-## Fit
+## The middle leg of the plotplot suite
 
 The middle leg of the plotplot suite (tend decides what the garden should bear, pleach interweaves the branches into one verified canopy, umbel holds each grower steady) and the canonical home of the @agent-contract/plan schema all three share.
 
-## Impact
+## Trustworthy by construction
 
 Agent work becomes trustworthy by construction: only verified nodes publish branches, failures quarantine their own subtree, and the operator reads one RunSummary instead of auditing N diffs. Agents produce; code decides.
 
 ## Children #audit-egress #cli-land #cli-run #cli-validate #conductor-loop #isolate-seam #lock-journal #pluggable-adapters #scripted-runner #tend-seam #umbel-seam #test-phase-commit #gate-artifacts #journal-envelope #teardown-keeps-work #nothing-is-lost #land-honestly #fail-before-spend #record-survives #seam-keeps-tree
 
 ## Tried
+- 2026-09-20 dropped the v1 slot headings. `## How`, `## Fit`, `## Impact` and `## Where` are not structure in the current format, which recognises only Tests/Jobs/Signals/Tried and the graph sections (FORMAT §2.3); everything else is narrative, and the craft is a heading that says what the section argues. All 57 became descriptive across 21 pages. Five bare-path sections were deleted rather than renamed, because their body was only paths the page already named; a path-only section also cannot lint clean, since the lint reads a section's subject as the words it introduces and a descriptive heading over no prose introduces only unshared ones.
+- 2026-09-20 caught the map up to tend2's current format: graph ids moved onto their heading lines (42 sections across 26 pages had them on the line beneath, so children, dependency edges and personas all parsed as empty), the renderer refreshed from the shipped dist, the project named `pleach` instead of `garden`, and 19 `narrative-uncovered` warnings resolved to 0 by naming the page each section hands its subject to (FORMAT rule 13). Dropped two v1 slots, conductor-loop's `Where` and lock-journal's `How`, which duplicated prose already on their own pages.
+- 2026-09-20 decided the all-`(code)` check distribution is right for this project, rather than a gap to fill. The reference garden runs ~20% `human`/`agent`, and the shape skill asks for an early human check on real output for product-shaped loops. pleach is the degenerate case on purpose: it is a deterministic conductor whose thesis is that every canonical decision is machine-decidable, so a `human` check here would mostly be ceremony. Revisit if a loop ever claims taste or fidelity, which none currently do.
 - 2026-08-18 migrated from v1 (docs/tend/overview.html) by `loop migrate`
 </script>
 <script src="./loop.js"></script>

@@ -21,21 +21,21 @@ An operator drops a six-node plan into `pleach run` and walks away. Say that pla
 
 The function is the shared core of the `validate` CLI face and [pleach run](cli-run.tend2.html). The bet is in [the project bet](pleach.tend2.html).
 
-## Where
+## The validate face and its core
 
 src/faces/cli.ts; src/core/validate.ts; src/core/plan.ts
 
-## How
+## Parse, check, toposort, then print
 
 readPlan (Zod parse) → validatePlan (structural checks + Kahn toposort) → print JSON → exit 0; any error → stderr + exit 2; validatePlan also returns waves (level-order Kahn on a copy of the in-degree map, so order is unchanged); nodeSummaries projects each node's work-type + declared gates; verbValidate emits {valid, order, waves, nodes}
 
-## Fit
+## One shared core, so both faces agree
 
-The pre-flight check for `pleach run`; shares the schema + validatePlan core.
+The pre-flight check for [pleach run](cli-run.tend2.html), sharing the same schema and `validatePlan` core, so a plan either face accepts is a plan the other accepts.
 
-## Impact
+## Milliseconds instead of a deadlocked run
 
-Invalid plans fail in milliseconds with a precise reason instead of deadlocking or corrupting a run.
+Invalid plans fail in milliseconds with a precise reason instead of deadlocking or corrupting a run. The run-side refusal that pairs with this one is [pleach run](cli-run.tend2.html)'s, taken before it acquires the lock.
 
 ## Tests
 - [x] (code) Valid proof plan → exit 0; {valid:true, order:[...]} where last element is 'wordcount'. (inferred from test/e2e/cli.test.ts:validate on proof plan) · test/e2e/cli.test.ts @bb813f6 · by cli
