@@ -62,11 +62,18 @@ WORK_ROOT="${PLEACH_SCRUB_ROOT:-$HOME/pleach-history-scrub}"
 BACKUP="$WORK_ROOT/backup-pre-scrub.git"
 MIRROR="$WORK_ROOT/rewritten.git"
 
-# Strings that occur only inside docs/research/. Verified 2026-09-20 against every
-# blob on every ref: zero hits outside docs/research/. They are the content-level
-# proof that the scrub worked, independent of any path check. Add a canary for any
-# path added to PATHS_TO_DROP above.
-CANARIES=("***REMOVED***" "***REMOVED***" "***REMOVED***")
+# The canary list and the redaction list are the same file, and it lives OUTSIDE the
+# repository on purpose: one line per sensitive string, never committed.
+#
+# This script used to hard-code the canaries. That was the leak it exists to prevent:
+# three competitor names sat in plain text in a tracked file, so publishing the repo
+# would have published exactly the references the scrub removes. Its own canary scan
+# caught it on 2026-09-20, in three blobs, all of them earlier versions of this file.
+#
+# Those stale blobs are still in history, so when this file is present it is also
+# passed to git-filter-repo as --replace-text, which rewrites those bytes out of every
+# blob on every ref. Bare literal lines are valid for both uses.
+REDACT_FILE="${PLEACH_SCRUB_REDACT:-$WORK_ROOT/redact.txt}"
 
 say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 ok()  { printf '  \033[32mok\033[0m    %s\n' "$*"; }
@@ -97,7 +104,7 @@ publishable_refs() {
 
 # Read-only. Never writes to $MIRROR, never fetches anything into it.
 verify_mirror() {
-  local failures=0
+  local failures=0 cn=0
   say "Verifying $MIRROR (read-only; the backup is never fetched in)"
 
   if git -C "$MIRROR" for-each-ref --format='%(refname)' | grep -q '^refs/\(backup\|remotes\)/'; then
@@ -122,19 +129,42 @@ this scrub removes. Run: trash '$MIRROR' && $0 prepare"
     | awk '{print $1}' | sort -u \
     | git -C "$MIRROR" cat-file --batch-check='%(objectname) %(objecttype)' 2>/dev/null \
     | awk '$2=="blob" {print $1}')
-  ok "scanning $(printf '%s\n' "$blobs" | grep -c . || echo 0) publishable blobs for canaries"
-  local canary hits
-  for canary in "${CANARIES[@]}"; do
-    hits=$(printf '%s\n' "$blobs" | git -C "$MIRROR" cat-file --batch 2>/dev/null \
-      | grep -a -c -- "$canary" || true)
-    if [ "$hits" = "0" ]; then ok "absent from every publishable blob: \"$canary\""
-    else bad "still present in $hits blob(s): \"$canary\""; failures=$((failures + 1)); fi
-  done
+  ok "scanning $(printf '%s\n' "$blobs" | grep -c . || echo 0) publishable blobs"
+
+  # 2a. Exact, and needs no strings: no blob that ever lived at a dropped path in the
+  #     backup may survive in the publishable set.
+  local before_blobs survivors
+  before_blobs=$(git -C "$BACKUP" rev-list --objects --branches --tags \
+    | awk 'NF>1' | while read -r sha path; do is_dropped_path "$path" && echo "$sha"; done | sort -u)
+  if [ -z "$before_blobs" ]; then
+    ok "backup has no blobs at the dropped paths to check against"
+  else
+    survivors=$(comm -12 <(printf '%s\n' "$before_blobs") <(printf '%s\n' "$blobs" | sort -u) | grep -c . || true)
+    if [ "$survivors" = "0" ]; then
+      ok "none of the $(printf '%s\n' "$before_blobs" | grep -c .) dropped-path blobs survive"
+    else bad "$survivors dropped-path blobs still reachable"; failures=$((failures + 1)); fi
+  fi
+
+  # 2b. Content-level, for a copy that was committed elsewhere under another name.
+  #     Strings come from the external redact file, never from this script.
+  if [ ! -f "$REDACT_FILE" ]; then
+    bad "no redact/canary file at $REDACT_FILE; the content-level check cannot run"
+    failures=$((failures + 1))
+  else
+    local canary hits
+    while IFS= read -r canary; do
+      [ -n "$canary" ] || continue
+      hits=$(printf '%s\n' "$blobs" | git -C "$MIRROR" cat-file --batch 2>/dev/null \
+        | grep -a -c -F -- "$canary" || true)
+      if [ "$hits" = "0" ]; then ok "absent from every publishable blob: [redacted string $((++cn))]"
+      else bad "still present in $hits blob(s): [redacted string $((++cn))]"; failures=$((failures + 1)); fi
+    done < "$REDACT_FILE"
+  fi
 
   # 3. Content neutrality. No dropped path sits at any branch tip, so every rewritten
   #    tip must hash to exactly the tree it replaced. Compared across repos by reading
   #    each side independently.
-  local drifted=0 total=0 missing=0 branch before after tipfiles
+  local drifted=0 total=0 missing=0 branch before after tipfiles redacted canary
   while read -r branch; do
     [ -n "$branch" ] || continue
     total=$((total + 1))
@@ -144,11 +174,23 @@ this scrub removes. Run: trash '$MIRROR' && $0 prepare"
       bad "branch lost in rewrite: $branch"; missing=$((missing + 1)); continue
     fi
     if [ "$before" != "$after" ]; then
-      # Only legitimate if the branch tip actually carried a dropped path.
+      # Legitimate only if the tip carried a dropped path, or held a string the
+      # redaction rewrote. Anything else means the rewrite touched work it should not.
       tipfiles=$(git -C "$BACKUP" ls-tree -r --name-only "refs/heads/$branch" -- "${PATHS_TO_DROP[@]}" 2>/dev/null | grep -c . || true)
-      if [ "$tipfiles" = "0" ]; then
-        bad "$branch: tip tree changed ($before -> $after) but carried no dropped path"
+      redacted=0
+      if [ "$tipfiles" = "0" ] && [ -f "$REDACT_FILE" ]; then
+        while IFS= read -r canary; do
+          [ -n "$canary" ] || continue
+          if git -C "$BACKUP" grep -q -a -F -- "$canary" "refs/heads/$branch" 2>/dev/null; then
+            redacted=1; break
+          fi
+        done < "$REDACT_FILE"
+      fi
+      if [ "$tipfiles" = "0" ] && [ "$redacted" = "0" ]; then
+        bad "$branch: tip tree changed ($before -> $after) with no dropped path and nothing redacted"
         drifted=$((drifted + 1))
+      elif [ "$redacted" = "1" ]; then
+        ok "$branch: tip tree changed because a redacted string was rewritten out"
       fi
     fi
   done < <(git -C "$BACKUP" for-each-ref --format='%(refname:strip=2)' refs/heads)
@@ -207,7 +249,11 @@ cmd_prepare() {
   [ -e "$MIRROR" ] && die "$MIRROR exists. trash '$MIRROR' and re-run, so the rewrite starts clean."
 
   if [ -e "$BACKUP" ]; then
-    say "Reusing the existing backup at $BACKUP"
+    say "Refreshing the backup at $BACKUP"
+    # Never just reuse it: a backup a few commits behind the remote makes the
+    # tip-tree comparison compare two different things and report false drift.
+    git -C "$BACKUP" fetch --prune "$REMOTE_URL" '+refs/heads/*:refs/heads/*'
+    ok "backup holds $(git -C "$BACKUP" for-each-ref refs/heads | wc -l | tr -d ' ') branches"
   else
     say "Backing up the published history (insurance, never pushed)"
     git clone --mirror "$REMOTE_URL" "$BACKUP"
@@ -220,7 +266,17 @@ cmd_prepare() {
   say "Rewriting: dropping ${PATHS_TO_DROP[*]} from every commit on every ref"
   local args=() p
   for p in "${PATHS_TO_DROP[@]}"; do args+=(--path "$p"); done
-  git -C "$MIRROR" filter-repo "${args[@]}" --invert-paths
+  args+=(--invert-paths)
+  if [ -f "$REDACT_FILE" ]; then
+    # Also rewrite the sensitive strings out of blobs OUTSIDE the dropped paths.
+    # --invert-paths applies to --path only; --replace-text is independent of it.
+    args+=(--replace-text "$REDACT_FILE")
+    ok "redacting $(grep -c . "$REDACT_FILE") string(s) from every blob, per $REDACT_FILE"
+  else
+    die "No redact/canary file at $REDACT_FILE. Write one line per sensitive string
+(never inside the repo), then re-run. It drives both the redaction and the canary check."
+  fi
+  git -C "$MIRROR" filter-repo "${args[@]}"
 
   verify_mirror
 
