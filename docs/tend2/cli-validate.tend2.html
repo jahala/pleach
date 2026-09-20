@@ -31,11 +31,11 @@ readPlan (Zod parse) → validatePlan (structural checks + Kahn toposort) → pr
 
 ## Fit
 
-The pre-flight check for `pleach run`; shares the schema + validatePlan core.
+The pre-flight check for [pleach run](cli-run.tend2.html), sharing the same schema and `validatePlan` core, so a plan either face accepts is a plan the other accepts.
 
 ## Impact
 
-Invalid plans fail in milliseconds with a precise reason instead of deadlocking or corrupting a run.
+Invalid plans fail in milliseconds with a precise reason instead of deadlocking or corrupting a run. The run-side refusal that pairs with this one is [pleach run](cli-run.tend2.html)'s, taken before it acquires the lock.
 
 ## Tests
 - [x] (code) Valid proof plan → exit 0; {valid:true, order:[...]} where last element is 'wordcount'. (inferred from test/e2e/cli.test.ts:validate on proof plan) · test/e2e/cli.test.ts @bb813f6 · by cli

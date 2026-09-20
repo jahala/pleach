@@ -37,11 +37,11 @@ BLOCK_RE regex iterates all matches, last wins; AuditParseError on missing block
 
 ## Fit
 
-The contract that makes the cross-provider audit gate trustworthy.
+The contract that makes the cross-provider audit gate trustworthy. The gate itself, and the retry it drives, belong to [the conductor loop](conductor-loop.tend2.html).
 
 ## Impact
 
-The auditor's verdict is recovered verbatim and parsed deterministically, so audit egress can't burn a node that passed its gates.
+The auditor's verdict is recovered verbatim and parsed deterministically, so a bad relay cannot burn a node whose gates were green. What happens to such a node is [the conductor loop](conductor-loop.tend2.html)'s: it quarantines, and `pleach audit` re-adjudicates it.
 
 ## Tests
 - [x] (code) Single fenced tend-audit-result block: JSON parsed and returned correctly. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @10627ce

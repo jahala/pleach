@@ -45,11 +45,11 @@ parseFlags → readPlan (Zod) → assemble ConductorDeps via buildDeps → runPl
 
 ## Fit
 
-pleach's primary entry point: the operator's surface over the conductor loop.
+pleach's primary entry point: the operator's surface over [the conductor loop](conductor-loop.tend2.html), which owns every scheduling and close decision behind it.
 
 ## Impact
 
-One command turns a tend plan into verified branches; the exit code alone tells the operator whether to trust the run or intervene.
+One command turns a plan into verified branches, and the exit code alone says whether to trust the run or intervene. Which branches get published is decided by [the conductor loop](conductor-loop.tend2.html), never here.
 
 ## Tests
 - [x] (code) All nodes close verified → exit 0; RunSummary.closed contains all node IDs; failed/blocked/skipped empty. (inferred from test/e2e/cli.test.ts — requires real umbel binary + missoula module) · test/e2e/cli.test.ts @d75b7a9 · by cli

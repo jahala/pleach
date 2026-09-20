@@ -84,11 +84,11 @@ createModuleTransport: dynamic import + export validation; createTendSeam: FIFO 
 
 ## Fit
 
-pleach's bridge to tend's gated ledger; the only writer to the source polyglots during a run.
+pleach's bridge to tend's gated ledger, and the only writer to the source polyglots during a run. It satisfies the ledger port described in [pluggable-adapters](pluggable-adapters.tend2.html).
 
 ## Impact
 
-Verdicts reach tend's ledger through a single serial writer, and resume reads back each verified node's commit. Claim and artifact stay in lockstep.
+Verdicts reach tend's ledger through a single serial writer, and resume reads back each verified node's commit, so claim and artifact stay in lockstep. The verdicts themselves are minted by [the conductor loop](conductor-loop.tend2.html); this seam only carries them.
 
 ## Tests
 - [x] (code) createModuleTransport rejects a module missing readClosed/emitVerdict exports → TendTransportError. (inferred from test/integration/tend-seam.test.ts — real missoula required) · test/integration/tend-seam.test.ts @5e65818

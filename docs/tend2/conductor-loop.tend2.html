@@ -98,17 +98,13 @@ The outer loop is the scheduler (`src/loop/run-plan.ts` lines 262–271), a Kahn
 
 
 
-## Where
-
-src/loop/run-plan.ts; src/loop/run-node.ts; src/loop/run-work.ts; src/loop/deps.ts; src/core/classify.ts; src/core/argv.ts; src/core/errors.ts
-
 ## How
 
 Kahn-style DAG with Promise.race on inflight Map; per-node retry loop with evidence threading (A3); classify() routes worker reasons and errors to dead/retryable/blocked/terminal; seam-injected ConductorDeps interfaces; never imports seam modules directly; the worker spawn is guarded by work shape ('command' in work skips spawnWorker); alreadyVerified is captured from readClosed before seedClosure and excluded from closed; the cross-provider auditor honours accept.audit.model when the plan pins one
 
 ## Fit
 
-The heart of pleach. Every gate, retry and close decision the ledger demands lives here, and faces and seams exist to feed it.
+The heart of pleach. Every gate, retry and close decision lives here, and the rest of the system exists to feed it: [cli-run](cli-run.tend2.html) is its operator surface, [isolate-seam](isolate-seam.tend2.html) gives it trees, [umbel-seam](umbel-seam.tend2.html) gives it workers, and [lock-journal](lock-journal.tend2.html) keeps the run safe and replayable.
 
 ## Impact
 

@@ -110,6 +110,8 @@ Agent work becomes trustworthy by construction: only verified nodes publish bran
 ## Children #audit-egress #cli-land #cli-run #cli-validate #conductor-loop #isolate-seam #lock-journal #pluggable-adapters #scripted-runner #tend-seam #umbel-seam #test-phase-commit #gate-artifacts #journal-envelope #teardown-keeps-work #nothing-is-lost #land-honestly #fail-before-spend #record-survives #seam-keeps-tree
 
 ## Tried
+- 2026-09-20 caught the map up to tend2's current format: graph ids moved onto their heading lines (42 sections across 26 pages had them on the line beneath, so children, dependency edges and personas all parsed as empty), the renderer refreshed from the shipped dist, the project named `pleach` instead of `garden`, and 19 `narrative-uncovered` warnings resolved to 0 by naming the page each section hands its subject to (FORMAT rule 13). Dropped two v1 slots, conductor-loop's `Where` and lock-journal's `How`, which duplicated prose already on their own pages.
+- 2026-09-20 decided the all-`(code)` check distribution is right for this project, rather than a gap to fill. The reference garden runs ~20% `human`/`agent`, and the shape skill asks for an early human check on real output for product-shaped loops. pleach is the degenerate case on purpose: it is a deterministic conductor whose thesis is that every canonical decision is machine-decidable, so a `human` check here would mostly be ceremony. Revisit if a loop ever claims taste or fidelity, which none currently do.
 - 2026-08-18 migrated from v1 (docs/tend/overview.html) by `loop migrate`
 </script>
 <script src="./loop.js"></script>
