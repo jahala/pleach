@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>cli-run · garden</title>
+<title>cli-run · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
@@ -33,7 +33,7 @@ The runner and ledger come from `src/faces/config.ts:resolveSeams`. It uses a `p
 
 Errors outside the loop collapse to typed exits: `LockHeldError` → 3 (another conductor holds this repo); `UsageError`, `PlanInvalidError`, or `ConfigError` → 2; `RebuildRequiredError` or `TendTransportError` → 1. Nothing falls through silently.
 
-Landing is manual by design. Verified work publishes as `node/<id>` branches, and the HELP text says so explicitly. There is no `--land` flag, so the operator merges `node/<feature>` themselves. The sibling verbs round out the surface: [pleach validate](cli-validate.tend2.html) checks plan structure without running anything, and `pleach schema` emits the plan contract as JSON Schema for planners. The [conductor loop](conductor-loop.tend2.html) is the engine `run` drives. The [isolate](isolate-seam.tend2.html), [umbel](umbel-seam.tend2.html), and [tend](tend-seam.tend2.html) seams are the bundled adapters it wires into deps (see `docs/adapters.md` for swapping them). The [project bet](garden.tend2.html) is why those seams exist at all.
+Verified work publishes as `node/<id>` branches. Landing them is a separate, deterministic step: `pleach land` merges a plan's sinks onto the checked-out branch, and `pleach run --land` performs that same landing after a fully-verified close. The sibling verbs round out the surface: [pleach validate](cli-validate.tend2.html) checks plan structure without running anything, and `pleach schema` emits the plan contract as JSON Schema for planners. The [conductor loop](conductor-loop.tend2.html) is the engine `run` drives. The [isolate](isolate-seam.tend2.html), [umbel](umbel-seam.tend2.html), and [tend](tend-seam.tend2.html) seams are the bundled adapters it wires into deps (see `docs/adapters.md` for swapping them). The [project bet](pleach.tend2.html) is why those seams exist at all.
 
 ## Where
 
@@ -60,8 +60,7 @@ One command turns a tend plan into verified branches; the exit code alone tells 
 - [x] (code) Retry ladder: flaky command node (fails once) retries and closes; node/id branch published with retry evidence. (inferred from test/e2e/cli.test.ts — requires real umbel + missoula) · test/e2e/cli.test.ts @71462a2 · by cli
 - [x] (code) Resume surfacing: an already-verified node is reported, not re-run — RunSummary.alreadyVerified lists it and verbRun's stderr says 'skipped N already-verified node(s)'. · test/loop/run-plan.test.ts @84ed1ac
 
-## For
-#operator
+## For #operator
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/cli-run.tend.html) by `loop migrate`

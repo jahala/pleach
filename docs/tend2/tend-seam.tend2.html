@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>tend-seam · garden</title>
+<title>tend-seam · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
@@ -72,7 +72,7 @@ tend's honest-middle can decline a node, because a check lacked a negative contr
 
 When a run restarts, `readClosed` is called before any node is scheduled. The return is always `Map<id, sha | null>`, but tend's ingester currently returns a `Set<string>` (pre-T1, no SHAs persisted yet). `src/adapters/tend.ts:adaptToMap` converts the set in-place, mapping each verified id to `null`. The loop treats `null` as "verified by some prior run, no recorded SHA" and resolves the base ref from the published `node/<id>` branch instead. When tend ships SHA-persistence (the T1 / B1-B2 work tracked cross-repo), the adapter upgrades transparently, because `adaptToMap` short-circuits on `instanceof Map` and the loop gets the real SHA directly. Until then the operator:3 job is already satisfied: verified nodes are isolated off their branch ref, and nothing already closed is rebuilt.
 
-Path translation is the other half of resume. `src/adapters/tend.ts:toProjectRoot` strips `/docs/tend/features/` and everything after it from `plan.source`, routing the ingester to the project root the transport expects. A path without that marker is returned unchanged, so the adapter doesn't assume a fixed structure. `src/adapters/tend.ts:createModuleTransport` handles the other failure mode. A bad `--tend-module` path throws `TendTransportError` (not a generic `Error`) before any node runs. That satisfies the developer:1 job (transport validation is ledger-tested) and separates misconfiguration from a real ingester failure at the type level. The adapter is selected by `resolveSeams` when `--tend-module` is given; without it (and no `pleach.config.ts`), pleach uses the bundled `gitLedger` instead. See [../overview.html](garden.tend2.html) for the full system bet.
+Path translation is the other half of resume. `src/adapters/tend.ts:toProjectRoot` strips `/docs/tend/features/` and everything after it from `plan.source`, routing the ingester to the project root the transport expects. A path without that marker is returned unchanged, so the adapter doesn't assume a fixed structure. `src/adapters/tend.ts:createModuleTransport` handles the other failure mode. A bad `--tend-module` path throws `TendTransportError` (not a generic `Error`) before any node runs. That satisfies the developer:1 job (transport validation is ledger-tested) and separates misconfiguration from a real ingester failure at the type level. The adapter is selected by `resolveSeams` when `--tend-module` is given; without it (and no `pleach.config.ts`), pleach uses the bundled `gitLedger` instead. See [the project bet](pleach.tend2.html) for the full system bet.
 
 ## Where
 
@@ -97,8 +97,7 @@ Verdicts reach tend's ledger through a single serial writer, and resume reads ba
 - [x] (code) readClosed returns Map with verified feature present; in-progress feature excluded. (inferred from test/integration/tend-seam.test.ts — real missoula) · test/integration/tend-seam.test.ts @278fef5
 - [x] (code) emitVerdict with failed Verdict → {closed:false}; feature polyglot status and audit field unchanged. (inferred from test/integration/tend-seam.test.ts — real missoula) · test/integration/tend-seam.test.ts @7d2bfc5
 
-## For
-#developer #operator
+## For #developer #operator
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/tend-seam.tend.html) by `loop migrate`

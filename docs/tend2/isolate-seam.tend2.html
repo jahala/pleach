@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>isolate-seam · garden</title>
+<title>isolate-seam · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
@@ -74,7 +74,7 @@ Worktree isolation lets parallel nodes work on independent copies without interf
 
 `src/seams/isolate.ts:stage` calls `git add -A -- <files>`, never bare `-A`. The file list comes from the union of `WorkerResult.filesTouched` and `src/seams/isolate.ts:changedFiles` (porcelain, gitignored paths excluded by default). Junk the agent dropped but didn't name cannot enter the commit. `src/seams/isolate.ts:commitBranch` then runs `git commit --allow-empty`, `git branch -f <branch> HEAD`, and `git rev-parse HEAD`. It returns a 40-char SHA, which the loop records as `evidence.diffRef` before calling `emitVerdict` (operator:3). `src/seams/isolate.ts:refSha` resolves any ref to its SHA, returning null if absent. The loop's resume logic uses it to locate a prior verified node's branch without throwing on a first run.
 
-`dispose` calls `git worktree remove --force` and treats "is not a working tree" and "not found" as success (idempotent for double-dispose). Any other non-zero exit throws `IsolateCatastrophicError`, so an unrecognized failure is never silently swallowed. After the worktree is removed, `dispose` deletes the `mkdtemp` parent directory (`tmpBase`) it owns via `fs.rm`. The [conductor loop](conductor-loop.tend2.html) holds `dispose` until after `emitVerdict` returns, so a waking dependent never sees its dependency's worktree vanish mid-resolve. See [../overview.html](garden.tend2.html) for the project bet.
+`dispose` calls `git worktree remove --force` and treats "is not a working tree" and "not found" as success (idempotent for double-dispose). Any other non-zero exit throws `IsolateCatastrophicError`, so an unrecognized failure is never silently swallowed. After the worktree is removed, `dispose` deletes the `mkdtemp` parent directory (`tmpBase`) it owns via `fs.rm`. The [conductor loop](conductor-loop.tend2.html) holds `dispose` until after `emitVerdict` returns, so a waking dependent never sees its dependency's worktree vanish mid-resolve. See [the project bet](pleach.tend2.html) for the project bet.
 
 ## Where
 
@@ -108,8 +108,7 @@ Every node builds in a disposable worktree off its verified deps, so conflict ma
 
 - [x] (code) A relative `--repo-root` that is not `.`, run from another cwd, closes a node: the face resolves the root once, so the isolate and clean seams' `git -C <root>` with `cwd: <root>` never resolve a relative path twice (D22, jahala/pleach#102) · test/e2e/repo-root-relative.test.ts @988fed1 · by cli
 
-## For
-#developer #operator
+## For #developer #operator
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/isolate-seam.tend.html) by `loop migrate`

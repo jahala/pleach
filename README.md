@@ -17,7 +17,7 @@ landed code, with zero human diff-reviews: a six-feature client-side PDF unifier
 [plotplot](https://github.com/jahala/plotplot), a released Rust binary in a different repository
 and a different language ([its plans are public](https://github.com/jahala/plotplot/tree/master/docs/dogfood)).
 pleach's own development is tracked in its verified garden:
-[`docs/tend2/garden.tend2.html`](docs/tend2/garden.tend2.html) (self-contained pages, open any of
+[`docs/tend2/pleach.tend2.html`](docs/tend2/pleach.tend2.html) (self-contained pages, open any of
 them in a browser).
 
 > **New to the plotplot tools?** pleach is *day 2*: reach for it when work runs unattended, in

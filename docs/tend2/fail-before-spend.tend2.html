@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>fail-before-spend · garden</title>
+<title>fail-before-spend · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
@@ -30,11 +30,9 @@ The secret battery (src/core/hygiene.ts) carries the documented example credenti
 - [x] (code) docs/journal.md documents `verdict`'s `spawned`; README and the CLI help state that validate refuses shell operators and that a gate that cannot run fails once · test/unit/journal-doc.test.ts @aa9f6da · by cli
 - [x] (code) Through the real CLI: `pleach validate` on a plan with `&&` in its smoke exits 2 before anything runs; `pleach run` on a plan whose smoke names a missing binary fails the node after one attempt with the fault named and no second worker; `pleach schema` output validates that plan's minimal sibling · test/e2e/fail-before-spend.test.ts @7513f7c · by cli
 
-## Needs
-#cli-validate #conductor-loop #audit-egress
+## Needs #cli-validate #conductor-loop #audit-egress
 
-## For
-#operator
+## For #operator
 
 ## Tried
 - 2026-09-11 shaped from the "Fail before spend" milestone (jahala/pleach#64, #69, #75, #68, #73, #81), on cape-town's word that it follows "Land honestly". Design: validate reuses exec's tokenizer rather than a second grammar (one rule, one home); a gate that never ran is settled once with the fault named rather than classified retryable (a retry re-prompts the worker for something the worker cannot fix); the allowlist is exact-match and vendored with provenance rather than fetched (a scanner must not depend on the network to know a documented key); `spawned` is added rather than `provider` removed (the journal's stability promise says `provider` is never absent — the fix is to say what it means). Rejected: a schema change for any of it.

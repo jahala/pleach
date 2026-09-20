@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>land-honestly · garden</title>
+<title>land-honestly · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
@@ -26,11 +26,9 @@ The map gate is a command the operator supplies. `--land-gate CMD` (repeatable) 
 - [x] (code) docs/journal.md documents `land-gate-refused` and `land-start`'s `sinks`; `KINDS` pins the event as `gate.result`; the CLI help and README list `--sinks` and `--land-gate` · test/unit/journal-doc.test.ts @77a9222 · by cli
 - [x] (code) Through the real CLI with real git: a landing whose stack moves a stamped evidence file is refused by a `--land-gate` that runs tend2's gate (skipped honestly when the binary is absent) and by a fixture gate script that reads `{base}`; after the gate is green the same landing lands; and `pleach land --sinks` lands one verified node while a second process holds the run lock · test/e2e/land-honestly.test.ts @03ef297 · by cli
 
-## Needs
-#cli-land #lock-journal #teardown-keeps-work
+## Needs #cli-land #lock-journal #teardown-keeps-work
 
-## For
-#operator
+## For #operator
 
 ## Tried
 - 2026-09-11 shaped on cape-town's word ("Land honestly" before "Fail before spend": a land gate that never reads the map left fifty-one stamps stale for three days and hid real drift — the wrong tier before the expensive one). Design: a land lock of its own rather than landing under the run's lock (the two never write the same thing, and a serial queue behind the run is the cost); a subset flag rather than "land one node" (the all-or-nothing rule stays the default because a partial landing the plan never verified is the thing it exists to prevent — a subset is the operator saying which verified sinks); a gate COMMAND with `{base}` rather than pleach calling tend2 (tend is an adapter, never a requirement; the signal is tend2's, the moment is pleach's). Rejected: keeping the gate's SARIF beside a receipt (a landing mints none — its record is the journal line and the merge commit); running `tend2 next` as the issue suggests (it reads the whole map; `tend2 gate --base` answers the exact question).

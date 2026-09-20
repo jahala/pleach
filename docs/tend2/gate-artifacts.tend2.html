@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>gate-artifacts · garden</title>
+<title>gate-artifacts · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
@@ -36,11 +36,9 @@ A gate's finding log outlives the worktree, bound to the sealed facts by one has
 - [x] (code) A worktree friction journal (`.plotplot/friction/*.jsonl`) is kept as `<node>.friction.jsonl` (months concatenated in name order) with its own `gate-artifact` event · test/loop/gate-artifact-friction.test.ts @713f08c · by cli
 - [x] (code) Through the real CLI with real git and a smoke that prints SARIF to stdout: after a verified close `<git-dir>/pleach/receipts/<node>.sarif` exists, its sha256 equals the sealed `artifactSha`, `pleach receipt <node>` verifies, and a smoke that prints plain text keeps no file · test/e2e/gate-artifact.test.ts @0b8fd2b · by cli
 
-## Needs
-#test-phase-commit #conductor-loop #lock-journal
+## Needs #test-phase-commit #conductor-loop #lock-journal
 
-## For
-#operator
+## For #operator
 
 ## Tried
 - 2026-09-09 reshaped after loop 1 landed: the never-delivery rule is now the loop's FIRST check and node, widened from "`.loop-scratch/` and `.plotplot/friction/`" to "anything git ignores, anything outside the worktree" with a `set-aside` journal line — jahala/pleach#74/#76/#79 showed a finished node dying at `git add` of an ignored scratch path, which any later node of this loop could hit; so its node runs alone, lands, and the conductor restarts on the landed code before the rest. Loop 1's nodes were spared only because their scratch went through Bash rather than the editor manifest.

@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>test-phase-commit · garden</title>
+<title>test-phase-commit · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
@@ -34,11 +34,9 @@ Retries keep the seal honest. Once a red commit exists on the attempt's tree, a 
 - [x] (code) `pleach validate` warns on a node whose phases end on impl: `warnings[]` in the JSON, one stderr line, exit stays 0 · test/unit/validate-phases.test.ts @01a0ece · by cli
 - [x] (code) docs/journal.md documents `phase-commit`, and every event name the source appends is documented there (the stability promise, pinned) · test/unit/journal-doc.test.ts @b9bc0b1 · by cli
 
-## Needs
-#conductor-loop #isolate-seam #lock-journal
+## Needs #conductor-loop #isolate-seam #lock-journal
 
-## For
-#developer
+## For #developer
 
 ## Tried
 - 2026-09-08 shaped from cape-town's order (umbrella fit loop, weed's bite kill report 2026-09-06). Design: seal at RED-pass inside the phase loop (not a settle-time split — a split from a tree that may hold impl edits cannot prove what actually ran red); the seal is a commit on the detached HEAD, gated by the same marker + hygiene scans as the close; retries resume at impl once sealed. Rejected: recording the red sha inside the receipt envelope (git already binds parent → child; the trailer names the phase) and re-running the smoke on the red diff (the smoke judges delivered work; hygiene covers secrets in tests).

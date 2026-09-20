@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>seam-keeps-tree · garden</title>
+<title>seam-keeps-tree · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
@@ -28,11 +28,9 @@ The contract is the table. `WorkerResult.reason` and `classifyWorkerReason` name
 - [x] (code) docs/journal.md documents `seam-violation` and the surprise verdict's gate and detail; docs/adapters.md states the runner contract — the reason is read from the JSON whatever the exit code, the nine reasons and their classes, citing `contracts/runner.md`; `KINDS` pins the event · test/unit/journal-doc.test.ts @98a4aaa · by cli
 - [x] (code) Through the real CLI with a fake umbel binary: a worker wait that exits 124 with a timeout reason is retried and then settles failed with its tree quarantined, a receipt and both attempts counted; a wait that exits 122 provider-error is retried; an auditor whose wait times out over a green tree leaves the tree quarantined with a never-adjudicated audit record and `pleach audit` re-runs the lane alone; a wait that exits 1 with no reason leaves a quarantine and a receipt carrying the seam's text and the next step · test/e2e/seam-keeps-tree.test.ts @4a2d97c · by cli
 
-## Needs
-#record-survives #nothing-is-lost #teardown-keeps-work #umbel-seam
+## Needs #record-survives #nothing-is-lost #teardown-keeps-work #umbel-seam
 
-## For
-#operator
+## For #operator
 
 ## Tried
 - 2026-09-18 shaped from jahala/pleach#120 (four verified trees lost on jahala/quadrat overnight) and #110, by the owner's word through the umbrella: fix it ahead of everything else. Root cause read from 411a1eb: the adapter throws on the exit code before parsing the reason; run-node's safety net disposes the tree on the throw; run-plan's catch returns before settle. Decided: the surprise settles inside run-node, where the tree is live, and again in run-plan for throws from anywhere else — two catches, one path. Decided: an unnamed reason stays terminal (never default-retry what cannot be named) and is journaled. Scoped out: the idle window not firing on a frozen codex pane (#120's second fault — umbel's side, its transcript-aware idle net landed 2026-09-15) and gate events between node-start and verdict (#63, The operator's seat).

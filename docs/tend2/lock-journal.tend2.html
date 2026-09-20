@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>lock-journal · garden</title>
+<title>lock-journal · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
@@ -23,7 +23,7 @@ Two conductors on one repo would race the branches and the ledger. A run nobody 
 
 `src/seams/journal.ts:createJournal` returns a single `append(event)` method. Each call serializes the event to `JSON.stringify(event) + '\n'` and calls `appendFile`: one line, one syscall, no buffering. The parent directory is created once through a memoized `ensureDir` promise, so only the first append pays `mkdir -p`. Filesystem errors propagate rather than being swallowed, because a lost trace is worse than a loud failure.
 
-The [conductor loop](conductor-loop.tend2.html) writes `run-start`, `node-start`, `verdict`, `gate-fail`, `blocked`, `closed` or `not-closed`, and `run-end` as events through this seam. A developer reconstructing a misbehaving run opens the JSONL and reads the full sequence (`run-start` → node verdicts → `closed`/`not-closed` decisions → `run-end` with the bucket summary) without paying for real agents or re-executing anything. The scheduler's retry choices, the stale-lock takeover and the dual-close decision are all in the file. See [../overview.html](garden.tend2.html) for the project bet behind this.
+The [conductor loop](conductor-loop.tend2.html) writes `run-start`, `node-start`, `verdict`, `gate-fail`, `blocked`, `closed` or `not-closed`, and `run-end` as events through this seam. A developer reconstructing a misbehaving run opens the JSONL and reads the full sequence (`run-start` → node verdicts → `closed`/`not-closed` decisions → `run-end` with the bucket summary) without paying for real agents or re-executing anything. The scheduler's retry choices, the stale-lock takeover and the dual-close decision are all in the file. See [the project bet](pleach.tend2.html) for the project bet behind this.
 
 ## Where
 
@@ -48,8 +48,7 @@ One conductor per (repo, source) is guaranteed, and every run leaves a replayabl
 - [x] (code) B4: lockfile content is the acquiring process pid (decimal string). (inferred from test/integration/lock.test.ts — real filesystem) · test/integration/lock.test.ts @bc80098
 - [x] (code) Journal: run-start and run-end events present in JSONL after runPlan completes. (inferred from test/loop/run-plan.test.ts:lock + journal) · test/loop/run-plan.test.ts @b9e077c
 
-## For
-#developer
+## For #developer
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/lock-journal.tend.html) by `loop migrate`

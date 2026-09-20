@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>pluggable-adapters · garden</title>
+<title>pluggable-adapters · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
@@ -25,7 +25,7 @@ The generalization keeps the deterministic loop untouched and turns those two co
 
 `src/faces/config.ts:resolveSeams` decides which adapters a run uses, in precedence: an explicit `--config <path>`, else a `pleach.config.ts` at the repo root, else the defaults (`umbelRunner` plus `tendLedger` when `--tend-module` is given, or `gitLedger`). A `pleach.config.ts` exports `{ runner, ledger }` built from the bundled factories or your own; a missing or malformed one throws the typed `ConfigError`. `loadConfig` also duck-types the resolved adapters, checking that the runner has `spawnWorker` and the ledger has `readClosed`/`emitVerdict` as functions. A wrong-shape config therefore fails at the boundary with `ConfigError` instead of deep in a run (`src/faces/config.ts:68–76`). The plan stays portable: it names the provider per node (`worker.provider`) while the config names the tools. The same plan runs whether the runner is umbel, an API wrapper, or a test double. For programmatic planners, `pleach schema` emits the plan contract as JSON Schema (`src/core/schema-json.ts:planJsonSchema`, kept out of the drift-pinned `plan.ts`).
 
-pleach conducts **local** executors over git worktrees with **automatable** verification. That is the boundary. Cloud-autonomous agents or human-gated approval need an adapter that bridges into the sync send→wait→kill and deterministic-emitVerdict contracts. See `docs/adapters.md` and the [project bet](garden.tend2.html).
+pleach conducts **local** executors over git worktrees with **automatable** verification. That is the boundary. Cloud-autonomous agents or human-gated approval need an adapter that bridges into the sync send→wait→kill and deterministic-emitVerdict contracts. See `docs/adapters.md` and the [project bet](pleach.tend2.html).
 
 ## Where
 
@@ -37,7 +37,7 @@ RunnerSeam/LedgerSeam interfaces (loop/deps.ts) the loop composes but never impo
 
 ## Fit
 
-The generalization layer: the two ports the loop depends on, the bundled adapters that satisfy them, and the config that selects a pair. "plot-plot" (tend + umbel) becomes pleach's batteries-included default rather than its only mode.
+The generalization layer: the two ports the loop depends on, the bundled adapters that satisfy them, and the config that selects a pair. "plotplot" (tend + umbel) becomes pleach's batteries-included default rather than its only mode.
 
 ## Impact
 
@@ -53,8 +53,7 @@ A non-tend, non-umbel user runs pleach standalone on git, or wires any runner/le
 - [x] (code) buildDeps(opts) assembles a ConductorDeps from the four pleach seams (exec/isolate/lock/journal) plus an injected runner + ledger. · test/unit/library-export.test.ts @39edcca · by cli
 - [x] (code) The bundled directCliRunner (headless claude -p / codex exec) is selectable with `pleach run --runner direct-cli` and reaches a verified close with no umbel and no tmux; --runner with a config file is a contradiction and errors (no silent fallback). · test/e2e/direct-cli.test.ts @79b2e31
 
-## For
-#developer #operator
+## For #developer #operator
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/pluggable-adapters.tend.html) by `loop migrate`

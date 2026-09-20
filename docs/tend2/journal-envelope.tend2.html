@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>journal-envelope · garden</title>
+<title>journal-envelope · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
@@ -31,11 +31,9 @@ Every journal line parses as one JSON object carrying the envelope, so tend2 rea
 - [x] (code) The stability pin covers kinds: every event documented in docs/journal.md has a pinned `plotplot.kind`, and the kind table names no event the documentation lacks · test/unit/journal-doc.test.ts @2476653 · by cli
 - [x] (code) Through the real CLI: every line of a real run's journal parses as one JSON object carrying the envelope, `time` ends in `Z`, `gate-retry` lines (if any) carry `plotplot.node` + `plotplot.gate`, and the `verdict` line carries `plotplot.runner` · test/e2e/journal-envelope.test.ts @f999712 · by cli
 
-## Needs
-#gate-artifacts #lock-journal
+## Needs #gate-artifacts #lock-journal
 
-## For
-#operator
+## For #operator
 
 ## Tried
 - 2026-09-08 shaped from jahala/pleach#60 and jahala/plotplot#16. Kinds `run.lifecycle`, `node.lifecycle`, `gate.result` (beside the pinned `gate.retry`) and the `plotplot.runner` attribute go to the umbrella's profile by PR on jahala/plotplot, with one fixture line each — cape-town's ruling 2026-09-08, which also refused a provider mapping: `claude` → `anthropic` is a guess (Bedrock, Vertex), so the runner is written as the fact it is and `gen_ai.provider.name` is omitted until a runner reports it. Design: envelope in core (pure), applied once in the journal seam (the edge) — not in every `journal.append` call site, and not in the in-memory test journal, so the loop tests stay about the loop. Rejected: a per-event `plotplot.kind` (fourteen private kinds — the profile forbids inventing attributes per bed); inferring `plotplot.harness` or `gen_ai.provider.name` from the runner (claims pleach cannot observe). Stacked on #gate-artifacts (branch feat/journal-envelope) because `gate-artifact` and `phase-commit` need kinds too.

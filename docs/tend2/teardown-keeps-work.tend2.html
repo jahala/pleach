@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>teardown-keeps-work · garden</title>
+<title>teardown-keeps-work · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
@@ -34,11 +34,9 @@ An operator can drain a run at a node boundary without racing the scheduler, abo
 - [x] (code) docs/journal.md documents `run-stopped`, the `aborted` verdict status and the `aborted` run-end field; `KINDS` pins `run-stopped`; the CLI help and README list `pleach stop` and `--idle-ms` · test/unit/journal-doc.test.ts @874b3d9 · by cli
 - [x] (code) Through the real CLI: SIGINT mid-node leaves an `aborted` receipt, a `quarantine/<id>` holding the worker's files, `run-aborted` then `run-end`, exit 1; and `pleach stop` from a second process drains a two-node plan after the first close with `run-stopped` journaled and the marker gone · test/e2e/teardown.test.ts @95d02bd · by cli
 
-## Needs
-#conductor-loop #umbel-seam #lock-journal
+## Needs #conductor-loop #umbel-seam #lock-journal
 
-## For
-#operator
+## For #operator
 
 ## Tried
 - 2026-09-11 shaped on cape-town's word while tend2 runs its six, from #61, #67 and #72 — the defects that lost the most window this week. Design: the adapter answers `aborted` (the seam knows its own signal fired; the loop must not have to guess from an exit code); the drain is a marker read in the launch tick (a signal cannot be made race-free against a scheduler that launches in the same tick as a close); the idle timeout is a conductor default, not a plan field (no contract change — `policy` stays as it is). Scoped OUT, deliberately: #61's second half, resuming FROM a quarantined tree (`pleach run` reusing `quarantine/<id>` as the retry's base) — a resume today re-isolates and rebuilds, which is correct and loses only time; reusing a quarantine as a base needs the acceptance-evolution rules to say what a quarantined base proves, and that is its own loop.

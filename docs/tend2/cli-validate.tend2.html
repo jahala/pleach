@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>cli-validate · garden</title>
+<title>cli-validate · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
@@ -19,7 +19,7 @@ An operator drops a six-node plan into `pleach run` and walks away. Say that pla
 
 `validatePlan` in `src/core/validate.ts` is a pure, total function over the `Plan` type defined in `src/core/plan.ts`. It accumulates failures into a `reasons[]` array rather than short-circuiting, so a single call surfaces every structural defect at once. It runs four checks in order: duplicate node IDs, unknown `needs` references (a node declaring a dependency on an ID that doesn't exist in the plan), the provider-diversity rule, and finally Kahn's toposort for cycle detection. The diversity check resolves `worker.provider` against `DEFAULT_WORKER_PROVIDER` (`'claude'`) when the field is omitted. A plan that leaves `worker.provider` unset but sets `accept.audit.provider = 'claude'` is therefore rejected on the same grounds as one that spells it out. The [conductor loop](conductor-loop.tend2.html)'s cross-provider audit gate only has teeth if the auditor is a different model than the builder, and `validatePlan` enforces that at plan-acceptance time. Structural errors (duplicates, ghost refs, diversity violations) are thrown before toposort runs, because Kahn requires a clean graph. A cycle in the survivors raises `PlanInvalidError(['dependency cycle detected in plan nodes'])`. On a clean plan the function returns `{ order: string[] }`, the topological order the conductor will schedule, and the CLI prints `{valid:true, order:[...]}` to stdout and exits 0.
 
-The function is the shared core of the `validate` CLI face and [pleach run](cli-run.tend2.html). The bet is in [../overview.html](garden.tend2.html).
+The function is the shared core of the `validate` CLI face and [pleach run](cli-run.tend2.html). The bet is in [the project bet](pleach.tend2.html).
 
 ## Where
 
@@ -48,11 +48,9 @@ Invalid plans fail in milliseconds with a precise reason instead of deadlocking 
 - [x] (code) nodeSummaries reports each node's work-type (command/prompt/phases) and only the gates it declares (setup/smoke/audit:<provider>). · test/unit/validate-describe.test.ts @8b204e6
 - [ ] (code) pleach validate stdout JSON includes waves and nodes in addition to {valid, order}.
 
-## Needs
-#cli-run
+## Needs #cli-run
 
-## For
-#operator #developer
+## For #operator #developer
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/cli-validate.tend.html) by `loop migrate`

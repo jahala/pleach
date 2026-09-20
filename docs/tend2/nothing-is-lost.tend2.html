@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>nothing-is-lost · garden</title>
+<title>nothing-is-lost · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
@@ -34,11 +34,9 @@ Resuming from a quarantine is the one with rules. A quarantined tree was never g
 - [x] (code) docs/journal.md documents `resumed-from-quarantine` and the `handback` artifact; `KINDS` pins the event; the CLI help and README list `pleach audit`, `--fallback-provider` and `--fresh` · test/unit/journal-doc.test.ts @ce12569 · by cli
 - [x] (code) Through the real CLI with real git: an aborted phased node resumes from its quarantine and closes verified with `facts.base` set and its handback kept; the receipt history holds both closes; `pleach audit` re-adjudicates a node whose auditor relayed garbage · test/e2e/nothing-is-lost.test.ts @858ca8a · by cli
 
-## Needs
-#teardown-keeps-work #gate-artifacts #conductor-loop
+## Needs #teardown-keeps-work #gate-artifacts #conductor-loop
 
-## For
-#operator
+## For #operator
 
 ## Tried
 - 2026-09-11 shaped from the "Nothing is lost" milestone (jahala/pleach#66, #82, #65, #77, #91), the P1s the triage put first. Design: the handback and the receipt history reuse D14's artifact store (one place things are kept beside a receipt); the fallback provider is conductor-level (`--fallback-provider`), not a plan field — no contract change, and a cast is the operator's call; a resumed close is distinguishable forever (`facts.base`), because a quarantine was never gated and the umbrella's predicate must be able to tell. Rejected: reading the Tried line out of the handback in pleach (agents produce; code decides — pleach keeps the message, the fit loop's later rule classifies it); a per-node `worker.fallback` (a contract change for a policy the run owns).

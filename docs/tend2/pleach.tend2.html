@@ -2,12 +2,12 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>garden</title>
+<title>pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
 <script type="text/markdown" id="loop">
-# Project Garden
+# pleach: the deterministic conductor for verified agent work
 
 **Goal.** pleach is a deterministic conductor that interweaves a DAG of agent-built work into one verified canopy. It isolates each plan node in its own git worktree, enforces gates, and publishes a branch only for work that mechanically passed them.
 
@@ -15,7 +15,7 @@ Stochastic agents can't be trusted to self-certify, and reviewing every diff def
 
 ## Agents produce; code decides
 
-pleach occupies the middle of the plot-plot suite. [tend](tend-seam.tend2.html) holds the feature ledger and decides what "done" means. [umbel](umbel-seam.tend2.html) holds each agent steady over tmux. pleach is the loop between them. Its single invariant is that every canonical decision (close, verify, quarantine, retry, skip) is deterministic code. Agent output is parsed evidence, never a control-flow branch.
+pleach occupies the middle of the plotplot suite. [tend](tend-seam.tend2.html) holds the feature ledger and decides what "done" means. [umbel](umbel-seam.tend2.html) holds each agent steady over tmux. pleach is the loop between them. Its single invariant is that every canonical decision (close, verify, quarantine, retry, skip) is deterministic code. Agent output is parsed evidence, never a control-flow branch.
 
 The design answers a verified defect ledger. Three classes of failure were found in the pre-pleach bridge: semantic deadlocks where honest work could never close (class A), state-lifetime splits where tend's `verified` status outran the git artifact it claimed (class B), and gate holes where conflict markers reached verified branches (class C). Each defect lands as a RED test before its fix (`docs/ledger.md`).
 
@@ -101,14 +101,13 @@ A pure, total core defines the contract and the classify ladder; thin seams own 
 
 ## Fit
 
-The middle leg of the plot-plot suite (tend decides what the garden should bear, pleach interweaves the branches into one verified canopy, umbel holds each grower steady) and the canonical home of the @agent-contract/plan schema all three share.
+The middle leg of the plotplot suite (tend decides what the garden should bear, pleach interweaves the branches into one verified canopy, umbel holds each grower steady) and the canonical home of the @agent-contract/plan schema all three share.
 
 ## Impact
 
 Agent work becomes trustworthy by construction: only verified nodes publish branches, failures quarantine their own subtree, and the operator reads one RunSummary instead of auditing N diffs. Agents produce; code decides.
 
-## Children
-#audit-egress #cli-land #cli-run #cli-validate #conductor-loop #isolate-seam #lock-journal #pluggable-adapters #scripted-runner #tend-seam #umbel-seam #test-phase-commit #gate-artifacts #journal-envelope #teardown-keeps-work #nothing-is-lost #land-honestly #fail-before-spend #record-survives #seam-keeps-tree
+## Children #audit-egress #cli-land #cli-run #cli-validate #conductor-loop #isolate-seam #lock-journal #pluggable-adapters #scripted-runner #tend-seam #umbel-seam #test-phase-commit #gate-artifacts #journal-envelope #teardown-keeps-work #nothing-is-lost #land-honestly #fail-before-spend #record-survives #seam-keeps-tree
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/overview.html) by `loop migrate`
