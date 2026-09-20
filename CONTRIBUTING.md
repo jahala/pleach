@@ -1,6 +1,6 @@
 # Contributing to pleach
 
-Thanks for your interest. pleach is the deterministic conductor for DAGs of verified agent work — see [`README.md`](README.md) for what it is, and **read [`ENGINEERING.md`](ENGINEERING.md) before any substantial change** — it is the binding engineering doctrine, not optional reading.
+Thanks for your interest. pleach is the deterministic conductor for DAGs of verified agent work; see [`README.md`](README.md) for what it is, and **read [`ENGINEERING.md`](ENGINEERING.md) before any substantial change.** It is the binding engineering doctrine, not optional reading.
 
 ## Setup
 
@@ -8,7 +8,7 @@ pleach runs on [Bun](https://bun.sh).
 
 ```sh
 bun install
-bun run check   # tsc --noEmit + biome + bun test — must be green before any PR
+bun run check   # tsc --noEmit + biome + bun test; must be green before any PR
 ```
 
 ## The non-negotiables
@@ -31,7 +31,7 @@ Enforced in review (and most by CI). Full detail in `ENGINEERING.md`:
 | `PLEACH_UMBEL_BIN` | path to the `umbel` binary |
 | `PLEACH_TEND_MODULE` | path to a tend ingester module |
 
-They also need `git >= 2.38` and `tmux` on PATH. With the vars unset most of those suites skip — which is exactly how CI runs.
+They also need `git >= 2.38` and `tmux` on PATH. With the vars unset most of those suites skip, which is exactly how CI runs.
 
 Two exceptions worth knowing about. `test/integration/umbel-abort.test.ts` and `test/integration/umbel-idle.test.ts` fall back to whatever `umbel` is on PATH, so they run for anyone who has the binary installed, even with `PLEACH_UMBEL_BIN` unset. They drive the real runner, so they go red when umbel's `wait` or `kill` contract moves under them. CI has no umbel binary and never sees this, which means a green CI is not on its own proof that the runner seam still holds. Run them locally against the umbel you actually use.
 
@@ -40,27 +40,28 @@ Two exceptions worth knowing about. `test/integration/umbel-abort.test.ts` and `
 1. Branch from `master`.
 2. Make the change test-first; keep `bun run check` green.
 3. Fill the PR template checklist; commit messages follow `type(scope): subject`.
-4. Be kind — see [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
+4. Be kind; see [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
 
 ## Issues are an inbox
 
-pleach does not accumulate issues — it converts them. Every triaged issue
+pleach does not accumulate issues, it converts them. Every triaged issue
 becomes exactly one of:
 
-1. **A failing check** — a bug is a RED test that can only be closed by going
+1. **A failing check.** A bug is a RED test that can only be closed by going
    green, never by prose. The issue closes with a pointer to the test.
-2. **A decision record** — a "why is it like this?" gets its answer written
+2. **A decision record.** A "why is it like this?" gets its answer written
    down (context, options, rejection reasons) where the next reader will look.
-3. **A recorded no** — declined, with the reason, kindly.
+3. **A recorded no.** Declined, with the reason, kindly.
 
 The `untriaged` label marks the queue; templates collect exactly what
-conversion needs. Status lives in checks and branches — computed, never
-asserted — so an open issue is always "not yet triaged," never "known broken."
+conversion needs. Status lives in checks and branches: computed, never
+asserted, so an open issue is always "not yet triaged," never "known broken."
 
 ## Brand checks are local
 
 `.brand/` is committed (see `.petalsrc`): pleach's own product layer under
-`.brand/products/pleach/`, plus the plotplot umbrella pulled from the brand repo. CI has no
+`.brand/products/pleach/`, plus the plotplot umbrella cached from the public
+[plotplot](https://github.com/jahala/plotplot) repo at the tag `.petalsrc` pins. CI has no
 petals tooling, so it cannot brand-check either way.
 Landing-page and copy changes are checked locally with the petals skill (`/petals check index.html`)
-before committing — the page's "passes /petals check" badge is a maintainer promise, not a CI gate.
+before committing. The page's "passes /petals check" badge is a maintainer promise, not a CI gate.
