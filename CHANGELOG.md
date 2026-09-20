@@ -6,6 +6,8 @@ Entries carry the defect-ledger id where one exists (`D8`, `D21`, ...); the ledg
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-20
+
 ### Added
 - The deterministic conductor: a Kahn-scheduled DAG runner with a per-node gate ladder (isolate -> setup -> work -> conflict-marker scan -> scoped stage -> smoke -> cross-provider audit -> commit-before-emit) that publishes a `node/<id>` branch only for verified work.
 - Seven seams — exec, isolate, lock, journal, receipts, clean, gitdir — and two adapter ports (runner, ledger) behind a pure, total `core/`.
