@@ -1,4 +1,4 @@
-# The run journal — pleach's event stream (stable read surface)
+# The run journal: pleach's event stream (stable read surface)
 
 Every `pleach run` / `pleach land` appends one JSON line per event to
 **`<git-dir>/pleach/journal.jsonl`** (the git dir is resolved through the same
@@ -9,8 +9,8 @@ stderr narration is a rendering of the same events (`--quiet` silences the
 rendering, never the file).
 
 **Stability promise:** event names and the fields documented below are a read
-surface other tools build on. Changes are additive — new events and new fields
-may appear; documented fields don't change meaning or disappear. Consumers must
+surface other tools build on. Changes are additive: new events and new fields
+may appear, and documented fields don't change meaning or disappear. Consumers must
 tolerate unknown events and unknown fields.
 
 ## Events
@@ -89,8 +89,8 @@ profile's names:
 
 Terminal-verdict lines add who ran the work: `plotplot.runner` is the runner's
 CLI name, verbatim from the line's `provider` field, and `gen_ai.request.model`
-is the model where the plan pinned one (absent otherwise — "never told us" is a
-missing key, not a `null`). `gen_ai.provider.name` is never written: a runner
+is the model where the plan pinned one. It is absent otherwise, because "never told us" is a
+missing key rather than a `null`. `gen_ai.provider.name` is never written: a runner
 can be routed through Bedrock or Vertex, and pleach cannot see which.
 
 The envelope is additive. Every event name and field documented above means
@@ -106,4 +106,4 @@ journal exactly as before.
   cost-per-verified-claim = spend on the path that ended in `closed`, divided by
   claims closed.
 - **Library callers**: `buildDeps({ narrate })` receives every event after its
-  durable append — same stream, in-process.
+  durable append. Same stream, in-process.
