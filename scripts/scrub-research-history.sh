@@ -134,8 +134,16 @@ this scrub removes. Run: trash '$MIRROR' && $0 prepare"
   # 2a. Exact, and needs no strings: no blob that ever lived at a dropped path in the
   #     backup may survive in the publishable set.
   local before_blobs survivors
+  # `is_dropped_path "$p" && echo` as the loop's last command makes the loop exit
+  # non-zero whenever the final line is not a dropped path. Under `set -euo pipefail`
+  # that killed the whole script mid-verification, silently, with status 0. Use an
+  # explicit `if`, which is 0 when the condition is false.
   before_blobs=$(git -C "$BACKUP" rev-list --objects --branches --tags \
-    | awk 'NF>1' | while read -r sha path; do is_dropped_path "$path" && echo "$sha"; done | sort -u)
+    | awk 'NF>1' \
+    | while read -r sha path; do
+        if is_dropped_path "$path"; then echo "$sha"; fi
+      done \
+    | sort -u || true)
   if [ -z "$before_blobs" ]; then
     ok "backup has no blobs at the dropped paths to check against"
   else
@@ -219,7 +227,7 @@ this scrub removes. Run: trash '$MIRROR' && $0 prepare"
       dropped_files=0
       while read -r f; do
         [ -n "$f" ] || continue
-        is_dropped_path "$f" && dropped_files=$((dropped_files + 1))
+        if is_dropped_path "$f"; then dropped_files=$((dropped_files + 1)); fi
       done < <(git -C "$BACKUP" log -1 --format= --name-only "$c" 2>/dev/null)
       if [ "$parents" -gt 2 ]; then
         : # a merge that went empty
