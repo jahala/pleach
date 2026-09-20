@@ -12,3 +12,21 @@ docs/research/
 # Worker scratch (tend2's work-order convention: "goes in .loop-scratch/ only — never collected").
 # pleach stages every untracked-unignored path, so the repo must ignore it or scratch ships.
 .loop-scratch/
+
+# Conductor workspace scratch: pasted attachments, agent notes, build copies.
+# Untracked AND unignored is the dangerous combination here — pleach stages every
+# such path, so without this line a conducted run in this repo would collect it.
+.context/
+
+# The scrub's redaction/canary list (scripts/scrub-research-history.sh).
+# It holds, in plain text, the strings that exist to be kept out of this repo.
+# It belongs outside the working tree; these lines are the backstop for the day
+# someone points $PLEACH_SCRUB_REDACT at the repo by mistake.
+redact.txt
+**/redact.txt
+
+# Scrub working artifacts, in case $PLEACH_SCRUB_ROOT is ever set inside the repo.
+pleach-history-scrub/
+*.bundle
+backup-pre-scrub.git/
+rewritten.git/
