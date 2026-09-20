@@ -65,3 +65,22 @@ asserted, so an open issue is always "not yet triaged," never "known broken."
 petals tooling, so it cannot brand-check either way.
 Landing-page and copy changes are checked locally with the petals skill (`/petals check index.html`)
 before committing. The page's "passes /petals check" badge is a maintainer promise, not a CI gate.
+
+## Why this is not on npm
+
+`package.json` carries `"private": true`, deliberately. The `pleach` bin is
+`src/main.ts` under a `#!/usr/bin/env bun` shebang and there is no build step, so
+an npm package would install cleanly and then fail for anyone without Bun:
+`npx pleach` would die on `env: bun: No such file or directory`. Publishing a
+package that breaks the command people will actually type is worse than not
+publishing one.
+
+Installing from GitHub works today and needs no registry:
+
+```sh
+bunx github:jahala/pleach validate plan.json
+```
+
+What would change the decision is a build step that emits something Node can run,
+at which point `"private"` comes off and the name is free to claim. Until then the
+flag is also a guard against publishing by accident.

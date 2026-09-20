@@ -1,6 +1,6 @@
 {
   "name": "pleach",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "private": true,
   "description": "Deterministic conductor for DAGs of verified agent work — isolates each plan node in a git worktree, enforces gates, and publishes a node/<id> branch only for verified work.",
   "license": "MIT",
