@@ -23,7 +23,7 @@
   "Shared law" section (LAW 1: the checker must not be writable by the checked; LAW 2: status is
   computed, never asserted), with instances from both implementations. No schema-block change;
   drift guards unaffected. Converged in the tend2 × pleach walkie dialogue 2026-08-17
-  (archive: docs/research/walkie-dialogue-2026-08-17.md); explanatory companion:
+  ; explanatory companion:
   tend2 docs/bridge/working-together.md.
 
 - **v1.1.4 (2026-08-17 — tend2-ratified same day, on-channel)** — binding-prose-only: "Exec

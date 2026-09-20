@@ -2,16 +2,16 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>operator · garden</title>
+<title>operator · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
 <script type="text/markdown" id="loop">
 # Operator
 
-**Who.** A practitioner who has already planned work in a tend garden and wants a swarm of stochastic agents to build and verify it unattended — won't read every diff, so the machine, not their own judgment, has to decide what 'done' means. Trusts gates over vibes; measures the run by what landed verified, not by what an agent claimed.
+**Who.** A practitioner who has already planned work in a tend garden and wants a swarm of stochastic agents to build and verify it unattended. They won't read every diff, so the machine has to decide what 'done' means. They trust gates over vibes, and measure the run by what landed verified rather than by what an agent claimed.
 
-Runs `pleach run plan.json` against a tend-generated DAG and walks away, returning to verified `node/<id>` branches or a RunSummary naming exactly which nodes failed and why. Scenario: it's late; they queue a six-node feature plan before bed — claude builds the leaves, codex audits the integration node, tend's honest-middle decides — and they wake to '5 closed, 1 partial,' with nothing unverified leaked into a branch.
+Runs `pleach run plan.json` against a tend-generated DAG and walks away. They come back to verified `node/<id>` branches, or to a RunSummary naming exactly which nodes failed and why. Scenario: late at night they queue a six-node feature plan before bed. claude builds the leaves, codex audits the integration node, and tend's honest-middle decides. They wake to '5 closed, 1 partial,' with nothing unverified leaked into a branch.
 
 ## Jobs
 - When I hand a multi-step plan to stochastic agents, because I can't personally review every diff and I won't take an agent's word that it 'finished,' we believe only work that mechanically clears the gates should ever land. We'll know we got it right when every published `node/<id>` branch passed smoke + conflict-marker + cross-provider audit, and no node tend declined to verify is ever reported closed.

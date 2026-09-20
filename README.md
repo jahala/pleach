@@ -3,33 +3,34 @@
 [![CI](https://github.com/jahala/pleach/actions/workflows/ci.yml/badge.svg)](https://github.com/jahala/pleach/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**Standalone deterministic conductor for DAGs of verified agent work.** pleach takes a plan — a DAG
-of nodes — isolates each node in a detached git worktree, enforces gates (conflict-marker scan,
-smoke command, cross-provider audit), and publishes a `node/<id>` branch only for verified work.
+**Standalone deterministic conductor for DAGs of verified agent work.** pleach takes a plan, which
+is a DAG of nodes. It isolates each node in a detached git worktree, enforces gates (conflict-marker
+scan, smoke command, cross-provider audit), and publishes a `node/<id>` branch only for verified work.
 The integration surface is one data contract (the plan) and two pluggable code seams (runner,
 ledger). Agents produce; code decides.
 
 > *Pleaching: the craft of training and interweaving living branches into a single structure.*
 
-**Status — v1.** The end-to-end proof run closes: a multi-step feature builds through real agent
-workers, is cross-provider audited, and verifies — and a six-feature product (a client-side PDF
-unifier) has been built the same way, plan to landed code, with zero human diff-reviews. pleach's
-own development is tracked in its verified garden: [`docs/tend2/garden.tend2.html`](docs/tend2/garden.tend2.html)
-(self-contained pages — open any of them in a browser).
+**Status: v1.** The end-to-end proof run closes: a multi-step feature builds through real agent
+workers, is cross-provider audited, and verifies. Two things have been built the same way, plan to
+landed code, with zero human diff-reviews: a six-feature client-side PDF unifier, and the stem of
+[plotplot](https://github.com/jahala/plotplot), a released Rust binary in a different repository
+and a different language ([its plans are public](https://github.com/jahala/plotplot/tree/master/docs/dogfood)).
+pleach's own development is tracked in its verified garden:
+[`docs/tend2/pleach.tend2.html`](docs/tend2/pleach.tend2.html) (self-contained pages, open any of
+them in a browser).
 
-> **New to the plotplot tools?** pleach is *day 2* — reach for it when work runs unattended,
-> in parallel, or must be trusted later. Day 1 is a single verifier loop
-> (tend2's quickstart, linked here when it publishes); a two-line edit you review
-> yourself needs neither. The full when-to-use ladder: [`docs/journal.md`](docs/journal.md)'s
-> companion in the joint doc, and each tool's skill carries its own "not for" list.
+> **New to the plotplot tools?** pleach is *day 2*: reach for it when work runs unattended, in
+> parallel, or must be trusted later. Day 1 is a single verifier loop (tend2, not public yet).
+> A two-line edit you review yourself needs neither.
 
 ## Install
 
 pleach is a Bun CLI. It requires `git >= 2.38` at run time. The default
 `umbelRunner` also needs `tmux` and an `umbel` binary that knows `--unattended`
-(workers spawn promptless by default; an older umbel refuses the spawn loudly) — but the
-runner is pluggable (see [Adapters](#adapters)): `pleach run plan.json --runner direct-cli`
-needs only the `claude` and `codex` CLIs, no umbel, no tmux.
+(workers spawn promptless by default; an older umbel refuses the spawn loudly). The runner is
+pluggable, though (see [Adapters](#adapters)): `pleach run plan.json --runner direct-cli` needs only
+the `claude` and `codex` CLIs, no umbel and no tmux.
 
 Run it without cloning:
 
@@ -62,8 +63,8 @@ pleach needs two seams to run: a **runner** (spawns and drives an agent per node
 can replace either with your own implementation of `RunnerSeam` or `LedgerSeam`.
 
 **Zero-config.** With no `pleach.config.ts` and no `--config` flag, pleach defaults to
-`umbelRunner` + `gitLedger`. `gitLedger` is entirely local — it reads `node/*` branches from the
-git repo, no external ledger required. `pleach run plan.json` works standalone.
+`umbelRunner` + `gitLedger`. `gitLedger` is entirely local: it reads `node/*` branches from the git
+repo, so no external ledger is required. `pleach run plan.json` works standalone.
 
 **Selecting adapters explicitly.** Drop a `pleach.config.ts` at the repo root:
 
@@ -95,7 +96,7 @@ own: [`docs/adapters.md`](docs/adapters.md).
 pleach run <plan.json> [flags]     Execute a plan (--land to land a fully-verified close)
 pleach land <plan.json> [flags]    Merge a verified plan's sinks onto the checked-out branch
 pleach audit <plan.json> <node>    Re-run only the audit on a quarantined node whose build
-                                   was green — a bad relay costs one auditor turn, not the node
+                                   was green; a bad relay costs one auditor turn, not the node
 pleach stop <plan.json> [flags]    Drain a running plan: nothing new launches, in-flight nodes
                                    settle (--now aborts them instead)
 pleach validate <plan.json>        Parse + validate a plan; print the topo order
@@ -106,8 +107,8 @@ pleach clean [flags]               Sweep a killed run's leavings: stale locks + 
 
 Landing is deterministic and fail-closed: it refuses unless **every** plan node is
 verified (with `--sinks`, unless every named one is), builds the merges in a throwaway
-worktree, and touches your checkout only via a final fast-forward — a conflict aborts
-with the repo untouched. It holds a lock of its own beside the run's, so it never queues
+worktree, and touches your checkout only via a final fast-forward. A conflict aborts with
+the repo untouched. It holds a lock of its own beside the run's, so it never queues
 behind gates it has no stake in: settled work lands while the run is still building the
 rest, two landings serialise, and a refusal names the pid that holds the lock and which
 of the two locks it is.
@@ -118,8 +119,8 @@ verified refuses the landing by name before anything is built, and the compositi
 and the publish then cover exactly that subset. `--land-gate CMD` (repeatable, run in
 order) runs on the composed stack after the sinks' smokes and before the publish,
 argv-style with no shell. `{base}` is replaced by the target branch's tip as it stood
-before the merges, so the gate can ask what this landing changes — which is what makes a
-map's staleness check runnable at the one moment it matters. This repo's own garden lands
+before the merges, so the gate can ask what this landing changes. That is what makes a map's
+staleness check runnable at the one moment it matters. This repo's own garden lands
 behind tend2's gate:
 
 ```sh
@@ -129,20 +130,20 @@ pleach land plan.json \
 
 A non-zero exit refuses the landing as `land-gate-refused` with the command's output tail
 on stderr and the repository untouched, so a landing that would leave a stamped claim
-unproven is refused instead of landed green. Both flags shape `pleach run --land` too — the
-landing a run performs is the same landing.
+unproven is refused instead of landed green. Both flags shape `pleach run --land` too: the landing
+a run performs is the same landing.
 
 **An auditor's bad relay never costs the node.** When the auditor's reply carries no readable
-result — or the auditor dies — the node is quarantined with its build's gates green, and
+result, or the auditor dies, the node is quarantined with its build's gates green, and
 `pleach audit plan.json <node>` re-adjudicates it: the quarantined tree is checked out again with
 its dependencies merged as a run merges them, setup provisions it, and only the audit runs. A pass
 publishes `node/<id>`; anything else writes a new quarantine receipt, and the receipt of every close
 before it is still on file. It refuses a node whose latest close is not a quarantine with a green
-smoke — an audit verdict over an unproven build proves nothing.
+smoke. An audit verdict over an unproven build proves nothing.
 
 **A provider outage is paid once.** An attempt that comes back `dead` never got a working
-session at all — an outage, not a red gate — so re-running it on the same provider buys the
-same outage twice. `--fallback-provider NAME` re-casts the node on another provider instead,
+session at all. That is an outage rather than a red gate, so re-running it on the same provider
+buys the same outage twice. `--fallback-provider NAME` re-casts the node on another provider instead,
 with the cross-provider audit's diversity rule re-checked against it. Without a usable
 fallback the node settles after the one attempt with its remaining attempts unspent, and the
 verdict's `detail` names why.
@@ -162,14 +163,14 @@ retries the worker with its output.
 
 **Halting a run never loses a node's work.** `pleach stop plan.json` drains: the scheduler reads
 the stop marker in the same tick as its next launch decision, so nothing further starts and the
-in-flight nodes settle normally. `--now` adds the hard abort — an interrupted node settles
+in-flight nodes settle normally. `--now` adds the hard abort, and an interrupted node settles
 `aborted`, its receipt written and its worktree kept on `quarantine/<id>`, never counted as a
 failure. A wedged worker never rides the attempt clock either: `--idle-ms` (default 10m) ends a
 wait that has gone quiet, and the node settles blocked with its tree kept the same way.
 
 **The next run picks that work up.** A pending node whose `quarantine/<id>` still resolves is
-isolated from it — the quarantine is the checkout base, its dependencies merge onto it as they
-always do — and the worker's first prompt names the sha it is resuming and what the tree holds.
+isolated from it. The quarantine is the checkout base and its dependencies merge onto it as they
+always do. The worker's first prompt names the sha it is resuming and what the tree holds.
 Nothing about that tree is trusted: it was never gated, so the whole ladder runs over it, from the
 marker scan through smoke and the cross-provider audit, and the close records `facts.base` so a
 resumed close stays distinguishable from a fresh one forever. `--fresh` refuses the seed and builds
@@ -210,9 +211,9 @@ worker to explain again.
 Two operational facts worth knowing before your first run:
 
 - **Claude Code workers need the repo trusted.** Trust follows the *main checkout*
-  (`~/.claude.json`), not the worktree — pleach's temporary worktrees inherit it.
+  (`~/.claude.json`) rather than the worktree, and pleach's temporary worktrees inherit it.
   An untrusted repo makes every worker hit the trust dialog.
-- **Hand-landing a quarantine is outside the ledger — by design.** If you review
+- **Hand-landing a quarantine is outside the ledger, by design.** If you review
   `quarantine/<id>`, merge it yourself, and verify it out-of-band, no `node/<id>`
   branch exists: the map is the ledger, and the expected follow-up is re-emission
   (an emitter that drops fully-stamped work, like tend2's, makes this a no-op). A
@@ -240,4 +241,11 @@ Doctrine: [`ENGINEERING.md`](ENGINEERING.md) · Plan contract: [`docs/contract/p
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/jahala)
 
-MIT licensed ([`LICENSE`](LICENSE)). Part of the plot-plot suite alongside [tend](https://github.com/plot-plot) and umbel.
+MIT licensed ([`LICENSE`](LICENSE)). A bed in the
+[plotplot](https://github.com/jahala/plotplot) garden, alongside
+[tilth](https://github.com/jahala/tilth) (code intelligence),
+[weeder](https://github.com/jahala/weeder) (the judge of the diff),
+[umbel](https://github.com/jahala/umbel) (fans out agent CLIs in tmux),
+[pollen](https://github.com/jahala/pollen) (agent-to-agent messaging) and
+[copeca](https://github.com/jahala/copeca) (cost per correct answer). tend2, the feature
+ledger, and petals, the brand checker, are built but not public yet.

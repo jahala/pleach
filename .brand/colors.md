@@ -45,11 +45,17 @@ Each tool in the garden claims one accent; the primary palette is shared across 
 | Product | Accent Hex | Role |
 |---------|-----------|------|
 | tilth | #4E88A6 | code intelligence — sky |
-| tend | #D6502F | feature mapping & narration — poppy |
+| tend2 | #D6502F | feature mapping & narration — poppy |
 | petals | #E588A0 | brand intelligence for agents — petal |
 | pleach | #97539B | the conductor — plum |
 | umbel | #E89227 | fan out agent CLIs — sunlight |
 | copeca | #1F8A7B | cost-per-correct benchmarking — juniper |
+| pollen | #C8B330 | agent-to-agent messaging — anther gold |
+| weeder | #8E3B5E | the judge of the diff — bramble |
+
+pollen's bloom is **display/fill only** on paper (1.9:1) — the same class as sunlight and
+petal. Where the gold must read as a *word* on paper, use **pollen-ink `#7E6A08`** (4.9:1),
+exactly as sunlight uses amber-ink. On soil-night the bloom brightens to `#D9C44A`.
 
 ## Contrast Pairings
 
@@ -80,13 +86,20 @@ Color is only on-brand when it is legible. Classes: **reading** ≥ 4.5:1 (body,
 | Plum #97539B on Paper #FAF5E9 | 4.8 | labels |
 | Petal #E588A0 on Paper #FAF5E9 | 2.3 | decorative |
 | Juniper #1F8A7B on Paper #FAF5E9 | 3.9 | labels |
+| Pollen #C8B330 on Paper #FAF5E9 | 1.9 | decorative |
+| Ink #3A2718 on Pollen #C8B330 | 6.7 | reading |
+| Pollen-ink #7E6A08 on Paper #FAF5E9 | 4.9 | reading |
 | Night-text #F3ECD9 on Night #1C1610 | 15.2 | reading |
 | Night-soft #C9BBA0 on Night #1C1610 | 9.5 | reading |
 | Night-green #84C56A on Night #1C1610 | 8.7 | reading |
 | Night-sun #F2A93B on Night #1C1610 | 9.0 | reading |
 | Night-leaf #9FD08A on Night #1C1610 | 10.1 | reading |
+| Night-pollen #D9C44A on Night #1C1610 | 10.2 | reading |
+| Weeder (bramble) #8E3B5E on Paper #FAF5E9 | 6.6 | reading |
+| Weeder (bramble) #8E3B5E on Night #1C1610 | 2.5 | decorative |
+| Bramble-night #B85C82 on Night #1C1610 | 4.2 | labels |
 
-Pairs that fail their class are off-brand even though both colors are in the palette. Decorative-only traps: Sunlight, Leaf, Petal, and Muted as words on paper.
+Pairs that fail their class are off-brand even though both colors are in the palette. Decorative-only traps: Sunlight, Leaf, Petal, Pollen, and Muted as words on paper.
 
 ## Data Visualization
 
@@ -110,6 +123,8 @@ Charts draw from the family — never library defaults.
 | Surface | #F5EEDD | #262019 |
 | Border | #E2D8C0 | #403628 |
 | Leaf | #4A9E3F | #9FD08A |
+| Pollen (bloom) | #C8B330 | #D9C44A |
+| Weeder (bloom) | #8E3B5E | #8E3B5E as fill · #B85C82 as a word |
 
 ## Soil-Night Surfaces
 
@@ -158,6 +173,13 @@ Dark mode is "soil at night," not a harsh developer theme. Embedded terminal pan
   --pp-pleach: #97539B;
   --pp-umbel:  #E89227;
   --pp-copeca: #1F8A7B;
+  --pp-pollen: #C8B330;
+
+  /* the bloom as a word — pollen's amber-ink */
+  --pp-pollen-ink: #7E6A08;
+  --pp-weeder: #8E3B5E;
+  /* bramble as a word on night */
+  --pp-weeder-word: #8E3B5E;
 
   /* soil-night terminal */
   --pp-term-bg:      #1C1610;
@@ -177,5 +199,8 @@ Dark mode is "soil at night," not a harsh developer theme. Embedded terminal pan
   --pp-bg:        #1C1610;
   --pp-surface:   #262019;
   --pp-border:    #403628;
+  --pp-pollen:     #D9C44A;
+  --pp-pollen-ink: #D9C44A;
+  --pp-weeder-word: #B85C82;
 }
 ```

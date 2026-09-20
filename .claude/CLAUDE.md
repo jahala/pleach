@@ -47,11 +47,18 @@ Stack: Bun + `bun:test`, TypeScript strict, `zod` the only dependency, `biome`. 
 
 ## Track work in tend2 (this repo dogfoods itself)
 
-The garden is `docs/tend2/` (hub: `garden.tend2.html`; one `<id>.tend2.html` per loop). A page is markdown
+The garden is `docs/tend2/` (hub: `pleach.tend2.html`; one `<id>.tend2.html` per loop). A page is markdown
 inside `<script type="text/markdown" id="loop">` — edit it by hand; it is NOT a bash polyglot. Checks are
 `- [ ] (code) claim · evidence-path`; **only `tend2 verify` writes a pass** (`[x] … @sha`). If the map isn't
 updated, the next session starts blind.
 
+- **Graph sections put their ids ON the heading line** — `## Needs #a #b`, `## Children #a #b`, likewise
+  `## For` and `## Solved by`. Ids on the line *beneath* the heading parse as nothing: the renderer shows
+  no children, no dependency edges, no personas, and `tend2 lint` stays clean because the section simply
+  reads as empty. A `- #id` list line under the heading works too (FORMAT.md §2.5); a bare line does not.
+- **Keep the renderer current.** `docs/tend2/loop.css` and `loop.js` are copies of tend2's shipped
+  `dist/`, not generated at view time, so they go stale silently as tend2 ships. Refresh them from the
+  installed tend2's `dist/` when pages look wrong.
 - **See where things stand:** `tend2 next docs/tend2` (stale stamps, what needs you) · `tend2 lint <page> --strict`.
 - **Before multi-file work,** find the loop that owns it (`ls docs/tend2/`). None → shape one: page first
   (Goal, How, Impact, `## Tests` with an evidence path per check, `## Needs`, `## For`, dated `## Tried`),
@@ -74,8 +81,11 @@ updated, the next session starts blind.
 - **`docs/research/` is local-only** (gitignored, untracked): candid competitor analysis and internal
   records. Never re-track it; new research goes there and stays private. Cross-references to it from
   tracked docs are provenance labels for maintainers, not public links.
-- **`.brand/` is a pulled cache** (gitignored, untracked — see `.petalsrc`); the landing page renders
-  without it. `.mcp.json` is gitignored + machine-specific; its `tend` entry must be `tend2 mcp`
+- **`.brand/` is committed, not ignored** (14 files — see `.petalsrc`): `.brand/products/pleach/` is
+  pleach's own layer, deliberately committed; the rest is the plotplot umbrella cached from the
+  PUBLIC `jahala/plotplot` at its pinned tag, so publishing it leaks nothing. Refresh the cache from
+  the tag, never edit those files in place. The landing page renders without either.
+  `.mcp.json` is gitignored + machine-specific; its `tend` entry must be `tend2 mcp`
   (the v1 `dist/bin/tend.js serve` path is gone — a stale entry fails as CONNECTION_CLOSED at session
   start), and its pollen entry carries `POLLEN_ID=pleach` + `POLLEN_ALLOW`.
 - **Dogfood record:** every conducted loop keeps `docs/dogfood/<loop>.md` (faults, misunderstandings,

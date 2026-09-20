@@ -2,28 +2,28 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>garden</title>
+<title>pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
 <script type="text/markdown" id="loop">
-# Project Garden
+# pleach: the deterministic conductor for verified agent work
 
-**Goal.** pleach — a deterministic conductor that interweaves a DAG of agent-built work into one verified canopy: it isolates each plan node in its own git worktree, enforces gates, and publishes a branch only for work that mechanically passed them.
+**Goal.** pleach is a deterministic conductor that interweaves a DAG of agent-built work into one verified canopy. It isolates each plan node in its own git worktree, enforces gates, and publishes a branch only for work that mechanically passed them.
 
-Stochastic agents can't be trusted to self-certify, and reviewing every diff defeats the point of delegating to them. pleach makes deterministic code — never agent prose — the sole authority on what counts as done, so a swarm can build unattended without garbage reaching the trunk.
+Stochastic agents can't be trusted to self-certify, and reviewing every diff defeats the point of delegating to them. pleach makes deterministic code, never agent prose, the sole authority on what counts as done. A swarm can then build unattended without garbage reaching the trunk.
 
 ## Agents produce; code decides
 
-pleach occupies the middle of the plot-plot suite. [tend](tend-seam.tend2.html) holds the feature ledger and decides what "done" means; [umbel](umbel-seam.tend2.html) holds each agent steady over tmux; pleach is the loop between them. Its single invariant: every canonical decision — close, verify, quarantine, retry, skip — is deterministic code. Agent output is parsed evidence, never a control-flow branch.
+pleach occupies the middle of the plotplot suite. [tend](tend-seam.tend2.html) holds the feature ledger and decides what "done" means. [umbel](umbel-seam.tend2.html) holds each agent steady over tmux. pleach is the loop between them. Its single invariant is that every canonical decision (close, verify, quarantine, retry, skip) is deterministic code. Agent output is parsed evidence, never a control-flow branch.
 
 The design answers a verified defect ledger. Three classes of failure were found in the pre-pleach bridge: semantic deadlocks where honest work could never close (class A), state-lifetime splits where tend's `verified` status outran the git artifact it claimed (class B), and gate holes where conflict markers reached verified branches (class C). Each defect lands as a RED test before its fix (`docs/ledger.md`).
 
 ## The shape of a run
 
-A run takes a `Plan` — a DAG of nodes — and drives it to a `RunSummary`. [The conductor loop](conductor-loop.tend2.html) is the engine: it schedules ready nodes, runs each through a fixed gate ladder, and publishes a `node/<id>` branch only for work that cleared every gate. The operator reaches it through [pleach run](cli-run.tend2.html), after [pleach validate](cli-validate.tend2.html) has rejected any malformed or cyclic plan before an agent is spawned.
+A run takes a `Plan`, a DAG of nodes, and drives it to a `RunSummary`. [The conductor loop](conductor-loop.tend2.html) is the engine: it schedules ready nodes, runs each through a fixed gate ladder, and publishes a `node/<id>` branch only for work that cleared every gate. The operator reaches it through [pleach run](cli-run.tend2.html), after [pleach validate](cli-validate.tend2.html) has rejected any malformed or cyclic plan before an agent is spawned.
 
-Under the loop, each seam owns one concern: [isolate](isolate-seam.tend2.html) gives every node a disposable git worktree off its verified dependencies, [umbel](umbel-seam.tend2.html) drives the agent worker, [the tend seam](tend-seam.tend2.html) is the single serial writer to the ledger, [audit egress](audit-egress.tend2.html) recovers the cross-provider auditor's verdict intact, and [lock and journal](lock-journal.tend2.html) keep one conductor per repo with a replayable trace of every decision. Two invariants bind them: commit-before-emit — the branch exists in git before tend is told "verified" (ledger B2) — and quarantine — a node that fails its gates publishes nothing, and its dependents are skipped rather than built on a bad base. 
+Under the loop, each seam owns one concern: [isolate](isolate-seam.tend2.html) gives every node a disposable git worktree off its verified dependencies, [umbel](umbel-seam.tend2.html) drives the agent worker, [the tend seam](tend-seam.tend2.html) is the single serial writer to the ledger, [audit egress](audit-egress.tend2.html) recovers the cross-provider auditor's verdict intact, and [lock and journal](lock-journal.tend2.html) keep one conductor per repo with a replayable trace of every decision. Two invariants bind them. Commit-before-emit means the branch exists in git before tend is told "verified" (ledger B2). Quarantine means a node that fails its gates publishes nothing, and its dependents are skipped rather than built on a bad base.
 
 <svg viewBox="0 0 640 280" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,monospace" font-size="12">
   <!-- External systems -->
@@ -89,7 +89,7 @@ Under the loop, each seam owns one concern: [isolate](isolate-seam.tend2.html) g
 
 ## The contract
 
-`docs/contract/plan-schema.md` is the canonical home of `@agent-contract/plan` v1.1.1 — the typed vocabulary tend, pleach, and umbel share. `src/core/plan.ts` matches its fenced block byte-for-byte under a drift test, so changing the schema means moving the doc, the source, the drift test, and `docs/contract/CHANGES.md` in one commit. The error taxonomy in `src/core/classify.ts` makes every retry decision a pure function of error type, not ad-hoc branching — the same discipline, one layer down.
+`docs/contract/plan-schema.md` is the canonical home of `@agent-contract/plan` v1.1.1, the typed vocabulary tend, pleach, and umbel share. `src/core/plan.ts` matches its fenced block byte-for-byte under a drift test, so changing the schema means moving the doc, the source, the drift test, and `docs/contract/CHANGES.md` in one commit. The error taxonomy in `src/core/classify.ts` makes every retry decision a pure function of error type instead of ad-hoc branching. That is the same discipline, one layer down.
 
 ## Where
 
@@ -101,14 +101,13 @@ A pure, total core defines the contract and the classify ladder; thin seams own 
 
 ## Fit
 
-The middle leg of the plot-plot suite — tend decides what the garden should bear, pleach interweaves the branches into one verified canopy, umbel holds each grower steady — and the canonical home of the @agent-contract/plan schema all three share.
+The middle leg of the plotplot suite (tend decides what the garden should bear, pleach interweaves the branches into one verified canopy, umbel holds each grower steady) and the canonical home of the @agent-contract/plan schema all three share.
 
 ## Impact
 
 Agent work becomes trustworthy by construction: only verified nodes publish branches, failures quarantine their own subtree, and the operator reads one RunSummary instead of auditing N diffs. Agents produce; code decides.
 
-## Children
-#audit-egress #cli-land #cli-run #cli-validate #conductor-loop #isolate-seam #lock-journal #pluggable-adapters #scripted-runner #tend-seam #umbel-seam #test-phase-commit #gate-artifacts #journal-envelope #teardown-keeps-work #nothing-is-lost #land-honestly #fail-before-spend #record-survives #seam-keeps-tree
+## Children #audit-egress #cli-land #cli-run #cli-validate #conductor-loop #isolate-seam #lock-journal #pluggable-adapters #scripted-runner #tend-seam #umbel-seam #test-phase-commit #gate-artifacts #journal-envelope #teardown-keeps-work #nothing-is-lost #land-honestly #fail-before-spend #record-survives #seam-keeps-tree
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/overview.html) by `loop migrate`

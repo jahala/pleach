@@ -133,7 +133,8 @@ export interface WorkerResult {
   diff?: string;
   filesTouched: string[];
   exitCode?: number;
-  reason?: 'stop' | 'dead' | 'timeout' | 'aborted' | 'input' | 'idle';
+  reason?: 'stop' | 'file' | 'pattern' | 'provider-error' | 'idle'
+         | 'timeout' | 'dead' | 'input' | 'aborted';
   message?: string;                           // blocking prompt text → Verdict.evidence.blockedReason
   telemetry: { tokens?: number; contextPct?: number; compacted?: boolean };
 }
@@ -163,9 +164,8 @@ export interface WorkerResult {
 ## Shared law (v1.1.3 — binding prose, tend2-ratified 2026-08-17)
 
 Two laws every implementation of this contract — planner, conductor, runner, ledger — must
-uphold. Converged in the tend2 × pleach dialogue of 2026-08-17 (deliberation archive:
-`docs/research/walkie-dialogue-2026-08-17.md`; explanatory home: tend2's
-`docs/bridge/working-together.md`).
+uphold. Converged in the tend2 × pleach dialogue of 2026-08-17; the explanatory home is
+tend2's `docs/bridge/working-together.md`.
 
 - **LAW 1 — the checker must not be writable by the checked.** No gate, verifier, or audit
   command may be modifiable by the worker whose output it judges. Instances: pleach's

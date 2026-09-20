@@ -2,32 +2,32 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>conductor-loop · garden</title>
+<title>conductor-loop · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
 <script type="text/markdown" id="loop">
 # Conductor Loop: DAG Scheduler and Per-Node Ladder
 
-**Goal.** Drives a validated Plan to a RunSummary. Owns the process lock, closed-set, ready/inflight scheduler with concurrency semaphore, commit-before-emit ordering (B2), dual-close decision (A1), partial/blocked/skipped tracking, and the per-node execution ladder: isolate → setup → work → marker gate → scoped stage → smoke → cross-provider audit → commit. A build worker is spawned only for {prompt}/{phases} work — {command} nodes exec directly and need no runner, so a command-only plan runs with no agent runner at all. Re-running a plan resumes: nodes already verified in the ledger are skipped (RunSummary.alreadyVerified, captured before seedClosure).
+**Goal.** Drives a validated Plan to a RunSummary. Owns the process lock, closed-set, ready/inflight scheduler with concurrency semaphore, commit-before-emit ordering (B2), dual-close decision (A1), partial/blocked/skipped tracking, and the per-node execution ladder: isolate → setup → work → marker gate → scoped stage → smoke → cross-provider audit → commit. A build worker is spawned only for {prompt}/{phases} work. {command} nodes exec directly and need no runner, so a command-only plan runs with no agent runner at all. Re-running a plan resumes, so nodes already verified in the ledger are skipped (RunSummary.alreadyVerified, captured before seedClosure).
 
-The deterministic scheduling, ordering invariants, and gate enforcement are what makes pleach trustworthy: a human can reason about concurrency, retry, and commit ordering from the code alone.
+Deterministic scheduling, ordering invariants and gate enforcement make pleach trustworthy, because a human can reason about concurrency, retry and commit ordering from the code alone.
 
 ## The gate ladder runs in one direction
 
-An operator queues a six-node feature plan before bed. They won't read every diff; they want to wake to a run summary that says what actually landed — not what an agent claimed. That's the job: verified branches, not vibes. The conductor loop is how the claim becomes mechanical.
+An operator queues a six-node feature plan before bed. They won't read every diff. They want to wake to a run summary that says what landed, rather than what an agent claimed. The conductor loop is what makes that claim mechanical.
 
-For every scheduled node, `src/loop/run-node.ts:runNode` runs the same ladder in fixed order: isolate → setup → work → marker gate → scoped stage → smoke → cross-provider audit → return to caller. No step executes before its predecessor passes. The [isolate seam](isolate-seam.tend2.html) detaches a worktree and surfaces conflict files for the agent's prompt; `src/loop/run-work.ts:runWork` drives the build worker through `{prompt}`, `{command}`, or `{test,phases}` shapes; `src/core/classify.ts:classify` maps every worker reason and error to exactly one outcome — `dead`, `retryable`, `blocked`, `reaudit`, or `terminal` — before the node decides its next move. Retryable failures thread the gate's output tail back into the re-prompt (A3 evidence); a `blocked` reason (permission prompt, idle) surfaces the prompt text in the verdict and skips all dependents. The worker is always killed before the tree moves. `run-node`'s `disposeQuiet` journals and swallows any `IsolateCatastrophicError` from `dispose` on a non-done verdict, so a blocked/dead/timeout verdict is never overwritten by a dispose failure. A failed gate's real exit code is carried on `GateFailedError` and threaded into `verdict.evidence.gate.exitCode` so the journal records what the gate actually returned.
+For every scheduled node, `src/loop/run-node.ts:runNode` runs the same ladder in fixed order: isolate → setup → work → marker gate → scoped stage → smoke → cross-provider audit → return to caller. No step executes before its predecessor passes. The [isolate seam](isolate-seam.tend2.html) detaches a worktree and surfaces conflict files for the agent's prompt. `src/loop/run-work.ts:runWork` drives the build worker through `{prompt}`, `{command}`, or `{test,phases}` shapes. `src/core/classify.ts:classify` maps every worker reason and error to exactly one outcome (`dead`, `retryable`, `blocked`, `reaudit`, or `terminal`) before the node decides its next move. Retryable failures thread the gate's output tail back into the re-prompt (A3 evidence). A `blocked` reason (permission prompt, idle) surfaces the prompt text in the verdict and skips all dependents. The worker is always killed before the tree moves. `run-node`'s `disposeQuiet` journals and swallows any `IsolateCatastrophicError` from `dispose` on a non-done verdict, so a blocked/dead/timeout verdict is never overwritten by a dispose failure. A failed gate's real exit code is carried on `GateFailedError` and threaded into `verdict.evidence.gate.exitCode`, so the journal records what the gate returned.
 
-The marker gate (`deps.isolate.scanMarkers`) runs twice: once after work stops, and again in `src/loop/run-plan.ts:settle` before commit. The second scan catches auditor droppings — the auditor shares the cwd and writes files after the in-node gate already passed. A dirty tree at that point fails the node with no commit. Scoped staging (`deps.isolate.stage`) is locked to the union of `WorkerResult.filesTouched` and `changedFiles` before the second scan runs; nothing re-stages afterward.
+The marker gate (`deps.isolate.scanMarkers`) runs twice: once after work stops, and again in `src/loop/run-plan.ts:settle` before commit. The second scan catches auditor droppings, because the auditor shares the cwd and writes files after the in-node gate already passed. A dirty tree at that point fails the node with no commit. Scoped staging (`deps.isolate.stage`) is locked to the union of `WorkerResult.filesTouched` and `changedFiles` before the second scan runs, and nothing re-stages afterward.
 
 ## Commit lands before the ledger hears a word
 
-`src/loop/run-plan.ts:settle` enforces a strict ordering: `commitBranch` runs, the SHA is baked into the verdict as `evidence.diffRef`, then `emitVerdict` is called. A crash between commit and emit leaves a branch without a tend record — startup reconciliation (`resolveBaseRef`, ledger B1/B2) catches this on the next run by walking every closed dependency. `resolveBaseRef` requires that the `node/<id>` branch tip equals the recorded SHA; a mismatch (force-moved ref) throws `RebuildRequiredError` immediately (C5 verify-before-use). If neither the branch nor the SHA resolves, `RebuildRequiredError` halts before any node runs. Within a run, `baseRefForClosed` stores the committed SHA directly (not the movable branch name), so same-run dependents isolate from the immutable commit.
+`src/loop/run-plan.ts:settle` enforces a strict ordering: `commitBranch` runs, the SHA is baked into the verdict as `evidence.diffRef`, then `emitVerdict` is called. A crash between commit and emit leaves a branch without a tend record. Startup reconciliation (`resolveBaseRef`, ledger B1/B2) catches that on the next run by walking every closed dependency. `resolveBaseRef` requires the `node/<id>` branch tip to equal the recorded SHA, and a mismatch (force-moved ref) throws `RebuildRequiredError` immediately (C5 verify-before-use). If neither the branch nor the SHA resolves, `RebuildRequiredError` halts before any node runs. Within a run, `baseRefForClosed` stores the committed SHA directly rather than the movable branch name, so same-run dependents isolate from the immutable commit.
 
-The dual-close rule (`src/loop/run-plan.ts` line 245) then decides visibility: if the node carries `accept.audit`, the [tend seam](tend-seam.tend2.html)'s `emitVerdict` response — `{closed: boolean}` — determines the outcome. If tend declines, the node is `partial`, not `failed`: the branch is published, every conductor gate passed, but tend won't flip it verified (e.g. a check lacked a discriminating negative control). Dependents are skipped. A non-audit node closes itself — conductor decides, no tend gate needed (A1). Only after all of this does `disposeOrJournal(iso, node.id)` run: a dispose failure is journaled as a `dispose-failed` event and the run continues normally, ensuring a dependent that wakes via `Promise.race` never sees its dependency as closed while the worktree still exists, and a dispose error never aborts an otherwise clean run.
+The dual-close rule (`src/loop/run-plan.ts` line 245) then decides visibility. If the node carries `accept.audit`, the [tend seam](tend-seam.tend2.html)'s `emitVerdict` response (`{closed: boolean}`) determines the outcome. If tend declines, the node is `partial` rather than `failed`: the branch is published and every conductor gate passed, but tend won't flip it verified (e.g. a check lacked a discriminating negative control). Dependents are skipped. A non-audit node closes itself, because the conductor decides and no tend gate is needed (A1). Only after all of this does `disposeOrJournal(iso, node.id)` run. A dispose failure is journaled as a `dispose-failed` event and the run continues normally, so a dependent that wakes via `Promise.race` never sees its dependency as closed while the worktree still exists, and a dispose error never aborts an otherwise clean run.
 
-The scheduler — a Kahn-style `ready()` scan driving a capped `inflight` Map with `Promise.race` — is the outer loop (`src/loop/run-plan.ts` lines 262–271). `runOne` never rejects; any surprise is caught and mapped to a failed verdict so the race never stalls. When `inflight` empties with nothing ready, remaining nodes are bucketed as `skipped`. The developer tracing a misbehaving run reads the JSONL journal, which records every event — `run-start`, `node-start`, `verdict`, `closed`/`not-closed`/`blocked`/`gate-fail`/`dispose-failed`, `run-end` — and can replay every scheduling and retry decision without re-running any agent.
+The outer loop is the scheduler (`src/loop/run-plan.ts` lines 262–271), a Kahn-style `ready()` scan driving a capped `inflight` Map with `Promise.race`. `runOne` never rejects; any surprise is caught and mapped to a failed verdict, so the race never stalls. When `inflight` empties with nothing ready, remaining nodes are bucketed as `skipped`. A developer tracing a misbehaving run reads the JSONL journal, which records every event: `run-start`, `node-start`, `verdict`, `closed`/`not-closed`/`blocked`/`gate-fail`/`dispose-failed` and `run-end`. From it they can replay every scheduling and retry decision without re-running any agent.
 
 
 
@@ -108,11 +108,11 @@ Kahn-style DAG with Promise.race on inflight Map; per-node retry loop with evide
 
 ## Fit
 
-The heart of pleach — every gate, retry, and close decision the ledger demands lives here; faces and seams exist to feed it.
+The heart of pleach. Every gate, retry and close decision the ledger demands lives here, and faces and seams exist to feed it.
 
 ## Impact
 
-An operator runs a whole DAG unattended and only verified work publishes a branch — no diff-by-diff review, no garbage reaching dependents.
+An operator runs a whole DAG unattended, and only verified work publishes a branch. There is no diff-by-diff review, and no garbage reaches dependents.
 
 ## Tests
 - [ ] (code) Diamond A→{B,C}→D: B and C run after A closes; concurrency cap honored. (inferred from test/loop/run-plan.test.ts — in-memory seam harness, not mocked behavior)
@@ -132,12 +132,11 @@ An operator runs a whole DAG unattended and only verified work publishes a branc
 - [ ] (code) Smoke gate fail evidence: re-prompt on retry contains the smoke output tail. (inferred from test/loop/run-node.test.ts:retry carries evidence A3)
 - [ ] (code) {command} work: exit 0 → synthetic stop WorkerResult; non-zero → GateFailedError(command). (inferred from test/loop/run-work.test.ts:{command})
 - [ ] (code) {test,phases} work: RED must fail (exit 0 throws GateFailedError(red)); GREEN must pass (non-zero throws GateFailedError(green)). (inferred from test/loop/run-work.test.ts:{test,phases})
-- [x] (code) Lazy worker spawn: a {command} node reaches a verified close without the runner ever spawning a worker. · test/loop/run-node.test.ts @183d1e7
+- [x] (code) Lazy worker spawn: a {command} node reaches a verified close without the runner ever spawning a worker. · test/loop/run-node.test.ts @1d3c34b · by cli
 - [x] (code) Resume: a node already verified in the ledger is reported in RunSummary.alreadyVerified and never re-run. · test/loop/run-plan.test.ts @fb9024e
-- [x] (code) accept.audit.model: the cross-provider auditor is spawned at the requested model when the plan pins one. · test/loop/run-node.test.ts @2b6ba15
+- [x] (code) accept.audit.model: the cross-provider auditor is spawned at the requested model when the plan pins one. · test/loop/run-node.test.ts @057c667 · by cli
 
-## For
-#operator #developer
+## For #operator #developer
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/conductor-loop.tend.html) by `loop migrate`

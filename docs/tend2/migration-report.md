@@ -859,7 +859,7 @@ Source: `docs/tend/features/umbel-seam.tend.html` → `umbel-seam.tend2.html`
 
 ## garden (garden)
 
-Source: `docs/tend/overview.html` → `garden.tend2.html`
+Source: `docs/tend/overview.html` → `pleach.tend2.html`
 
 **Dropped fields:**
 

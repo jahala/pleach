@@ -2,40 +2,38 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>journal-envelope · garden</title>
+<title>journal-envelope · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
 <script type="text/markdown" id="loop">
 # The run journal carries the friction profile's envelope
 
-**Goal.** Every line the run journal writes carries the garden's one event envelope in addition to its own fields: `time` (UTC, ends in `Z`), `event.name` (`pleach.<event>`), `plotplot.kind` (a pinned kind), `plotplot.count` (1), `plotplot.harness` and `gen_ai.conversation.id` (present, `null` — pleach observes the runner, not a harness turn); `verdict` lines add `plotplot.runner` (the runner's CLI name, verbatim) and `gen_ai.request.model` where the plan named a model. `gen_ai.provider.name` is never written by pleach: the runner is the fact pleach holds, the provider behind it is not. Existing event names and documented fields are unchanged.
+**Goal.** Every line the run journal writes carries its own fields plus the garden's one event envelope: `time` (UTC, ends in `Z`), `event.name` (`pleach.<event>`), `plotplot.kind` (a pinned kind), `plotplot.count` (1), and `plotplot.harness` with `gen_ai.conversation.id` (both present and `null`, because pleach observes the runner rather than a harness turn). `verdict` lines add `plotplot.runner` (the runner's CLI name, verbatim) and `gen_ai.request.model` where the plan named a model. pleach never writes `gen_ai.provider.name`, because the runner is the fact pleach holds and the provider behind it is not. Existing event names and documented fields are unchanged.
 
-Ledger D15; jahala/pleach#60; the envelope is contracts/friction-profile.md at jahala/plotplot v1.1.0 and contracts/fixtures/friction.jsonl line 2 is a pleach journal line authored in it. The garden writes three append-only JSONL streams with three envelopes for one purpose; tend2's ledger face (jahala/tend#154) reads all three, and one envelope means one loader.
+Ledger D15; jahala/pleach#60. The envelope is contracts/friction-profile.md at jahala/plotplot v1.1.0, and contracts/fixtures/friction.jsonl line 2 is a pleach journal line authored in it. The garden writes three append-only JSONL streams that serve one purpose with three envelopes. tend2's ledger face (jahala/tend#154) reads all three, so one envelope means one loader.
 
 ## How
 
-A pure `envelope(event, now)` in core (src/core/journal-envelope.ts) takes the event object the loop appends today and returns the line to write: every input field verbatim, then the envelope keys. `plotplot.kind` comes from one exhaustive table keyed by event name — `gate.retry` for `gate-retry` (pinned), and the three kinds the umbrella pins for pleach: `run.lifecycle` (run and land lifecycle events), `node.lifecycle` (every node-scoped event), `gate.result` (gate outcomes). Node-scoped lines mirror `node` as `plotplot.node`; gate lines mirror `gate` as `plotplot.gate` (present and `null` on land-level gate lines). `verdict` lines carry `plotplot.runner` — the resolved runner name the line's `provider` field already holds, verbatim — and `gen_ai.request.model` only when the plan set `worker.model` (the profile's "never told us" rule: the key is omitted, not nulled); `gen_ai.provider.name` is omitted on every line, because Claude Code can be routed through Bedrock or Vertex and pleach cannot see which — when umbel learns to read the provider from the CLI's own configuration it fills that key and nothing in pleach changes. An event name with no kind is a typed throw — unreachable while the documentation pin holds, never a silent default.
+A pure `envelope(event, now)` in core (src/core/journal-envelope.ts) takes the event object the loop appends today and returns the line to write: every input field verbatim, then the envelope keys. `plotplot.kind` comes from one exhaustive table keyed by event name. The table holds `gate.retry` for `gate-retry` (pinned) and the three kinds the umbrella pins for pleach: `run.lifecycle` (run and land lifecycle events), `node.lifecycle` (every node-scoped event) and `gate.result` (gate outcomes). Node-scoped lines mirror `node` as `plotplot.node`. Gate lines mirror `gate` as `plotplot.gate`, present and `null` on land-level gate lines. `verdict` lines carry `plotplot.runner`, the resolved runner name the line's `provider` field already holds, verbatim. They carry `gen_ai.request.model` only when the plan set `worker.model`, under the profile's "never told us" rule, which omits the key rather than nulling it. `gen_ai.provider.name` is omitted on every line, because Claude Code can be routed through Bedrock or Vertex and pleach cannot see which. When umbel learns to read the provider from the CLI's own configuration it fills that key, and nothing in pleach changes. An event name with no kind is a typed throw, unreachable while the documentation pin holds and never a silent default.
 
-The journal seam (src/seams/journal.ts) is the one place lines are emitted; it wraps every append with `envelope` and a real clock. In-process narrators (`buildDeps({ narrate })`) receive the same enveloped line. Loop tests keep asserting on raw events through the in-memory journal; the envelope is proven on the real seam and end to end.
+The journal seam (src/seams/journal.ts) is the one place lines are emitted, and it wraps every append with `envelope` and a real clock. In-process narrators (`buildDeps({ narrate })`) receive the same enveloped line. Loop tests keep asserting on raw events through the in-memory journal, and the envelope is proven on the real seam and end to end.
 
 ## Impact
 
-Every journal line parses as one JSON object carrying the envelope, so tend2 reads pleach's journal the way it reads the friction journal; the `verdict` line's `plotplot.runner` is the runner name the casting join uses.
+Every journal line parses as one JSON object carrying the envelope, so tend2 reads pleach's journal the way it reads the friction journal. The `verdict` line's `plotplot.runner` is the runner name the casting join uses.
 
 ## Tests
 - [x] (code) `envelope` is pure and total: it preserves every input field verbatim, adds `time` (RFC 3339 UTC ending in `Z` from the injected clock), `event.name` = `pleach.<event>`, `plotplot.kind` from the pinned table, `plotplot.count: 1`, `plotplot.harness: null`, `gen_ai.conversation.id: null`; an event name with no pinned kind is a typed throw · test/unit/journal-envelope.test.ts @1f9f0e3 · by cli
 - [x] (code) The contracts fixture's pleach line (contracts/fixtures/friction.jsonl line 2 at v1.1.0, vendored with provenance) is reproduced key-for-key by `envelope({event:'gate-retry', node:'rules-block', gate:'smoke'}, clock)`: node-scoped lines mirror `plotplot.node`, gate lines mirror `plotplot.gate`, run-level lines carry neither · test/unit/journal-envelope-fixture.test.ts @5d742fd · by cli
 - [x] (code) `verdict` lines carry `plotplot.runner` (the runner's CLI name, verbatim from `provider`) and `gen_ai.request.model` only when the plan set a model (omitted otherwise, never null); no pleach line ever carries `gen_ai.provider.name`; the existing `provider` and `model` fields are unchanged · test/unit/journal-envelope-runner.test.ts @9e8bacf · by cli
 - [x] (code) The real journal seam writes the envelope on every line it appends and hands the same enveloped line to an in-process narrator; every field the loop appended round-trips through the file; docs/journal.md documents the envelope · test/integration/journal-envelope.test.ts @0f910b0 · by cli
-- [x] (code) The stability pin covers kinds: every event documented in docs/journal.md has a pinned `plotplot.kind`, and the kind table names no event the documentation lacks · test/unit/journal-doc.test.ts @2232338 · by cli
+- [x] (code) The stability pin covers kinds: every event documented in docs/journal.md has a pinned `plotplot.kind`, and the kind table names no event the documentation lacks · test/unit/journal-doc.test.ts @2476653 · by cli
 - [x] (code) Through the real CLI: every line of a real run's journal parses as one JSON object carrying the envelope, `time` ends in `Z`, `gate-retry` lines (if any) carry `plotplot.node` + `plotplot.gate`, and the `verdict` line carries `plotplot.runner` · test/e2e/journal-envelope.test.ts @f999712 · by cli
 
-## Needs
-#gate-artifacts #lock-journal
+## Needs #gate-artifacts #lock-journal
 
-## For
-#operator
+## For #operator
 
 ## Tried
 - 2026-09-08 shaped from jahala/pleach#60 and jahala/plotplot#16. Kinds `run.lifecycle`, `node.lifecycle`, `gate.result` (beside the pinned `gate.retry`) and the `plotplot.runner` attribute go to the umbrella's profile by PR on jahala/plotplot, with one fixture line each — cape-town's ruling 2026-09-08, which also refused a provider mapping: `claude` → `anthropic` is a guess (Bedrock, Vertex), so the runner is written as the fact it is and `gen_ai.provider.name` is omitted until a runner reports it. Design: envelope in core (pure), applied once in the journal seam (the edge) — not in every `journal.append` call site, and not in the in-memory test journal, so the loop tests stay about the loop. Rejected: a per-event `plotplot.kind` (fourteen private kinds — the profile forbids inventing attributes per bed); inferring `plotplot.harness` or `gen_ai.provider.name` from the runner (claims pleach cannot observe). Stacked on #gate-artifacts (branch feat/journal-envelope) because `gate-artifact` and `phase-commit` need kinds too.

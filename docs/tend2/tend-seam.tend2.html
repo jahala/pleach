@@ -2,20 +2,20 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>tend-seam · garden</title>
+<title>tend-seam · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
 <script type="text/markdown" id="loop">
 # tend Ledger Adapter: Ledger Bridge with Serial Queue
 
-**Goal.** Wraps tend's dynamically-imported ingester module in a serial promise-chain queue (single-ingester invariant), adapts pre-T1 Set returns to Map&lt;id, sha|null&gt;, routes plan.source paths to project roots, and validates required exports on import.
+**Goal.** Wraps tend's dynamically-imported ingester module in a serial promise-chain queue (single-ingester invariant). It adapts pre-T1 Set returns to Map&lt;id, sha|null&gt;, routes plan.source paths to project roots, and validates required exports on import.
 
-The tend seam is the gatekeeper between pleach's execution verdicts and tend's verifiable ledger; incorrect serialization or transport errors would silently corrupt the feature verification state.
+The tend seam is the gatekeeper between pleach's execution verdicts and tend's verifiable ledger. Wrong serialization or a transport error would silently corrupt the feature verification state.
 
 ## One writer, no matter how many nodes finish at once
 
-The tend ledger adapter (`tendLedger({module})` in `src/adapters/tend.ts`, over the `createTendSeam` core) is pleach's bundled `LedgerSeam` — and the single serial writer to tend. An operator kicks off a six-node plan and walks away. Three leaf nodes finish in the same second — each wants to tell tend it's closed. Without coordination, those concurrent writes race into the ledger and the second writer can corrupt what the first recorded. `src/adapters/tend.ts:createTendSeam` prevents this with a single tail-chained promise: every `readClosed` and `emitVerdict` call appends to the same `tail` via `tail.then(fn, fn)`, so calls resolve in arrival order and the transport is never entered twice simultaneously. This is the single-ingester invariant; the [conductor loop](conductor-loop.tend2.html) fires `emitVerdict` only after `commitBranch` completes, but it is the adapter's serial queue that guarantees no two concurrent commits race each other into tend.
+The tend ledger adapter (`tendLedger({module})` in `src/adapters/tend.ts`, over the `createTendSeam` core) is pleach's bundled `LedgerSeam` and the single serial writer to tend. An operator kicks off a six-node plan and walks away. Three leaf nodes finish in the same second, each wanting to tell tend it's closed. Without coordination, those concurrent writes race into the ledger and the second writer can corrupt what the first recorded. `src/adapters/tend.ts:createTendSeam` prevents that with a single tail-chained promise: every `readClosed` and `emitVerdict` call appends to the same `tail` via `tail.then(fn, fn)`. Calls resolve in arrival order, and the transport is never entered twice simultaneously. That is the single-ingester invariant. The [conductor loop](conductor-loop.tend2.html) fires `emitVerdict` only after `commitBranch` completes, but it is the adapter's serial queue that guarantees no two concurrent commits race each other into tend.
 
 
 
@@ -66,13 +66,13 @@ The tend ledger adapter (`tendLedger({module})` in `src/adapters/tend.ts`, over 
 
 ## A failed verdict changes nothing in the ledger
 
-When tend's honest-middle declines a node — a check lacked a negative control, a smoke run didn't produce clean output — `emitVerdict` returns `{closed: false}`. The operator waking to their run summary sees `1 partial`, not `1 failed`: the branch is published, every conductor gate passed, but tend won't flip the feature verified. The operator:4 job is concrete here: the feature polyglot's `status` and `audit` field are both untouched. Nothing is overwritten speculatively. The adapter simply relays tend's answer back to the loop, which marks the node `partial` and skips its dependents.
+tend's honest-middle can decline a node, because a check lacked a negative control or a smoke run didn't produce clean output. `emitVerdict` then returns `{closed: false}`. The operator waking to their run summary sees `1 partial` rather than `1 failed`. The branch is published and every conductor gate passed, but tend won't flip the feature verified. The operator:4 job is concrete here: the feature polyglot's `status` and `audit` field are both untouched. Nothing is overwritten speculatively. The adapter relays tend's answer back to the loop, which marks the node `partial` and skips its dependents.
 
 ## Resume reads the SHA the ledger recorded
 
-When a run restarts, `readClosed` is called before any node is scheduled. The return is always `Map<id, sha | null>` — but tend's ingester currently returns a `Set<string>` (pre-T1, no SHAs persisted yet). `src/adapters/tend.ts:adaptToMap` converts the set in-place: each verified id maps to `null`. The loop treats `null` as "verified by some prior run, no recorded SHA" and resolves the base ref from the published `node/<id>` branch instead. When tend ships SHA-persistence (the T1 / B1-B2 work tracked cross-repo), the adapter upgrades transparently — `adaptToMap` short-circuits on `instanceof Map` and the loop gets the real SHA directly. Until then the operator:3 job is already satisfied: verified nodes are isolated off their branch ref, nothing already closed is rebuilt.
+When a run restarts, `readClosed` is called before any node is scheduled. The return is always `Map<id, sha | null>`, but tend's ingester currently returns a `Set<string>` (pre-T1, no SHAs persisted yet). `src/adapters/tend.ts:adaptToMap` converts the set in-place, mapping each verified id to `null`. The loop treats `null` as "verified by some prior run, no recorded SHA" and resolves the base ref from the published `node/<id>` branch instead. When tend ships SHA-persistence (the T1 / B1-B2 work tracked cross-repo), the adapter upgrades transparently, because `adaptToMap` short-circuits on `instanceof Map` and the loop gets the real SHA directly. Until then the operator:3 job is already satisfied: verified nodes are isolated off their branch ref, and nothing already closed is rebuilt.
 
-The path translation is the other half of resume: `src/adapters/tend.ts:toProjectRoot` strips `/docs/tend/features/` and everything after it from `plan.source`, routing the ingester to the project root the transport expects. A path that doesn't contain the marker is returned unchanged — the adapter doesn't assume a fixed structure. `src/adapters/tend.ts:createModuleTransport` handles the other failure mode: a bad `--tend-module` path throws `TendTransportError` (not a generic `Error`) before any node runs, so the developer:1 job — transport validation is ledger-tested — distinguishes misconfiguration from a real ingester failure at the type level. The adapter is selected by `resolveSeams` when `--tend-module` is given; without it (and no `pleach.config.ts`), pleach uses the bundled `gitLedger` instead. See [../overview.html](garden.tend2.html) for the full system bet.
+Path translation is the other half of resume. `src/adapters/tend.ts:toProjectRoot` strips `/docs/tend/features/` and everything after it from `plan.source`, routing the ingester to the project root the transport expects. A path without that marker is returned unchanged, so the adapter doesn't assume a fixed structure. `src/adapters/tend.ts:createModuleTransport` handles the other failure mode. A bad `--tend-module` path throws `TendTransportError` (not a generic `Error`) before any node runs. That satisfies the developer:1 job (transport validation is ledger-tested) and separates misconfiguration from a real ingester failure at the type level. The adapter is selected by `resolveSeams` when `--tend-module` is given; without it (and no `pleach.config.ts`), pleach uses the bundled `gitLedger` instead. See [the project bet](pleach.tend2.html) for the full system bet.
 
 ## Where
 
@@ -88,7 +88,7 @@ pleach's bridge to tend's gated ledger; the only writer to the source polyglots 
 
 ## Impact
 
-Verdicts reach tend's ledger through a single serial writer, and resume reads back each verified node's commit — claim and artifact stay in lockstep.
+Verdicts reach tend's ledger through a single serial writer, and resume reads back each verified node's commit. Claim and artifact stay in lockstep.
 
 ## Tests
 - [x] (code) createModuleTransport rejects a module missing readClosed/emitVerdict exports → TendTransportError. (inferred from test/integration/tend-seam.test.ts — real missoula required) · test/integration/tend-seam.test.ts @5e65818
@@ -97,8 +97,7 @@ Verdicts reach tend's ledger through a single serial writer, and resume reads ba
 - [x] (code) readClosed returns Map with verified feature present; in-progress feature excluded. (inferred from test/integration/tend-seam.test.ts — real missoula) · test/integration/tend-seam.test.ts @278fef5
 - [x] (code) emitVerdict with failed Verdict → {closed:false}; feature polyglot status and audit field unchanged. (inferred from test/integration/tend-seam.test.ts — real missoula) · test/integration/tend-seam.test.ts @7d2bfc5
 
-## For
-#developer #operator
+## For #developer #operator
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/tend-seam.tend.html) by `loop migrate`

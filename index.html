@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>pleach — agents produce; code decides</title>
-<meta name="description" content="pleach takes a plan — a DAG of agent tasks — runs each in its own git worktree, and publishes a node/id branch only for work that mechanically cleared its gates.">
+<title>pleach: agents produce; code decides</title>
+<meta name="description" content="pleach takes a plan, a DAG of agent tasks, runs each in its own git worktree, and publishes a node/id branch only for work that mechanically cleared its gates.">
 <meta name="theme-color" content="#FAF5E9">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23FAF5E9'/><g transform='translate(4 4)'><path d='M6.5 22 C6.5 17 16 15 12 10 C9 7.4 12 6.6 12 6' stroke='%234A9E3F' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' fill='none'/><path d='M17.5 22 C17.5 17 8 15 12 10 C15 7.4 12 6.6 12 6' stroke='%2397539B' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' fill='none'/><path d='M12 6 V2' stroke='%2397539B' stroke-width='2.6' stroke-linecap='round' fill='none'/></g></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -39,10 +39,16 @@
   /* product accent — plum is the one voice */
   --pp-pleach:  #97539B;
 
-  /* garden siblings — used only in the family footer (shared umbrella accents) */
+  /* garden siblings — used only in the family footer (shared umbrella accents,
+     canonical in plotplot's .brand/colors.md). Dots are decorative fills, so the
+     display-only accents (pollen, weeder on dark) are in their rated class here. */
   --pp-tilth:  #4E88A6;
   --pp-tend:   #D6502F;
   --pp-petals: #E588A0;
+  --pp-umbel:  #E89227;
+  --pp-copeca: #1F8A7B;
+  --pp-pollen: #C8B330;
+  --pp-weeder: #8E3B5E;
 
   /* terminal */
   --pp-term-bg:      #1C1610;
@@ -767,6 +773,19 @@ code {
 }
 .garden a:hover { background: rgba(250,245,233,0.12); color: var(--pp-bg); }
 .garden a.is-self { background: rgba(151,83,155,0.20); }
+/* A bed that exists but is not published yet: same chip, no link to a 404. */
+.garden .soon {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3xs);
+  font-family: var(--font-code);
+  font-size: var(--text-small);
+  padding: var(--sp-3xs) var(--sp-2xs);
+  border-radius: var(--r-full);
+  background: rgba(250,245,233,0.03);
+  color: rgba(250,245,233,0.45);
+}
+.garden .soon .dot { opacity: 0.45; }
 .garden .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .foot-bottom {
   margin-top: var(--sp-xl);
@@ -827,7 +846,7 @@ code {
         <li><a href="#start">start</a></li>
       </ul>
 
-      <a class="nav-pill" href="docs/tend2/garden.tend2.html">see the garden</a>
+      <a class="nav-pill" href="docs/tend2/pleach.tend2.html">see the garden</a>
 
       <button class="nav-toggle" id="theme-toggle" aria-label="Switch to dark mode" title="Toggle dark mode">☽</button>
 
@@ -847,13 +866,13 @@ code {
           <span class="accent-plum">code decides.</span>
         </h1>
         <p class="hero-lead reveal d2">
-          pleach takes a plan — a DAG of agent tasks — runs each in its own git worktree,
-          and publishes a <code>node/&lt;id&gt;</code> branch only for work that mechanically
-          cleared its gates. So a swarm of agents can build unattended without garbage reaching the trunk.
+          pleach takes a plan, a DAG of agent tasks. It runs each one in its own git worktree and
+          publishes a <code>node/&lt;id&gt;</code> branch only for work that mechanically cleared its
+          gates. So a swarm of agents can build unattended without garbage reaching the trunk.
         </p>
         <div class="hero-actions reveal d3">
           <a class="btn btn-primary" href="https://github.com/jahala/pleach" target="_blank" rel="noopener">read the README</a>
-          <a class="btn btn-ghost" href="docs/tend2/garden.tend2.html">see it prove itself →</a>
+          <a class="btn btn-ghost" href="docs/tend2/pleach.tend2.html">see it prove itself →</a>
         </div>
       </div>
 
@@ -875,7 +894,7 @@ code {
             </div>
             <div class="gate-row">
               <span class="gate-check" aria-hidden="true">✓</span>
-              <span>setup — worktree from verified deps</span>
+              <span>setup: worktree from verified deps</span>
             </div>
             <div class="gate-row">
               <span class="gate-check" aria-hidden="true">✓</span>
@@ -883,11 +902,11 @@ code {
             </div>
             <div class="gate-row">
               <span class="gate-check" aria-hidden="true">✓</span>
-              <span>smoke — bun test passed (12 assertions)</span>
+              <span>smoke: bun test passed (12 assertions)</span>
             </div>
             <div class="gate-row">
               <span class="gate-check" aria-hidden="true">✓</span>
-              <span>cross-provider audit (codex) — independent pass</span>
+              <span>cross-provider audit (codex): independent pass</span>
             </div>
             <div class="verdict-footer">
               <span class="verified-pill">
@@ -925,8 +944,8 @@ code {
         </div>
         <p>
           A node agent declares its work done. Its branch is merged by downstream nodes.
-          A broken implementation — wrong logic, unchecked conflict markers, a red smoke suite
-          the agent quietly ignored — propagates down the DAG. By the time anyone notices,
+          A broken implementation propagates down the DAG: wrong logic, unchecked conflict
+          markers, a red smoke suite the agent quietly ignored. By the time anyone notices,
           3 dependent nodes have built on top of garbage.
         </p>
       </div>
@@ -953,7 +972,7 @@ code {
       <p class="kicker">the loop, walked</p>
       <h2 id="loop-heading">5 deterministic beats per node</h2>
       <p class="section-lede">
-        Every node in the plan passes through the same fixed ladder. The agent touches only beat 2 — everything else is code.
+        Every node in the plan passes through the same fixed ladder. The agent touches only beat 2, and everything else is code.
       </p>
     </div>
 
@@ -965,7 +984,7 @@ code {
           <div class="beat-title">isolate</div>
           <p class="beat-desc">
             A detached git worktree is created from the verified branches of every upstream dependency.
-            The agent starts from a clean, merged baseline — never from trunk directly.
+            The agent starts from a clean, merged baseline, never from trunk directly.
           </p>
           <span class="beat-cmd" aria-label="git worktree example">git worktree add --detach node/&lt;id&gt;</span>
         </div>
@@ -976,7 +995,7 @@ code {
         <div>
           <div class="beat-title">work</div>
           <p class="beat-desc">
-            The configured runner drives the worker inside the worktree — one unit of agent work, isolated, observable.
+            The configured runner drives the worker inside the worktree: one unit of agent work, isolated, observable.
             This is the only beat the agent controls. Two runners ship in the box: umbel drives interactive agent CLIs in tmux;
             direct-cli needs only the claude and codex CLIs on PATH. A <code>pleach.config.ts</code> swaps in any other.
           </p>
@@ -990,8 +1009,8 @@ code {
           <div class="beat-title">gates</div>
           <p class="beat-desc">
             Conflict-marker scan catches unresolved merges. Smoke runs the node's declared test command.
-            Cross-provider audit re-runs the plan's check command in a fresh session from a different vendor —
-            if claude built the node, codex audits — so no model grades its own work.
+            Cross-provider audit re-runs the plan's check command in a fresh session from a different vendor.
+            If claude built the node, codex audits, so no model grades its own work.
           </p>
         </div>
       </div>
@@ -1014,7 +1033,7 @@ code {
           <p class="beat-desc">
             Only verified nodes publish a <code>node/&lt;id&gt;</code> branch.
             Dependents build from that branch, and <code>pleach land</code> merges the verified
-            result onto your working branch. A failed node publishes no node branch — its final
+            result onto your working branch. A failed node publishes no node branch. Its final
             tree is kept on <code>quarantine/&lt;id&gt;</code> as evidence, and its dependents are
             skipped, not built on a bad base.
           </p>
@@ -1039,28 +1058,28 @@ code {
         <p>3 gates run in order. Each must pass before the next begins.</p>
 
         <p>
-          <strong>Conflict-marker scan</strong> — a literal string search for <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>
+          <strong>Conflict-marker scan.</strong> A literal string search for <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>
           in every tracked file. No parse, no heuristic. A marker present means the node is quarantined immediately.
         </p>
 
         <p>
-          <strong>Smoke</strong> — the node's declared test command runs inside the worktree.
+          <strong>Smoke.</strong> The node's declared test command runs inside the worktree.
           The test suite the agent itself wrote must pass.
           A red suite means the node never had a credible claim to done in the first place.
         </p>
 
         <p>
-          <strong>Cross-provider audit</strong> — an agent from a different vendor re-runs the
+          <strong>Cross-provider audit.</strong> An agent from a different vendor re-runs the
           plan's check command in a fresh session and relays its machine-parsed verdict.
-          If claude built the node, codex audits. The auditor executes; it does not opine —
+          If claude built the node, codex audits. The auditor executes; it does not opine:
           and pleach refuses to run a gate the builder edited, so a node cannot rewrite its
           own audit. This is the gate that makes the others honest.
         </p>
 
         <div class="audit-note">
           <strong>Quarantine.</strong>
-          A failed node publishes no node branch — its final tree is kept on
-          <code>quarantine/&lt;id&gt;</code> so the evidence survives. Its dependents are skipped —
+          A failed node publishes no node branch. Its final tree is kept on
+          <code>quarantine/&lt;id&gt;</code> so the evidence survives. Its dependents are skipped,
           they are not built on a bad base, and they are not marked failed either. They wait
           until the upstream is resolved.
         </div>
@@ -1131,28 +1150,34 @@ code {
   <div class="container">
     <div class="section-head reveal">
       <p class="kicker">built with itself</p>
-      <h2 id="proof-heading">pleach is tracked in its own tend garden</h2>
+      <h2 id="proof-heading">pleach is tracked in its own tend2 garden</h2>
       <p class="section-lede">
         The same gates that decide what lands in any other project decided what landed in pleach.
         The garden is real; the numbers are current.
       </p>
     </div>
 
+    <!-- Recompute before editing these; a stale number here is a lie on the front page.
+         loops    ls docs/tend2/*.tend2.html | grep -v garden | wc -l
+         verified loops whose checks are all [x]
+         checks   grep -hcE '^- \[[ x]\] \(' docs/tend2/*.tend2.html | paste -sd+ | bc
+         tests    bun test  (passing count)
+         Last recomputed 2026-09-20. -->
     <div class="stats-row" aria-label="Project statistics">
       <div class="stat-card reveal d1">
-        <span class="stat-num" data-target="11" aria-label="11 features">0</span>
-        <span class="stat-label">features</span>
+        <span class="stat-num" data-target="27" aria-label="27 loops">0</span>
+        <span class="stat-label">loops</span>
       </div>
       <div class="stat-card reveal d2">
-        <span class="stat-num" data-target="8" aria-label="8 verified">0</span>
-        <span class="stat-label">verified</span>
+        <span class="stat-num" data-target="17" aria-label="17 fully verified">0</span>
+        <span class="stat-label">fully verified</span>
       </div>
       <div class="stat-card reveal d3">
-        <span class="stat-num" data-target="82" aria-label="82 checks">0</span>
+        <span class="stat-num" data-target="142" aria-label="142 checks">0</span>
         <span class="stat-label">checks</span>
       </div>
       <div class="stat-card reveal d4">
-        <span class="stat-num" data-target="300" aria-label="300 tests passing">0</span>
+        <span class="stat-num" data-target="803" aria-label="803 tests passing">0</span>
         <span class="stat-label">tests passing</span>
       </div>
       <div class="stat-card reveal d5">
@@ -1162,12 +1187,14 @@ code {
     </div>
 
     <p class="proof-note reveal">
-      The proof run reaches a full verified close — built, cross-provider audited, verified, published.
-      One run, end to end, no human reviewing diffs.
+      The proof run reaches a full verified close: built, cross-provider audited, verified,
+      published, no human reviewing diffs. It also conducts outside this repo and outside
+      TypeScript. plotplot's stem, a released Rust binary, was built from
+      <a href="https://github.com/jahala/plotplot/tree/master/docs/dogfood" target="_blank" rel="noopener">pleach plans</a>.
     </p>
 
     <div style="margin-top: var(--sp-sm);" class="reveal">
-      <a class="btn btn-ghost" href="docs/tend2/garden.tend2.html">open the garden →</a>
+      <a class="btn btn-ghost" href="docs/tend2/pleach.tend2.html">open the garden →</a>
     </div>
   </div>
 </section>
@@ -1185,7 +1212,7 @@ code {
         <div class="scope-col-title" id="scope-for-label">for</div>
         <ul class="scope-list" role="list">
           <li>Unattended multi-step agent builds where gates decide what lands</li>
-          <li>A concrete plan — a real DAG of nodes, not a vague list (tend, the bundled pleach-plan skill, or any planner)</li>
+          <li>A concrete plan: a real DAG of nodes, not a vague list (tend2, the bundled pleach-plan skill, or any planner)</li>
           <li>Work you will not review diff-by-diff yourself</li>
           <li>Projects where a bad node silently poisoning its dependents is not acceptable</li>
           <li>Teams that need audit evidence, not just a green suite</li>
@@ -1196,8 +1223,8 @@ code {
         <ul class="scope-list" role="list">
           <li>A single quick edit you'll review before merging</li>
           <li>Interactive pairing sessions where you're guiding each step</li>
-          <li>Anything you'll hand-review anyway — the gates add overhead for no benefit</li>
-          <li>Projects without a concrete plan first — though the bundled pleach-plan skill will write one with you</li>
+          <li>Anything you'll hand-review anyway; the gates add overhead for no benefit</li>
+          <li>Projects without a concrete plan first, though the bundled pleach-plan skill will write one with you</li>
         </ul>
       </div>
     </div>
@@ -1217,7 +1244,7 @@ code {
     </div>
 
     <p class="start-family reveal d3">
-      Part of the plotplot garden — pleach runs standalone on git + any agent tool. With the claude and codex CLIs on PATH, <code>--runner direct-cli</code> needs nothing else; the bundled examples run on git + bun alone, no agent and no API keys; and your own code can drive the conductor with <code>import { runPlan } from 'pleach'</code>. tend and umbel are the batteries-included reference adapters; swap either via <code>pleach.config.ts</code>. <a href="docs/adapters.md" style="color:rgba(250,245,233,0.75)">Read the adapters guide →</a>
+      Part of the plotplot garden. pleach runs standalone on git + any agent tool. With the claude and codex CLIs on PATH, <code>--runner direct-cli</code> needs nothing else; the bundled examples run on git + bun alone, no agent and no API keys; and your own code can drive the conductor with <code>import { runPlan } from 'pleach'</code>. tend2 and umbel are the batteries-included reference adapters; swap either via <code>pleach.config.ts</code>. <a href="docs/adapters.md" style="color:rgba(250,245,233,0.75)">Read the adapters guide →</a>
     </p>
 
     <div class="start-actions reveal d4">
@@ -1247,28 +1274,33 @@ code {
     <div class="foot-grid">
       <div class="reveal">
         <h4>pleach</h4>
-        <p class="foot-soft">the deterministic conductor for verified agent work — it runs a plan's nodes in isolated git worktrees and publishes a <code>node/&lt;id&gt;</code> branch only for work that mechanically cleared its gates.</p>
+        <p class="foot-soft">the deterministic conductor for verified agent work. It runs a plan's nodes in isolated git worktrees and publishes a <code>node/&lt;id&gt;</code> branch only for work that mechanically cleared its gates.</p>
         <p class="foot-soft" style="margin-top:var(--sp-xs)"><a href="https://github.com/jahala/pleach" target="_blank" rel="noopener">github →</a> &nbsp;·&nbsp; MIT licensed &nbsp;·&nbsp; <a href="https://github.com/jahala/pleach/blob/master/CONTRIBUTING.md" target="_blank" rel="noopener">contributing</a></p>
       </div>
       <div class="reveal">
         <h4>the plotplot garden</h4>
         <div class="garden">
           <a href="https://github.com/jahala/tilth" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-tilth)"></span>tilth</a>
-          <a href="https://github.com/jahala/tend" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-tend)"></span>tend</a>
-          <a href="https://github.com/jahala/petals" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-petals)"></span>petals</a>
+          <a href="https://github.com/jahala/weeder" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-weeder)"></span>weeder</a>
+          <a href="https://github.com/jahala/umbel" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-umbel)"></span>umbel</a>
+          <a href="https://github.com/jahala/copeca" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-copeca)"></span>copeca</a>
+          <a href="https://github.com/jahala/pollen" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-pollen)"></span>pollen</a>
           <a class="is-self" href="https://github.com/jahala/pleach" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-pleach)"></span>pleach</a>
-          <a href="https://github.com/jahala/umbel" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-accent)"></span>umbel</a>
+          <span class="soon"><span class="dot" style="background:var(--pp-tend)"></span>tend2</span>
+          <span class="soon"><span class="dot" style="background:var(--pp-petals)"></span>petals</span>
         </div>
-        <p class="foot-soft" style="margin-top:var(--sp-xs)">small, sharp tools for building with agents.</p>
+        <p class="foot-soft" style="margin-top:var(--sp-xs)">small, sharp tools for building with agents. The
+          dimmed two are built and not yet public. The umbrella (brand, law and contracts) is
+          <a href="https://github.com/jahala/plotplot" target="_blank" rel="noopener">plotplot</a>.</p>
       </div>
       <div class="reveal">
         <h4>read on</h4>
         <p class="foot-soft">
-          <a href="ENGINEERING.md">the doctrine</a> — the binding rules.<br>
-          <a href="docs/contract/plan-schema.md">the plan contract</a> — what a planner emits.<br>
-          <a href="docs/adapters.md">the adapters guide</a> — bring your own runner + ledger.
+          <a href="ENGINEERING.md">the doctrine</a>: the binding rules.<br>
+          <a href="docs/contract/plan-schema.md">the plan contract</a>: what a planner emits.<br>
+          <a href="docs/adapters.md">the adapters guide</a>: bring your own runner + ledger.
         </p>
-        <p class="foot-soft" style="margin-top:var(--sp-xs)"><a href="docs/tend2/garden.tend2.html">see the garden prove itself →</a></p>
+        <p class="foot-soft" style="margin-top:var(--sp-xs)"><a href="docs/tend2/pleach.tend2.html">see the garden prove itself →</a></p>
       </div>
     </div>
     <div class="foot-bottom">

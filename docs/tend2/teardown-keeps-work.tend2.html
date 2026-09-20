@@ -2,43 +2,41 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>teardown-keeps-work · garden</title>
+<title>teardown-keeps-work · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
 <script type="text/markdown" id="loop">
 # A halted run keeps the work it was holding
 
-**Goal.** Stopping a run never loses a node's work. A node whose wait the run's own signal interrupts settles with `Verdict.status: 'aborted'`, a receipt, and its tree quarantined as it stands. `pleach stop <plan>` drains: the scheduler reads the stop marker in the same tick as every launch decision, launches nothing more, lets in-flight nodes settle normally and journals `run-stopped`; `--now` is the hard abort. A wedged worker ends at an idle timeout the conductor passes to the runner instead of riding to the attempt clock.
+**Goal.** Stopping a run never loses a node's work. When the run's own signal interrupts a node's wait, that node settles with `Verdict.status: 'aborted'`, a receipt, and its tree quarantined as it stands. `pleach stop <plan>` drains the run: the scheduler reads the stop marker in the same tick as every launch decision, launches nothing more, lets in-flight nodes settle normally, and journals `run-stopped`. `--now` is the hard abort. A wedged worker ends at an idle timeout the conductor passes to the runner, rather than riding to the attempt clock.
 
-Ledger D16; jahala/pleach#61, #67, #72. In two days a halted run cost work three times: a SIGINT during an audit disposed a finished, staged build with no receipt and no quarantine; an operator's drain raced the scheduler and spawned a worker only to kill it; a codex auditor idle on a 404 would have ridden to a thirty-minute timeout with the operator as the idle detector.
+Ledger D16; jahala/pleach#61, #67, #72. In two days a halted run cost work three times. A SIGINT during an audit disposed a finished, staged build with no receipt and no quarantine. An operator's drain raced the scheduler and spawned a worker only to kill it. A codex auditor idle on a 404 would have ridden to a thirty-minute timeout, with the operator as the idle detector.
 
 ## How
 
-The real umbel adapter (src/adapters/umbel.ts) throws `WorkerSeamError` when the run's signal kills `umbel wait`, while the in-memory runner returns `aborted` — D12's loop test is green over a path the real seam does not take. The adapter now answers `reason: 'aborted'` when its own signal fired. run-node (src/loop/run-node.ts) treats an aborted wait like every other terminal reason: it hands the live tree back with `status: 'aborted'` and `gate.ran: 'wait:aborted'` rather than throwing into the `finally` that disposes. settle (src/loop/run-plan.ts) takes the non-done path it already has — receipt minted and written, tree quarantined as it stands through `quarantineOrJournal` — and `RunSummary.aborted` names the node; `summaryExitCode` counts it as not clean.
+The real umbel adapter (src/adapters/umbel.ts) throws `WorkerSeamError` when the run's signal kills `umbel wait`, while the in-memory runner returns `aborted`. D12's loop test is green over a path the real seam does not take. The adapter now answers `reason: 'aborted'` when its own signal fired. run-node (src/loop/run-node.ts) treats an aborted wait like every other terminal reason: it hands the live tree back with `status: 'aborted'` and `gate.ran: 'wait:aborted'` rather than throwing into the `finally` that disposes. settle (src/loop/run-plan.ts) takes the non-done path it already has, minting and writing the receipt and quarantining the tree as it stands through `quarantineOrJournal`. `RunSummary.aborted` names the node, and `summaryExitCode` counts it as not clean.
 
-The drain is a marker, not a signal. `pleach stop <plan.json>` (src/faces/cli.ts) writes a stop marker beside the run's lock for the same (repoRoot, source) — through the lock seam (src/seams/lock.ts), which is where that path is known — and refuses when no live run holds the lock. The scheduler consults the marker through the seam in the same tick as every launch decision, so a marker written between two closes yields zero further `node-start`; in-flight nodes settle normally; the run journals `run-stopped`, consumes the marker, and ends as today with the unstarted nodes in `skipped`. `--now` additionally sends SIGINT to the pid the lock names, which is the aborted path above.
+The drain works through a marker on disk rather than a signal. `pleach stop <plan.json>` (src/faces/cli.ts) writes a stop marker beside the run's lock for the same (repoRoot, source). It writes through the lock seam (src/seams/lock.ts), which is where that path is known, and refuses when no live run holds the lock. The scheduler consults the marker through the seam in the same tick as every launch decision, so a marker written between two closes yields zero further `node-start`. In-flight nodes settle normally. The run journals `run-stopped`, consumes the marker, and ends as today with the unstarted nodes in `skipped`. `--now` additionally sends SIGINT to the pid the lock names, which is the aborted path above.
 
-The idle timeout is a conductor default (`--idle-ms`, ten minutes) threaded to `Worker.wait` as `idleMs`; the umbel adapter passes it as `--idle-timeout`, and umbel's `idle` return (exit 0, `{"reason":"idle"}`) classifies as it does today: blocked, prompt text as `blockedReason`, tree quarantined.
+The idle timeout is a conductor default (`--idle-ms`, ten minutes), threaded to `Worker.wait` as `idleMs`. The umbel adapter passes it on as `--idle-timeout`. umbel's `idle` return (exit 0, `{"reason":"idle"}`) classifies as it does today: blocked, prompt text as `blockedReason`, tree quarantined.
 
 ## Impact
 
-An operator can drain a run at a node boundary without racing the scheduler, abort it hard without losing a finished build, and leave a wedged worker to the conductor. A quarantined tree and an `aborted` receipt are what `pleach clean` and a resume find afterwards, instead of a bare seam error.
+An operator can drain a run at a node boundary without racing the scheduler, abort it hard without losing a finished build, and leave a wedged worker to the conductor. Afterwards `pleach clean` and a resume find a quarantined tree and an `aborted` receipt, instead of a bare seam error.
 
 ## Tests
-- [x] (code) The umbel adapter's `wait` returns `reason: 'aborted'` when the run's signal interrupts it, proven against the real umbel binary and a fake worker that never stops; a non-signal non-zero exit is still a `WorkerSeamError` · test/integration/umbel-abort.test.ts @a4b6586 · by cli
-- [x] (code) An in-flight node whose wait returns `aborted` settles with `Verdict.status: 'aborted'` and `gate.ran: 'wait:aborted'`, its receipt written (derived `quarantined`), its tree quarantined as it stands (staged and unstaged work on `quarantine/<id>`), `RunSummary.aborted` naming it and the exit code not clean · test/loop/abort-settles.test.ts @f24b8ca · by cli
+- [x] (code) The umbel adapter's `wait` returns `reason: 'aborted'` when the run's signal interrupts it, proven against the real umbel binary and a fake worker that never stops; a non-signal non-zero exit is still a `WorkerSeamError` · test/integration/umbel-abort.test.ts @a2dd84d · by cli
+- [x] (code) An in-flight node whose wait returns `aborted` settles with `Verdict.status: 'aborted'` and `gate.ran: 'wait:aborted'`, its receipt written (derived `quarantined`), its tree quarantined as it stands (staged and unstaged work on `quarantine/<id>`), `RunSummary.aborted` naming it and the exit code not clean · test/loop/abort-settles.test.ts @24ed341 · by cli
 - [x] (code) A stop marker read through the lock seam in the same tick as every launch decision drains the scheduler: a marker written between two closes yields zero further `node-start`, in-flight nodes settle normally, `run-stopped` is journaled, the marker is consumed, unstarted nodes are `skipped` · test/loop/stop.test.ts @ff861b7 · by cli
 - [x] (code) `pleach stop <plan> [--repo-root] [--now]` writes the marker for the run's (repoRoot, source) beside its lock, refuses with exit 3 when no live run holds the lock, and with `--now` sends SIGINT to the lock's pid — proven against the real lock seam and a real process · test/integration/stop.test.ts @eac8826 · by cli
 - [x] (code) The umbel adapter passes `--idle-timeout` from `Worker.wait`'s `idleMs`, threaded from a conductor default (`--idle-ms`, ten minutes); a worker that goes quiet returns `idle` from the real umbel binary and settles blocked with its tree quarantined · test/integration/umbel-idle.test.ts @7ba92b5 · by cli
-- [x] (code) docs/journal.md documents `run-stopped`, the `aborted` verdict status and the `aborted` run-end field; `KINDS` pins `run-stopped`; the CLI help and README list `pleach stop` and `--idle-ms` · test/unit/journal-doc.test.ts @13b8e85 · by cli
+- [x] (code) docs/journal.md documents `run-stopped`, the `aborted` verdict status and the `aborted` run-end field; `KINDS` pins `run-stopped`; the CLI help and README list `pleach stop` and `--idle-ms` · test/unit/journal-doc.test.ts @874b3d9 · by cli
 - [x] (code) Through the real CLI: SIGINT mid-node leaves an `aborted` receipt, a `quarantine/<id>` holding the worker's files, `run-aborted` then `run-end`, exit 1; and `pleach stop` from a second process drains a two-node plan after the first close with `run-stopped` journaled and the marker gone · test/e2e/teardown.test.ts @95d02bd · by cli
 
-## Needs
-#conductor-loop #umbel-seam #lock-journal
+## Needs #conductor-loop #umbel-seam #lock-journal
 
-## For
-#operator
+## For #operator
 
 ## Tried
 - 2026-09-11 shaped on cape-town's word while tend2 runs its six, from #61, #67 and #72 — the defects that lost the most window this week. Design: the adapter answers `aborted` (the seam knows its own signal fired; the loop must not have to guess from an exit code); the drain is a marker read in the launch tick (a signal cannot be made race-free against a scheduler that launches in the same tick as a close); the idle timeout is a conductor default, not a plan field (no contract change — `policy` stays as it is). Scoped OUT, deliberately: #61's second half, resuming FROM a quarantined tree (`pleach run` reusing `quarantine/<id>` as the retry's base) — a resume today re-isolates and rebuilds, which is correct and loses only time; reusing a quarantine as a base needs the acceptance-evolution rules to say what a quarantined base proves, and that is its own loop.

@@ -39,8 +39,8 @@ by negctrl discrimination, not granted by a passing test. No tend instance requi
 
 [`examples/proof/`](../../../examples/proof/) is the PROVEN reference run:
 real claude builders + a real codex auditor + real tend, on the wordcount payload.
-[`docs/research/proof-run.md`](../../../docs/research/proof-run.md) records the
-full execution history:
+Its execution history is a maintainers' local record; the two runs that matter
+are:
 
 - **Run 2** capped at `partial` when c2 had no negctrl — the honest-middle
   working exactly as designed, confirmed in production.
@@ -49,7 +49,7 @@ full execution history:
 
 That proof run used tend as the verifier (the production-grade path). Proof 1
 re-skins the same rig to the shared ttt payload, replacing the tend gate with
-`strict-audit.sh` — the same negctrl principle, no missoula instance required.
+`strict-audit.sh` — the same negctrl principle, no tend instance required.
 The code path through pleach (umbel runner + gitLedger + gate ladder) is identical.
 
 ## Prerequisites

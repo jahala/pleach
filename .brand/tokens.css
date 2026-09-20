@@ -31,6 +31,12 @@
   --pp-pleach:  #97539B;
   --pp-umbel:   #E89227;
   --pp-copeca:  #1F8A7B;
+  --pp-pollen:  #C8B330;
+
+  /* color — the bloom as a word (pollen is display-only on paper) */
+  --pp-pollen-ink: #7E6A08;
+  --pp-weeder:      #8E3B5E;
+  --pp-weeder-word: #8E3B5E;
 
   /* color — soil-night terminal */
   --pp-term-bg:      #1C1610;
@@ -97,4 +103,7 @@
   --pp-bg-band:   #211A12;
   --pp-surface:   #262019;
   --pp-border:    #403628;
+  --pp-pollen:     #D9C44A;
+  --pp-pollen-ink: #D9C44A;
+  --pp-weeder-word: #B85C82;
 }

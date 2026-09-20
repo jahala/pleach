@@ -72,7 +72,7 @@ checkpoint but have different lifetimes and trust domains.**
   every feature's terminal integration node (from A2's fix) is the landing unit; landing policy (auto-merge
   vs human merge) is an explicit conductor flag, not an omission.
   - **Implemented (2026-08-16):** `pleach land <plan>` + `pleach run --land` (`src/loop/land.ts`,
-    `IsolateSeam.land`). All-or-nothing: refuses unless every plan node is verified-closed; sinks resolve
+    `IsolateSeam.landStack`). All-or-nothing: refuses unless every plan node is verified-closed; sinks resolve
     through the B1/C5 baseRef chain; merges build in a throwaway worktree and the checkout is touched only
     by a final `--ff-only` (conflict → `LandConflictError`, repo untouched). Tests: `test/unit/land.test.ts`,
     `test/integration/land.test.ts`, `test/loop/land.test.ts`, `test/e2e/land.test.ts`.
@@ -119,8 +119,8 @@ checkpoint but have different lifetimes and trust domains.**
     `LedgerSeam` (tend MCP / gitLedger), which resolves over the main checkout, not any worker worktree.
     The worker has no write path into that seam.
 
-- **SEC4 ⚠ [2026-08-16, source: Anthropic Frontier Red Team multiagent report — see
-  `docs/research/multiagent-lessons.md`] Gate tampering / audit collusion via the shared worktree.**
+- **SEC4 ⚠ [2026-08-16, source: Anthropic Frontier Red Team multiagent
+  report; the reading notes are a maintainers' local record, not published] Gate tampering / audit collusion via the shared worktree.**
   The auditor works in the tree the builder wrote: (a) a repo-local audit command (`bash git-audit.sh`)
   is builder-writable — rewrite it to print a passing fence and every gate goes green; (b) repository
   content can prompt-inject the auditor into skipping the command. No malicious model needed — a

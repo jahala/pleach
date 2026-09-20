@@ -1,6 +1,6 @@
 # Mining adoption plan — the pleach-shaped versions
 
-**2026-08-18.** Design pass over `docs/research/competitor-mining.md`'s adoption sheet.
+**2026-08-18.** Design pass over the competitor-mining sheet (a maintainers' local record).
 Rule of the pass: every item gets its pleach-shaped form — which is usually NOT the
 source's form — plus an explicit not-built list. Four items touch the plan schema; they
 travel as ONE v1.2 amendment conversation with tend2, not four dribbles. Everything else

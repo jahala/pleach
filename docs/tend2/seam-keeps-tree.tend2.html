@@ -2,24 +2,24 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>seam-keeps-tree · garden</title>
+<title>seam-keeps-tree · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
 <script type="text/markdown" id="loop">
 # A seam's surprise never costs the tree
 
-**Goal.** Whatever a runner says or fails to say, the tree a node built is kept. The umbel adapter reads the wait's reason from the JSON whatever the exit code, so timeout, idle, dead, input and provider-error reach the classifier that already knows most of them; every reason in the runner contract is named and classified as the contract says, provider-error retryable within the node's attempts. A surprise anywhere in a node's run settles the node like any other end: the attempt counted, the tree quarantined, a receipt written with the seam's own text as the reason and the next step to take, so `pleach audit` or a re-run starts from what was built.
+**Goal.** Whatever a runner says or fails to say, the tree a node built is kept. The umbel adapter reads the wait's reason from the JSON whatever the exit code, so timeout, idle, dead, input and provider-error all reach the classifier that already knows most of them. Every reason in the runner contract is named and classified as the contract says, with provider-error retryable within the node's attempts. A surprise anywhere in a node's run settles the node like any other end: the attempt is counted, the tree is quarantined, and a receipt is written with the seam's own text as the reason and the next step to take. So `pleach audit` or a re-run starts from what was built.
 
-Ledger D23; jahala/pleach#120 and #110. On 2026-09-18 jahala/quadrat lost four verified trees overnight. umbel's `wait` now exits non-zero for every reason but stop (122 provider-error, 123 idle, 124 timeout, 125 dead, 126 input, 130 aborted; `contracts/runner.md` on jahala/plotplot) and still prints `{"reason": …}`. The adapter threw `WorkerSeamError("wait exited N")` on the exit code before parsing the reason; run-node's safety net disposed the live tree on the throw; run-plan's catch journaled `failed` and returned before `settle()`, the only writer of the receipt and the quarantine. A machine's sleep, an attempt clock and a stalled auditor each ended as `failed after 0 attempt(s)` with nothing kept but the worker's transcript.
+Ledger D23; jahala/pleach#120 and #110. On 2026-09-18 jahala/quadrat lost four verified trees overnight. umbel's `wait` now exits non-zero for every reason but stop (122 provider-error, 123 idle, 124 timeout, 125 dead, 126 input, 130 aborted; `contracts/runner.md` on jahala/plotplot), and it still prints `{"reason": …}`. The adapter threw `WorkerSeamError("wait exited N")` on the exit code before parsing the reason. run-node's safety net then disposed the live tree on the throw. run-plan's catch journaled `failed` and returned before `settle()`, the only writer of the receipt and the quarantine. A machine's sleep, an attempt clock and a stalled auditor each ended as `failed after 0 attempt(s)`, with nothing kept but the worker's transcript.
 
 ## How
 
-The reason is the result. In the adapter's wait, stdout that parses and carries a `reason` is the answer whatever the exit code; `WorkerSeamError` is thrown only when there is no parsable reason, and then carries the exit code and the output. The run's own abort keeps its early answer (D16).
+The reason is the result. In the adapter's wait, stdout that parses and carries a `reason` is the answer whatever the exit code. `WorkerSeamError` is thrown only when no reason parses, and it then carries the exit code and the output. The run's own abort keeps its early answer (D16).
 
-A surprise settles. run-node catches what its attempt loop did not name and hands the live tree back with a failed verdict: `gate.ran` names the seam, the error's text is the tail, the attempt is counted, and the verdict's detail states the next step — `pleach audit <plan> <node>` when the audit lane threw over a green tree, a re-run otherwise, which resumes from the quarantine (D17). run-plan's own catch settles too instead of returning, so a throw from anywhere leaves a receipt. The path follows the refused-commit precedent (D21): keep, then dispose.
+A surprise settles. run-node catches what its attempt loop did not name and hands the live tree back with a failed verdict: `gate.ran` names the seam, the error's text is the tail, and the attempt is counted. The verdict's detail states the next step. That is `pleach audit <plan> <node>` when the audit lane threw over a green tree, and otherwise a re-run, which resumes from the quarantine (D17). run-plan's own catch settles too instead of returning, so a throw from anywhere leaves a receipt. The path follows the refused-commit precedent (D21): keep, then dispose.
 
-The contract is the table. `WorkerResult.reason` and `classifyWorkerReason` name all nine reasons of `contracts/runner.md` — stop, file and pattern terminal; provider-error and timeout retryable; idle and input blocked; dead dead; aborted terminal — in the shapes the umbrella's seam test reads. A reason nobody named still falls to terminal and is journaled as `seam-violation` with its text. A vendored copy of the contract's fixture pins the table in this repository's own suite.
+The contract is the table. `WorkerResult.reason` and `classifyWorkerReason` name all nine reasons of `contracts/runner.md`, in the shapes the umbrella's seam test reads. Stop, file, pattern and aborted are terminal; provider-error and timeout are retryable; idle and input are blocked; dead is dead. A reason nobody named still falls to terminal and is journaled as `seam-violation` with its text. A vendored copy of the contract's fixture pins the table in this repository's own suite.
 
 ## Tests
 - [x] (code) The umbel adapter's `wait` takes the reason from the JSON whatever the exit code: a wait that exits 124 with a timeout reason yields a `timeout` result, and the same for 122 provider-error, 123 idle, 125 dead and 126 input, each with its message; `WorkerSeamError` is thrown only when no reason parses, naming the exit code and the output · test/unit/umbel-wait-reasons.test.ts @2e95fb5 · by cli
@@ -28,11 +28,9 @@ The contract is the table. `WorkerResult.reason` and `classifyWorkerReason` name
 - [x] (code) docs/journal.md documents `seam-violation` and the surprise verdict's gate and detail; docs/adapters.md states the runner contract — the reason is read from the JSON whatever the exit code, the nine reasons and their classes, citing `contracts/runner.md`; `KINDS` pins the event · test/unit/journal-doc.test.ts @98a4aaa · by cli
 - [x] (code) Through the real CLI with a fake umbel binary: a worker wait that exits 124 with a timeout reason is retried and then settles failed with its tree quarantined, a receipt and both attempts counted; a wait that exits 122 provider-error is retried; an auditor whose wait times out over a green tree leaves the tree quarantined with a never-adjudicated audit record and `pleach audit` re-runs the lane alone; a wait that exits 1 with no reason leaves a quarantine and a receipt carrying the seam's text and the next step · test/e2e/seam-keeps-tree.test.ts @4a2d97c · by cli
 
-## Needs
-#record-survives #nothing-is-lost #teardown-keeps-work #umbel-seam
+## Needs #record-survives #nothing-is-lost #teardown-keeps-work #umbel-seam
 
-## For
-#operator
+## For #operator
 
 ## Tried
 - 2026-09-18 shaped from jahala/pleach#120 (four verified trees lost on jahala/quadrat overnight) and #110, by the owner's word through the umbrella: fix it ahead of everything else. Root cause read from 411a1eb: the adapter throws on the exit code before parsing the reason; run-node's safety net disposes the tree on the throw; run-plan's catch returns before settle. Decided: the surprise settles inside run-node, where the tree is live, and again in run-plan for throws from anywhere else — two catches, one path. Decided: an unnamed reason stays terminal (never default-retry what cannot be named) and is journaled. Scoped out: the idle window not firing on a frozen codex pane (#120's second fault — umbel's side, its transcript-aware idle net landed 2026-09-15) and gate events between node-start and verdict (#63, The operator's seat).

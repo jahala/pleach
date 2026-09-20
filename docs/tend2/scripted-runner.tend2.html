@@ -2,16 +2,16 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>scripted-runner · garden</title>
+<title>scripted-runner · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
 <script type="text/markdown" id="loop">
-# Scripted runner — deterministic, no-LLM execution
+# Scripted runner: deterministic, no-LLM execution
 
-**Goal.** A deterministic RunnerSeam (src/adapters/scripted.ts) that applies canned worktree changes per build prompt and returns a canned cross-provider AuditResult — no LLM, no API keys, no network. Paired with two runnable examples (command-dag, scripted-agent) and a CI e2e, it lets a whole plan — work, smoke, cross-provider audit — run end to end with nothing but git + bun.
+**Goal.** A deterministic RunnerSeam (src/adapters/scripted.ts) that applies canned worktree changes per build prompt and returns a canned cross-provider AuditResult, with no LLM, no API keys and no network. Paired with two runnable examples (command-dag, scripted-agent) and a CI e2e, it lets a whole plan (work, smoke, cross-provider audit) run end to end with nothing but git + bun.
 
-Before this, the only real-process way to run a plan was umbel (interactive, subscription, tmux), so a prospect or contributor could not try pleach and CI could not exercise the loop end to end. The scripted runner makes the conductor runnable and demonstrable by anyone, and proves the RunnerSeam port is genuinely open — a third-party runner produces the same RunSummary the engine gates on.
+Before this, the only real-process way to run a plan was umbel (interactive, subscription, tmux), so a prospect or contributor could not try pleach and CI could not exercise the loop end to end. The scripted runner makes the conductor runnable and demonstrable by anyone. It also proves the RunnerSeam port is open, because a third-party runner produces the same RunSummary the engine gates on.
 
 ## Where
 
@@ -19,11 +19,11 @@ src/adapters/scripted.ts; examples/command-dag/; examples/scripted-agent/; test/
 
 ## How
 
-scriptedRunner(scenarios): RunnerSeam — spawnWorker captures cwd; the worker's wait() writes the matched scenario's files into cwd and returns { reason: 'stop', finalMessage, filesTouched }. Scenarios match first-wins: by spawn provider (selects the cross-provider auditor) and by a prompt substring (selects per-node build output). scriptedAuditResult(verdicts) builds the tend-audit-result fence the egress parses. It is a real seam (it writes real files the loop gates on), not a behaviour mock. Exported at pleach/adapters/scripted.
+scriptedRunner(scenarios): RunnerSeam. spawnWorker captures cwd. The worker's wait() writes the matched scenario's files into cwd and returns { reason: 'stop', finalMessage, filesTouched }. Scenarios match first-wins, by spawn provider (which selects the cross-provider auditor) and by a prompt substring (which selects per-node build output). scriptedAuditResult(verdicts) builds the tend-audit-result fence the egress parses. It is a real seam rather than a behaviour mock, because it writes real files the loop gates on. Exported at pleach/adapters/scripted.
 
 ## Fit
 
-A bundled reference adapter alongside umbel/tend/git — the deterministic counterpart to umbel for CI, demos, and tests; the proof that "agents produce; code decides" runs without a live agent.
+A bundled reference adapter alongside umbel/tend/git. It is the deterministic counterpart to umbel for CI, demos and tests, and the proof that "agents produce; code decides" runs without a live agent.
 
 ## Impact
 
@@ -35,8 +35,7 @@ Onboarding drops from "install umbel + get API keys" to "bun test". It doubles a
 - [x] (code) examples/command-dag runs via the real CLI with no runner spawned: verified nodes publish node/<id>, the failed-gate node is quarantined, its dependent skipped. · test/e2e/examples.test.ts @1432f2b
 - [x] (code) examples/scripted-agent reaches verified closes through the cross-provider audit, driven by the scripted runner via a pleach.config.ts. · test/e2e/examples.test.ts @0b6f77a
 
-## Needs
-#pluggable-adapters #conductor-loop
+## Needs #pluggable-adapters #conductor-loop
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/scripted-runner.tend.html) by `loop migrate`

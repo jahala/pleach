@@ -2,30 +2,30 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>audit-egress · garden</title>
+<title>audit-egress · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
 <script type="text/markdown" id="loop">
 # Audit Egress: Fenced Block Protocol
 
-**Goal.** Extracts the LAST ```tend-audit-result fenced block from an auditor's untruncated finalMessage (C4), and builds the audit prompt that instructs the auditor to reproduce the block verbatim in its reply (solving the egress defect where bare command output stays in tool stdout, not the agent message).
+**Goal.** Extracts the LAST ```tend-audit-result fenced block from an auditor's untruncated finalMessage (C4). It also builds the audit prompt that instructs the auditor to reproduce the block verbatim in its reply, solving the egress defect where bare command output stays in tool stdout instead of the agent message.
 
-A cross-provider audit only protects the build if its verdict reaches the gate intact — a truncated or summarized block silently fails good work.
+A cross-provider audit only protects the build if its verdict reaches the gate intact. A truncated or summarized block silently fails good work.
 
 ## The auditor speaks prose; the gate needs a block
 
-The cross-provider audit runs a deterministic `tend audit` command and expects a machine-readable verdict. The auditor — claude, codex, or any future provider — is stochastic: it runs the command in a shell tool, reads the output, and *writes a reply*. That reply is what the conductor receives. The tool's stdout and the agent's message are not the same thing.
+The cross-provider audit runs a deterministic `tend audit` command and expects a machine-readable verdict. The auditor (claude, codex, or any future provider) is stochastic. It runs the command in a shell tool, reads the output, and *writes a reply*. That reply is what the conductor receives. The tool's stdout and the agent's message are not the same thing.
 
-Without an explicit contract, the auditor's natural behavior is to summarize: the `tend-audit-result` block lands in the tool's stdout while the agent message says "the audit passed" or "I ran the command and found no issues." `extractAuditJson` reads the message. It finds no fenced block. The audit fails with egress unparseable — and a node that genuinely cleared its gates is reported as broken.
+Without an explicit contract, the auditor's natural behavior is to summarize. The `tend-audit-result` block lands in the tool's stdout while the agent message says "the audit passed" or "I ran the command and found no issues." `extractAuditJson` reads the message and finds no fenced block. The audit fails with egress unparseable, and a node that cleared its gates is reported as broken.
 
-`buildAuditPrompt(command)` in `src/core/audit-egress.ts` closes this gap by wrapping the command in an unambiguous machine instruction: reproduce the fenced ` ```tend-audit-result ` block verbatim — character for character, both fences included — as the final content of the reply. Not a summary. Not a paraphrase. The block. The [umbel seam](umbel-seam.tend2.html) delivers this prompt to the auditor and reads back the reply untruncated (ledger C4 — the block can appear anywhere in a long response and the last occurrence is authoritative).
+`buildAuditPrompt(command)` in `src/core/audit-egress.ts` closes this gap by wrapping the command in an unambiguous machine instruction: reproduce the fenced ` ```tend-audit-result ` block verbatim, character for character and both fences included, as the final content of the reply. The [umbel seam](umbel-seam.tend2.html) delivers this prompt to the auditor and reads back the reply untruncated (ledger C4: the block can appear anywhere in a long response, and the last occurrence is authoritative).
 
 ## Last block wins, or the raw message goes to the journal
 
-`extractAuditJson(finalMessage)` runs a global match against the exact label `tend-audit-result`. The auditor may produce prose, retry attempts, or other fences before settling; only the last matching block is authoritative. If no block is present, or the block's content is not valid JSON, the function throws `AuditParseError`, carrying the raw message so the journal records what actually arrived.
+`extractAuditJson(finalMessage)` runs a global match against the exact label `tend-audit-result`. The auditor may produce prose, retry attempts, or other fences before settling; only the last matching block is authoritative. If no block is present, or the block's content is not valid JSON, the function throws `AuditParseError`, carrying the raw message so the journal records what arrived.
 
-`AuditParseError` maps to `reaudit` in `src/core/classify.ts` — not `terminal`, not `retryable`. The [conductor loop](conductor-loop.tend2.html) treats it as re-audit-only: the build work stands, only the audit step reruns. An operator whose run hits a flaky auditor gets a reaudit attempt, not a node scrapped and rebuilt from scratch. A parse failure cannot silently close a node; it also cannot destroy a node that built cleanly.
+`AuditParseError` maps to `reaudit` in `src/core/classify.ts`, rather than to `terminal` or `retryable`. The [conductor loop](conductor-loop.tend2.html) reruns only the audit step, and the build work stands. An operator whose run hits a flaky auditor gets a reaudit attempt instead of a node scrapped and rebuilt from scratch. A parse failure cannot silently close a node, and it cannot destroy a node that built cleanly.
 
 ## Where
 
@@ -50,8 +50,7 @@ The auditor's verdict is recovered verbatim and parsed deterministically, so aud
 - [x] (code) Block present but content not valid JSON → AuditParseError. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @832eb42
 - [x] (code) buildAuditPrompt contains exact command and instructs auditor to reproduce block verbatim. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @0825421
 
-## For
-#developer #operator
+## For #developer #operator
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/audit-egress.tend.html) by `loop migrate`

@@ -7,7 +7,7 @@ cross-provider audit), and publishes a `node/<id>` branch only for verified work
 
 To pair pleach with your own tools, you implement at most **two small adapters**. The
 isolation layer, gate logic, git worktree lifecycle, and commit-before-emit invariant are
-pleach's own code — they are not pluggable and do not change. The integration surface is:
+pleach's own code. They are not pluggable and do not change. The integration surface is:
 one data contract (the plan) plus two code seams (runner, ledger).
 
 ---
@@ -30,7 +30,7 @@ The canonical specification lives in [`docs/contract/plan-schema.md`](contract/p
 Two commands let you check conformance without running the loop:
 
 ```
-pleach validate <plan.json>   # validates and prints precise typed errors; exit 1 on failure
+pleach validate <plan.json>   # validates and prints precise typed errors; exit 2 on an invalid plan
 pleach schema                 # emits the JSON Schema — feed it to an LLM or a codegen tool
 ```
 
@@ -82,7 +82,7 @@ calls. For tend-backed plans it is the feature polyglot path; for other planners
 any stable string that identifies the plan's origin.
 
 `node.worker.provider` selects the runner's provider per node, making plans portable
-across tool configurations — the same plan runs whether the config wires umbel or another
+across tool configurations: the same plan runs whether the config wires umbel or another
 runner.
 
 ---
@@ -162,7 +162,7 @@ of [`docs/journal.md`](journal.md)).
 
 **Runner post-condition (verified from `src/loop/run-node.ts:191–194`).** When `wait()`
 returns `reason: 'stop'`, the runner is expected to have populated the working tree with
-the agent's output — but it does NOT need to stage or commit anything. pleach calls
+the agent's output. It does NOT need to stage or commit anything. pleach calls
 `isolate.changedFiles(cwd)` to enumerate all tracked modifications and untracked-unignored
 files in the worktree, unions that with `result.filesTouched` from the worker manifest, and
 calls `isolate.stage(cwd, stagedFiles)` itself. The commit to `node/<id>` is entirely
@@ -199,7 +199,7 @@ export interface LedgerSeam {
 ```
 
 `readClosed` is called once at plan startup (before any node runs) and returns all previously
-verified node ids for this plan source. The SHA value — when present — is the commit pleach
+verified node ids for this plan source. The SHA value, when present, is the commit pleach
 will use as the base ref for dependent nodes if the `node/<id>` branch has been GC'd or is
 unavailable. Returning `null` for an id is valid (legacy / external verification with no
 SHA recorded); pleach falls back to searching the git refstore.
@@ -209,11 +209,11 @@ SHA recorded); pleach falls back to searching the git refstore.
 verified; `{ closed: false }` to decline (the node's branch is still published, but
 dependents are skipped and the run summary records it as `partial`). For non-audit nodes,
 pleach ignores `emitVerdict`'s return value and closes unconditionally (`run-plan.ts:230`):
-`const shouldClose = node.accept.audit ? decision.closed : true;` — so your ledger's
+`const shouldClose = node.accept.audit ? decision.closed : true;`, so your ledger's
 `closed` flag is only consequential for nodes that carry an `accept.audit` block.
 
 `gitLedger` is the trivial reference: `readClosed` lists `node/*` branches in the local
-repo, **scoped to the plan source** — pleach writes `source: <plan.source>` into every
+repo, **scoped to the plan source**: pleach writes `source: <plan.source>` into every
 node commit, and only branches carrying that exact line count as this plan's verified
 work (two plans sharing a repo cannot cross-resume; a hand-made `node/*` branch is never
 trusted). `emitVerdict` returns `{ closed: verdict.status === 'done' }`. It is entirely
@@ -234,11 +234,11 @@ export interface PleachConfig {
 
 `resolveSeams` resolves a runner and ledger in this precedence order:
 
-1. **`--config <path>`** — if given, loads exactly that file (and errors if it is absent).
-2. **`pleach.config.ts` at the repo root** — used when no `--config` is given. If present, its
+1. **`--config <path>`.** If given, loads exactly that file (and errors if it is absent).
+2. **`pleach.config.ts` at the repo root.** Used when no `--config` is given. If present, its
    default export must be a `PleachConfig`; both `runner` and `ledger` must be non-null objects,
    else `ConfigError`.
-3. **Zero-config default** — neither of the above present: `umbelRunner` + either `tendLedger`
+3. **Zero-config default.** Neither of the above present: `umbelRunner` + either `tendLedger`
    (when `--tend-module` is supplied) or `gitLedger`. The `--umbel-bin` and `--permission-mode`
    flags thread into the default runner.
 
@@ -261,7 +261,7 @@ names the provider the plan expects, and the config decides how that provider is
 
 **Plan vs. config separation.** `worker.provider` in the plan is intent; the config is
 tooling. A plan that says `provider: 'codex'` runs under any runner that can dispatch to
-codex — umbel, a hypothetical cloud runner, or a test double. Plans stay portable across
+codex: umbel, a hypothetical cloud runner, or a test double. Plans stay portable across
 environments; configs are environment-specific.
 
 ---
@@ -269,7 +269,7 @@ environments; configs are environment-specific.
 ## The cross-provider audit egress
 
 When a node carries an `accept.audit` block, pleach spawns a second agent using
-`audit.provider` (which must differ from `worker.provider` — provider diversity is a
+`audit.provider` (which must differ from `worker.provider`, because provider diversity is a
 preflight invariant enforced before any spawn). The auditor is sent a prompt constructed by
 `buildAuditPrompt` (from `src/core/audit-egress.ts`) that wraps `audit.command` with
 machine-readable extraction instructions.
@@ -291,7 +291,7 @@ before failing the node.
 
 **Gate integrity (ledger SEC4).** The auditor works in the tree the builder wrote, which
 makes the worktree a collusion channel. Two defenses: audit commands should live outside
-worker-writable paths (the `tend audit` pattern) — and for repo-local commands, pleach
+worker-writable paths (the `tend audit` pattern). For repo-local commands, pleach
 refuses to spawn the auditor when any file named in `audit.command` was touched by the
 builder (retryable with revert evidence, terminal at `maxAttempts`). The audit prompt also
 instructs the auditor to treat repository content as untrusted data and run only the given
@@ -330,13 +330,13 @@ are all `.optional()`. A non-tend auditor emits only the required minimum:
 ```
 
 A `verdict: 'fail'` on any check triggers a retryable re-prompt of the build worker with
-the failing `reasons[]` as evidence — up to `maxAttempts`. A `verdict: 'partial'` is
+the failing `reasons[]` as evidence, up to `maxAttempts`. A `verdict: 'partial'` is
 pleach's honest-middle: the audit passed but the ledger (e.g. tend) declined to
 verify-close. The node's branch is still published; its dependents are skipped.
 
 **For audit-command authors: verdicts carry reasons, and reasons should name the
 falsifying evidence.** The `reasons[]` you emit are the exact text the build worker sees
-on its retry — "check failed" teaches it nothing; "expected `parseDate('2026-02-30')` to
+on its retry. "check failed" teaches it nothing; "expected `parseDate('2026-02-30')` to
 return an error, got a Date" names the case to fix. Design each check so its failing case
 is constructible (run it against the pre-work tree once: if it passes there, it proves
 nothing), and on failure, put that discriminating case in the reason. Verdicts also land
@@ -349,28 +349,28 @@ chat.
 
 Five adapters ship in `src/adapters/` as the batteries-included configuration:
 
-- **`umbelRunner`** (`src/adapters/umbel.ts`) — `RunnerSeam` backed by the `umbel` binary
+- **`umbelRunner`** (`src/adapters/umbel.ts`): `RunnerSeam` backed by the `umbel` binary
   over tmux. Drives claude, codex, and gemini workers through spawn/send/wait/read/kill
   verbs. The public factory: `umbelRunner(opts: UmbelSeamOpts): RunnerSeam`.
 
-- **`directCliRunner`** (`src/adapters/direct-cli.ts`) — `RunnerSeam` over headless agent
+- **`directCliRunner`** (`src/adapters/direct-cli.ts`): `RunnerSeam` over headless agent
   CLIs (`claude -p`, `codex exec`) as one-shot subprocesses; no umbel, no tmux. Selected
   with `pleach run --runner direct-cli` or imported in a config. Single-turn `{prompt}`
-  work only (a second `send` throws — `{phases}` needs session resumption; use umbel).
-  Its argv table tracks external CLIs and is pinned by unit tests so drift breaks CI —
+  work only (a second `send` throws, because `{phases}` needs session resumption; use umbel).
+  Its argv table tracks external CLIs and is pinned by unit tests so drift breaks CI,
   the installed CLI versions are your substrate responsibility. The public factory:
   `directCliRunner(opts?: DirectCliOpts): RunnerSeam`.
 
-- **`scriptedRunner`** (`src/adapters/scripted.ts`) — deterministic no-LLM `RunnerSeam`
+- **`scriptedRunner`** (`src/adapters/scripted.ts`): deterministic no-LLM `RunnerSeam`
   driven by canned scenarios; the CI backbone for example plans and a template for
   test doubles. The public factory: `scriptedRunner(scenarios): RunnerSeam`.
 
-- **`tendLedger`** (`src/adapters/tend.ts`) — `LedgerSeam` backed by tend's ingester module.
+- **`tendLedger`** (`src/adapters/tend.ts`): `LedgerSeam` backed by tend's ingester module.
   Wraps the transport in a serial promise-chain queue (single-ingester invariant). Accepts a
   `Set<string>` (pre-T1 tend) or `Map<string, string | null>` (T1+) from `readClosed`.
   The public factory: `async tendLedger(opts: { module: string }): Promise<LedgerSeam>`.
 
-- **`gitLedger`** (`src/adapters/git.ts`) — trivial `LedgerSeam` backed by `node/*` branches
+- **`gitLedger`** (`src/adapters/git.ts`): trivial `LedgerSeam` backed by `node/*` branches
   in the local git repo. Zero external dependencies; `emitVerdict` is pure (`{ closed: verdict.status === 'done' }`).
   The public factory: `gitLedger(opts?: GitLedgerOpts): LedgerSeam`.
 
@@ -383,8 +383,8 @@ The zero-config default wires `umbelRunner` + `gitLedger` (or `tendLedger` when
 
 **The tend2 lane (no adapter needed).** tend's successor, tend2 (`@plotplot/tend2`),
 integrates through the thin waist alone: its emitter produces plans whose gate is its own
-verifier run as `accept.smoke` (`tend2 verify <file> --expect-payload <sha>` — deterministic,
-content-pinned), with `gitLedger` recording the close. No ledger adapter, no audit block —
+verifier run as `accept.smoke` (`tend2 verify <file> --expect-payload <sha>`, deterministic and
+content-pinned), with `gitLedger` recording the close. No ledger adapter and no audit block,
 the verifier IS the check, per the shared law (a pass only a verifier writes). This repo's
 integration canary (`scripts/canary.sh`, `test/canary/`) runs exactly that lane end-to-end
 with zero agents. `tend audit <id>` and `tendLedger` remain the v1 tend lane, unchanged.
@@ -397,7 +397,7 @@ pleach conducts **local executors** over git worktrees. It is not a cloud agent 
 the runner must be a process pleach can spawn locally (umbel/tmux, or a local API wrapper).
 Cloud-autonomous agents that accept work and return a result asynchronously (e.g. Devin,
 Claude Code in headless mode with no shell) require an adapter that bridges their async
-protocol into the sync send→wait→kill contract — doable, but the adapter owns that
+protocol into the sync send→wait→kill contract. Doable, but the adapter owns that
 translation.
 
 Verification must be **automatable**. A `LedgerSeam` whose `emitVerdict` blocks waiting for

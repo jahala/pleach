@@ -2,43 +2,41 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>test-phase-commit · garden</title>
+<title>test-phase-commit · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
 <script type="text/markdown" id="loop">
 # The red phase is its own commit
 
-**Goal.** When a node's work carries a test phase (`{test, phases}`), pleach seals the red phase as its own commit the moment the RED gate passes — before the impl prompt is sent — so the failing-test state exists in `node/<id>` history: base → red → verified. The GREEN gate runs against the combined tree; the verified commit stacks on the red one.
+**Goal.** When a node's work carries a test phase (`{test, phases}`), pleach seals the red phase as its own commit the moment the RED gate passes, before the impl prompt is sent. The failing-test state then exists in `node/<id>` history: base → red → verified. The GREEN gate runs against the combined tree, and the verified commit stacks on the red one.
 
-Ledger D13. pleach 0.0.1 gated RED-must-fail and GREEN-must-pass in the worktree and then committed the whole tree once at settle. Nothing in history proved a failing test ever existed; `weeder bite` (rule B1, "a test passed without the change it covers") had no commit to check out, and copeca's corpus minting and the slice-coverage rule stand on the same missing commit. The umbrella's law (docs/building-the-garden.md §5) mandates the separate test-phase commit.
+Ledger D13. pleach 0.0.1 gated RED-must-fail and GREEN-must-pass in the worktree, then committed the whole tree once at settle. Nothing in history proved a failing test ever existed. `weeder bite` (rule B1, "a test passed without the change it covers") had no commit to check out, and copeca's corpus minting and the slice-coverage rule stand on the same missing commit. The umbrella's law (docs/building-the-garden.md §5) mandates the separate test-phase commit.
 
 ## How
 
-`runWork` (src/loop/run-work.ts) drives the phases; it is given a seal function by `runNode` (src/loop/run-node.ts) and calls it once, after the RED gate passes and before the impl phase's prompt is sent. The seal does what the close does, in miniature: scoped staging of the red phase's files (`filesTouched` ∪ `changedFiles`), the marker scan, the hygiene battery over the staged diff, then a commit on the detached HEAD (no branch moves — `node/<id>` is only ever published at settle). Subject `pleach: <id> red phase`, trailer `pleach-phase: red`. The journal records `phase-commit` with the sha and the sealed files. A red phase that changed no file fails the `red` gate with evidence instead of sealing nothing.
+`runWork` (src/loop/run-work.ts) drives the phases. `runNode` (src/loop/run-node.ts) gives it a seal function, which it calls once, after the RED gate passes and before the impl phase's prompt is sent. The seal does what the close does, in miniature. It stages only the red phase's files (`filesTouched` ∪ `changedFiles`), runs the marker scan and the hygiene battery over the staged diff, then commits on the detached HEAD. No branch moves, because `node/<id>` is only ever published at settle. The subject is `pleach: <id> red phase` and the trailer is `pleach-phase: red`. The journal records `phase-commit` with the sha and the sealed files. A red phase that changed no file fails the `red` gate with evidence instead of sealing nothing.
 
-Retries keep the seal honest. Once a red commit exists on the attempt's tree, a retry resumes at the impl phase carrying the evidence — the seal is never remade, because a second "red" taken from a tree that already holds impl work would be a lie. A red-gate failure before any seal restarts at red as before. Dead-and-resume re-isolates a fresh tree and the seal state resets with it.
+Retries keep the seal honest. Once a red commit exists on the attempt's tree, a retry resumes at the impl phase carrying the evidence. The seal is never remade, because a second "red" taken from a tree that already holds impl work would be a lie. A red-gate failure before any seal restarts at red as before. Dead-and-resume re-isolates a fresh tree, and the seal state resets with it.
 
-`pleach validate` warns on a node whose phases end on `impl`: no green gate ever runs, so the combined tree is never proven. The warning rides the JSON (`warnings[]`) and stderr; the plan stays valid.
+`pleach validate` warns on a node whose phases end on `impl`, because no green gate ever runs and the combined tree is never proven. The warning appears in the JSON (`warnings[]`) and on stderr. The plan stays valid.
 
 ## Impact
 
-`weeder bite` is a checkout and a run. Every phased node's history shows the failing test before the change that made it pass, and a worker that weakens a test during impl leaves that edit in the impl commit where `weeder check` judges it against the sealed red.
+`weeder bite` is a checkout and a run. Every phased node's history shows the failing test before the change that made it pass. A worker that weakens a test during impl leaves that edit in the impl commit, where `weeder check` judges it against the sealed red.
 
 ## Tests
 - [x] (code) A phased node seals the red phase as its own commit the moment the RED gate passes and before the impl prompt is sent: scoped-staged red files, subject `pleach: <id> red phase`, trailer `pleach-phase: red`; journal `phase-commit` {node, phase, sha, files}; the settle commit stacks on it · test/loop/phase-commit.test.ts @84ae7c0 · by cli
 - [x] (code) Through the real CLI with real git: `node/<id>` history is base → red → verified; the red commit's tree holds the test and the unchanged seed; the verified commit's parent is the red commit and its tree passes the test · test/e2e/phase-commit.test.ts @450ab96 · by cli
-- [x] (code) A red phase that changes no file fails the `red` gate with evidence naming the empty phase — no seal, retryable like any gate · test/loop/phase-commit-empty.test.ts @0d1f6c3 · by cli
-- [x] (code) A retry after a sealed red resumes at the impl phase carrying the evidence — no second red prompt, no second seal; a red-gate failure before any seal restarts at red · test/loop/phase-commit-retry.test.ts @cdffde6 · by cli
-- [x] (code) The seal is gated like the close: conflict markers or a secret in the red files fail `marker` / `hygiene:secret` with no commit made · test/loop/phase-commit-hygiene.test.ts @63986bb · by cli
+- [x] (code) A red phase that changes no file fails the `red` gate with evidence naming the empty phase — no seal, retryable like any gate · test/loop/phase-commit-empty.test.ts @3459de8 · by cli
+- [x] (code) A retry after a sealed red resumes at the impl phase carrying the evidence — no second red prompt, no second seal; a red-gate failure before any seal restarts at red · test/loop/phase-commit-retry.test.ts @ab21104 · by cli
+- [x] (code) The seal is gated like the close: conflict markers or a secret in the red files fail `marker` / `hygiene:secret` with no commit made · test/loop/phase-commit-hygiene.test.ts @e9113bf · by cli
 - [x] (code) `pleach validate` warns on a node whose phases end on impl: `warnings[]` in the JSON, one stderr line, exit stays 0 · test/unit/validate-phases.test.ts @01a0ece · by cli
-- [x] (code) docs/journal.md documents `phase-commit`, and every event name the source appends is documented there (the stability promise, pinned) · test/unit/journal-doc.test.ts @9e57ce7 · by cli
+- [x] (code) docs/journal.md documents `phase-commit`, and every event name the source appends is documented there (the stability promise, pinned) · test/unit/journal-doc.test.ts @b9bc0b1 · by cli
 
-## Needs
-#conductor-loop #isolate-seam #lock-journal
+## Needs #conductor-loop #isolate-seam #lock-journal
 
-## For
-#developer
+## For #developer
 
 ## Tried
 - 2026-09-08 shaped from cape-town's order (umbrella fit loop, weed's bite kill report 2026-09-06). Design: seal at RED-pass inside the phase loop (not a settle-time split — a split from a tree that may hold impl edits cannot prove what actually ran red); the seal is a commit on the detached HEAD, gated by the same marker + hygiene scans as the close; retries resume at impl once sealed. Rejected: recording the red sha inside the receipt envelope (git already binds parent → child; the trailer names the phase) and re-running the smoke on the red diff (the smoke judges delivered work; hygiene covers secrets in tests).

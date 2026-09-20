@@ -1,9 +1,12 @@
 # .petalsrc — Project brand configuration
 brand:
-  # plotplot is the umbrella brand and the brand repo.
-  source: https://github.com/jahala/plotplot-ai.git
-  version: v2.0.0
+  # plotplot is the umbrella: brand, law and contracts, pinned together by tag.
+  # It moved here from the retired jahala/plotplot-ai, which numbered its brand
+  # v2.x; the umbrella restarted at v1.x, so the version below is not a downgrade.
+  source: https://github.com/jahala/plotplot.git
+  version: v1.5.0
   # pleach carries its own product layer (.brand/products/pleach/), committed —
-  # self-contained, not aggregated to a central repo.
+  # self-contained, not aggregated to a central repo. The umbrella files beside it
+  # are a pulled cache; refresh them from the tag above, never edit in place.
   product: pleach
   overrides: {}

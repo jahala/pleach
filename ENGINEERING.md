@@ -28,7 +28,7 @@ of control flow, stop: that's the exact hole this system exists to close.
 
 Authoritative context (read before substantial work):
 - `docs/plan.md` — the build plan and work breakdown.
-- `docs/contract/plan-schema.md` — the canonical `@agent-contract/plan` v1.1 text (this repo is its home).
+- `docs/contract/plan-schema.md` — the canonical `@agent-contract/plan` text, v1.1.5 (this repo is its home).
 - `docs/ledger.md` — the verified defect ledger this design answers. Every ledger ID maps to a required test.
 
 ## Non-negotiables
@@ -59,11 +59,16 @@ Authoritative context (read before substantial work):
 ## Architecture — strict downward dependencies
 
 ```
-faces/     cli.ts                                          ← argv, exit codes, stdout/stderr discipline
+faces/     cli.ts  config.ts  narrate.ts                  ← argv, exit codes, stdout/stderr discipline
 loop/      run-plan.ts  run-node.ts  run-work.ts           ← the deterministic loop; composes injected seams + adapters
+           audit-node.ts  land.ts  receipt-verify.ts  deps.ts
 adapters/  umbel.ts  tend.ts  git.ts                       ← pluggable tool bridges (the runner + ledger ports)
+           scripted.ts  direct-cli.ts
 seams/     isolate.ts  exec.ts  lock.ts  journal.ts        ← pleach's own I/O, thin
-core/      plan.ts  validate.ts  classify.ts  audit-egress.ts  argv.ts  schema-json.ts  errors.ts   ← pure, total
+           receipts.ts  clean.ts  gitdir.ts
+core/      plan.ts  validate.ts  classify.ts  errors.ts    ← pure, total
+           audit-egress.ts  argv.ts  schema-json.ts  delivery.ts
+           hygiene.ts  journal-envelope.ts  receipt.ts  sarif.ts
 ```
 
 - `core/` imports nothing from the other layers. `seams/` and `adapters/` import `core/`; an `adapters/`
@@ -86,7 +91,7 @@ core/      plan.ts  validate.ts  classify.ts  audit-egress.ts  argv.ts  schema-j
 
 ## The contract
 
-This repo is the **canonical home** of `@agent-contract/plan` v1.1. The schema text lives in
+This repo is the **canonical home** of `@agent-contract/plan`, at v1.1.5. The schema text lives in
 `docs/contract/plan-schema.md`; `src/core/plan.ts` must match it byte-for-byte inside the fenced block
 (drift test enforces; same pattern tend uses). tend and umbel vendor from the doc. Changing the schema =
 changing the doc + the source + the drift test in ONE commit, with a version note — and a heads-up
@@ -98,7 +103,7 @@ recorded in `docs/contract/CHANGES.md` for the other two repos.
 |---|---|---|
 | worker `reason: 'dead'` | `dead` | `onDead:'resume'` + a fallback provider that is not the dead one → dispose + re-isolate + fresh worker **on the fallback** (audit diversity re-checked against it); no usable fallback → settle dead with the attempt unspent (D17), else fail |
 | worker `reason: 'timeout' \| 'provider-error'` / exec timeout | `retryable` | retry ≤ `maxAttempts`, **reuse tree, re-prompt with evidence** |
-| worker `reason: 'input' \| 'idle'` | `blocked` | kill worker + dispose tree; Verdict `status:'blocked'`, prompt text in `blockedReason`; no auto-retry — fix the permission mode / allowlist and re-run |
+| worker `reason: 'input' \| 'idle'` | `blocked` | kill worker, **quarantine the tree** on `quarantine/<id>` (D11 — unfinished is not wrong); Verdict `status:'blocked'`, prompt text in `blockedReason`; no auto-retry — fix the permission mode / allowlist and re-run |
 | smoke / command non-zero, marker-gate hit | `retryable` | retry ≤ `maxAttempts`, reuse tree, evidence in re-prompt |
 | a gate that cannot run: the no-shell guard's `-1` or the exec seam's `127` (`GateCannotRunError`, `gateFault`) | `terminal` | settle on that attempt — no flaky retry, no re-prompt; `gate.ran` names the command, the verdict's `detail` names the plan or the environment (D19) |
 | audit returned fail verdicts | `retryable` | re-prompt the *builder* with the audit `reasons[]` |
@@ -148,9 +153,10 @@ raise a timeout to "fix" a flake — find the race.
   asserts on a seam internal belongs in integration instead.
 - **E2E (`test/e2e`)** — `pleach run` as a process, real git + real umbel + fake worker binaries +
   real tend transport. **No mocks. Ever.**
-- **Proof (`test/proof`, gated `PLEACH_PROOF=1`)** — real claude builds / real codex audits on the
-  examples project. Burns subscription; never in CI.
-- **The ledger is the test plan.** `docs/ledger.md` items (A1–A3, B1–B4, C1–C5, D1–D7, SEC1–3, M1–M3)
+- **Proof runs** — real claude builds and real codex audits against `examples/`, driven by
+  `scripts/proof-run.sh`. Burns subscription; run by hand, never in CI.
+- **The ledger is the test plan.** `docs/ledger.md` items (A1–A3, B1–B4, C1–C5, D1–D23 with
+  D20 unused, SEC4)
   each map to at least one named test (`// ledger: B2` comment at the test). The §6 cases from the bridge
   spec (fan-out, join-conflict, concurrency invariant, commit-on-verified, dead-retry-re-isolates,
   phase gates, ingester derivation) are all required.
@@ -161,10 +167,12 @@ raise a timeout to "fix" a flake — find the race.
   Lead-dev merges after green `bun run check` + a recorded self-audit pass (re-read the diff as a hostile
   reviewer; the audit note goes in the PR/commit body).
 - Work in *this* repo lands on `master` via short-lived branches. Work in **umbel** and
-  **missoula (tend)** is PRs only, never direct pushes; cite the ledger/letter item each PR answers.
-- CI (GitHub Actions): typecheck + lint + unit/integration/loop/e2e on ubuntu (tmux + git installed;
-  fake binaries only). Proof runs are manual.
-- Docs: decisions → this file or `docs/plan.md` the moment they're made; agent reports → `docs/research/`.
+  **tend** is PRs only, never direct pushes; cite the ledger/letter item each PR answers.
+- CI (GitHub Actions): typecheck + lint + the test suite on ubuntu, with git only. There is no tmux
+  and no umbel binary there, so the suites that drive the real runner skip — a green CI is not on its
+  own proof that the runner seam holds. Proof runs are manual.
+- Docs: decisions → this file or `docs/plan.md` the moment they're made; agent reports →
+  `docs/research/`, which is gitignored and stays local.
 - No `console.log` in committed code. The journal seam is the only runtime narrator; stderr only —
   stdout belongs to the face's structured output.
 

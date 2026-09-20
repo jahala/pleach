@@ -3,13 +3,17 @@
    Design language: tend — warm paper, editorial serif masthead, mono labels,
    single clay accent, three-tone palette, borders on large elements only. */
 
+/* Webfonts. Every family below also has a local fallback stack, so a page opened
+   offline or from file:// still renders — it just renders in the fallback. */
+@import url('https://fonts.googleapis.com/css2?family=Golos+Text:wght@400..900&family=IBM+Plex+Mono:wght@400;600;700&family=Mona+Sans:ital,wdth,wght@0,75..125,200..900;1,75..125,200..900&display=swap');
+
 :root {
-  --serif: ui-serif, Georgia, 'Iowan Old Style', 'Times New Roman', serif;
-  --sans:  system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --serif: 'Golos Text', ui-serif, Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  --sans:  'Mona Sans', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --mono:  'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
-  --bg:            #fbfaf8;
-  --bg-2:          #f5f3ee;
+  --bg:            #fbfafa;
+  --bg-2:          #f5f3f0;
   --surface:       #ffffff;
   --text:          #3a3a3a;
   --text-2:        #5a5a56;
@@ -18,11 +22,11 @@
   --border-strong: #c8c5be;
   --heading:       #1a1a18;
   --accent:        #D97757;
-  --accent-d:      #A04E33;  /* link colour — ≥4.5:1 on all three light backgrounds (AA) */
+  --accent-d:      #bf4E33;  /* link colour — AA on --bg (4.6) and --surface (4.8); 4.4 on --bg-2, 4.2 on --accent-weak */
   --accent-weak:   #fbeee5;
 
   /* check / state colours */
-  --ok:      #2d6b25;  --ok-bg:      #eef6ec;  --ok-bd:      #b8d9b4;
+  --ok:      #2d6b25;  --ok-bg:      #eefaec;  --ok-bd:      #b0d4b0;
   --fail:    #a03030;  --fail-bg:    #fdeeee;  --fail-bd:    #eec3c3;
   --human:   #7a5200;  --human-bg:   #fff8e8;  --human-bd:   #f0d88a;
   --open:    #6a6a66;  --open-bg:    #f0efeb;  --open-bd:    #d8d5cf;
@@ -82,6 +86,15 @@ body {
 }
 a { color: var(--accent-d); text-decoration: none; }
 a:hover { text-decoration: underline; }
+
+/* inline code — one rule for every prose surface (lede, narrative, claims, tried).
+   Sized in em so it tracks whatever text it sits in. */
+code {
+  font-family: var(--mono); font-size: .86em;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 1px 5px;
+}
+pre code { background: none; border: 0; padding: 0; font-size: inherit; }
 
 /* ── mono label (small caps convention everywhere) ── */
 .lp-label {
@@ -214,18 +227,12 @@ a.lp-chip:hover { border-color: var(--accent); color: var(--accent-d); text-deco
 .lp-article ul, .lp-article ol { margin: 0 0 var(--sp-4); padding-left: var(--sp-6); }
 .lp-article li { margin-bottom: var(--sp-2); }
 .lp-article li::marker { color: var(--accent); }
-.lp-article code {
-  font-family: var(--mono); font-size: 13.5px;
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); padding: 1px 5px;
-}
 .lp-article pre {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: var(--sp-4);
   overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6;
   margin: var(--sp-6) 0;
 }
-.lp-article pre code { background: none; border: 0; padding: 0; }
 .lp-article blockquote {
   margin: var(--sp-6) 0; padding: var(--sp-3) var(--sp-5, 20px);
   border-left: 3px solid var(--accent); background: var(--accent-weak);
@@ -287,6 +294,8 @@ a.lp-chip:hover { border-color: var(--accent); color: var(--accent-d); text-deco
 .lp-fail__decision { font-size: 15px; line-height: 1.55; color: var(--text); margin: var(--sp-3) 0 0; }
 .lp-badge--proven  { color: var(--ok); background: var(--ok-bg); border-color: var(--ok-bd); }
 .lp-badge--claimed { color: var(--claimed); background: var(--claimed-bg); border-color: var(--claimed-bd); }
+.lp-badge--eval    { color: var(--accent-d); background: transparent; border-color: var(--border-strong); font-variant-numeric: tabular-nums; }
+.lp-badge--by      { color: var(--text-muted); background: transparent; border-color: var(--border-strong); }
 .lp-badge--sha { color: var(--text-muted); background: var(--bg-2); border-color: var(--border); text-transform: none; letter-spacing: 0; }
 
 /* method chip */
@@ -350,6 +359,113 @@ a.lp-chip:hover { border-color: var(--accent); color: var(--accent-d); text-deco
   font-family: var(--mono); font-size: 11.5px; color: var(--text-muted);
   display: flex; gap: var(--sp-4); flex-wrap: wrap;
 }
+
+/* ── the pen (tend2 serve) — live controls, or the exact command ── */
+.lp-pen__state {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+  color: var(--text-muted);
+}
+.lp-pen__state--off { opacity: .8; }
+.lp-pen__dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent);
+}
+.lp-pen__row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
+.lp-check__body > .lp-pen__row { margin-top: var(--sp-3); }
+.lp-pen__btn {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+  color: var(--text-2); background: var(--surface);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  padding: 3px 9px; cursor: pointer; line-height: 1.6;
+}
+.lp-pen__btn:hover { color: var(--accent-d); border-color: var(--accent); }
+.lp-pen__btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lp-pen__btn--go { color: var(--surface); background: var(--accent-d); border-color: var(--accent-d); }
+.lp-pen__btn--go:hover { color: var(--surface); background: var(--accent); border-color: var(--accent); }
+.lp-pen__hint { font-family: var(--mono); font-size: 10.5px; color: var(--text-muted); }
+.lp-pen__cmd {
+  display: block; margin-top: var(--sp-2); padding: var(--sp-2) var(--sp-3);
+  font-family: var(--mono); font-size: 12px; color: var(--text);
+  background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  user-select: all; overflow-wrap: anywhere;
+}
+
+/* ── editing in place ──
+   Authorable text is edited ON the element that renders it: the affordance is
+   the hover tint and the caret, never a control that opens something else. */
+[data-edit] {
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 0 transparent;
+  transition: background-color .12s ease, box-shadow .12s ease;
+  /* An editing host is `pre-wrap` by UA default, which would print the
+     newlines BETWEEN rendered blocks. Prose wraps normally until it is being
+     edited, where the source's own line breaks are the point. */
+  white-space: normal;
+}
+/* A prose heading keeps its rule above it — the section wrapper the pen needs
+   must not swallow the article's rhythm. */
+.lp-narrative__sec:not(:first-child) > h2:first-child {
+  margin-top: var(--sp-12); padding-top: var(--sp-6); border-top: 1px solid var(--border);
+}
+[data-edit]:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+[data-edit]:focus { outline: none; }
+[data-edit].lp-edit--on {
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent);
+  white-space: pre-wrap;
+  /* The box breathes without moving the words: the padding is paid back in
+     margin, so what you are editing sits exactly where it was rendered. */
+  padding: var(--sp-2) var(--sp-3);
+  margin: calc(-1 * var(--sp-2)) calc(-1 * var(--sp-3));
+}
+.lp-narrative__sec.lp-edit--on, .lp-check__claim.lp-edit--on, .lp-links.lp-edit--on {
+  font-family: var(--mono); font-size: 13px; line-height: 1.7;
+}
+[data-edit]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted); font-style: italic;
+}
+.lp-links[data-edit], .lp-tried__new { min-height: 1.4em; }
+
+/* ── the map's own pages, under the edge being edited ──
+   The list is transient UI, built by the binder: it belongs to no payload, so
+   it sits over the rail rather than in it. */
+.lp-rail__sec { position: relative; }
+.lp-suggest {
+  position: absolute; z-index: 30; left: 0; right: 0; margin-top: var(--sp-2);
+  list-style: none; padding: var(--sp-1); max-height: 15rem; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--radius); box-shadow: var(--shadow-card);
+}
+.lp-suggest__row {
+  display: flex; align-items: baseline; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm); cursor: pointer;
+}
+.lp-suggest__row--on, .lp-suggest__row:hover { background: var(--accent-weak); }
+.lp-suggest__id { font-family: var(--mono); font-size: 12.5px; color: var(--text); flex-shrink: 0; }
+.lp-suggest__title {
+  font-size: 12px; color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.lp-suggest__state {
+  margin-left: auto; flex-shrink: 0;
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .05em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: var(--radius-sm);
+  color: var(--open); background: var(--open-bg); border: 1px solid var(--open-bd);
+}
+.lp-suggest__state--done    { color: var(--ok);    background: var(--ok-bg);    border-color: var(--ok-bd); }
+.lp-suggest__state--failing { color: var(--fail);  background: var(--fail-bg);  border-color: var(--fail-bd); }
+.lp-suggest__state--needs-you { color: var(--human); background: var(--human-bg); border-color: var(--human-bd); }
+.lp-tried__new { font-style: italic; color: var(--text-muted); }
+.lp-pen__note {
+  position: fixed; left: 50%; bottom: var(--sp-6); transform: translateX(-50%); z-index: 40;
+  font-family: var(--mono); font-size: 12px;
+  padding: var(--sp-2) var(--sp-4); border-radius: var(--radius);
+  border: 1px solid var(--ok-bd); background: var(--ok-bg); color: var(--ok);
+  box-shadow: var(--shadow-card);
+}
+.lp-pen__note--warn { border-color: var(--human-bd); background: var(--human-bg); color: var(--human); }
 
 /* ── responsive ── */
 @media (max-width: 1080px) {

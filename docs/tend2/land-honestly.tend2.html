@@ -2,35 +2,33 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>land-honestly · garden</title>
+<title>land-honestly · pleach</title>
 <link rel="stylesheet" href="./loop.css">
 <body>
 <noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
 <script type="text/markdown" id="loop">
 # Landing reads the map and does not wait on the whole run
 
-**Goal.** A landing holds its own lock, so a settled node lands while the run is still gating others and the refusal names who holds what; `pleach land --sinks` lands a verified subset; and a land gate the operator names (`--land-gate CMD`, with `{base}` substituted) runs on the composed stack before publish, so a landing that would leave the garden's stamps stale is refused with the reason printed, never landed green.
+**Goal.** A landing holds its own lock, so a settled node lands while the run is still gating others, and a refusal names who holds what. `pleach land --sinks` lands a verified subset. A land gate the operator names (`--land-gate CMD`, with `{base}` substituted) runs on the composed stack before publish, so a landing that would leave the garden's stamps stale is refused with the reason printed instead of landed green.
 
-Ledger D18; jahala/pleach#83, #84. On weeder a settled node's landing answered "lock held" until the whole run ended, and a rename that moved eleven loops' evidence landed green: fifty-one stamps sat stale on master for three days, two of them hiding real drift. `tend2 gate --base` already answers that question; pleach never asked it.
+Ledger D18; jahala/pleach#83, #84. On weeder a settled node's landing answered "lock held" until the whole run ended. A rename that moved eleven loops' evidence landed green, and fifty-one stamps sat stale on master for three days, two of them hiding real drift. `tend2 gate --base` already answers that question; pleach never asked it.
 
 ## How
 
-The run's lock guards the run's state; a landing writes the base branch, which the run never touches. So `landPlan` (src/loop/land.ts) takes a lock of its own through the lock seam (`<lock>.land`, the same (repoRoot, source) naming), and only another landing can refuse it; the refusal (`LockHeldError`) names the holder's pid and which lock it holds. `--sinks <id,…>` narrows the landing to named verified sinks — a named node that is not verified is refused by name before anything is built — and `land-start` journals the subset; without the flag the all-or-nothing rule stands.
+The run's lock guards the run's state. A landing writes the base branch, which the run never touches. So `landPlan` (src/loop/land.ts) takes a lock of its own through the lock seam (`<lock>.land`, the same (repoRoot, source) naming), and only another landing can refuse it. The refusal (`LockHeldError`) names the holder's pid and which lock it holds. `--sinks <id,…>` narrows the landing to named verified sinks, and `land-start` journals the subset. A named node that is not verified is refused by name before anything is built. Without the flag the all-or-nothing rule stands.
 
-The map gate is a command, not a dependency. `--land-gate CMD` (repeatable) is parsed argv-style with no shell like every plan-authored command, `{base}` replaced by the target branch's tip sha before the merge, and run in the provisioned stack after the sinks' own smokes. A non-zero exit refuses the landing: `land-gate-refused` {command, exitCode, outputTail} on the journal and the tail on stderr, the stack disposed, the checkout untouched. The garden's runbook passes `tend2 gate docs/tend2 --base {base} --runner 'bun test {evidence}'`; pleach knows nothing about stamps.
+The map gate is a command the operator supplies. `--land-gate CMD` (repeatable) is parsed argv-style with no shell, like every plan-authored command. `{base}` is replaced by the target branch's tip sha before the merge, and the command runs in the provisioned stack after the sinks' own smokes. A non-zero exit refuses the landing: `land-gate-refused` {command, exitCode, outputTail} goes on the journal, the tail goes on stderr, the stack is disposed and the checkout is untouched. The garden's runbook passes `tend2 gate docs/tend2 --base {base} --runner 'bun test {evidence}'`; pleach knows nothing about stamps.
 
 ## Tests
-- [x] (code) `landPlan` holds a land lock beside the run's, never the run's: a landing proceeds while a live run holds the run lock, two landings serialise on the land lock, and the refusal names the holder's pid and which lock — proven against the real lock seam and a real process · test/integration/land-lock.test.ts @b420987 · by cli
+- [x] (code) `landPlan` holds a land lock beside the run's, never the run's: a landing proceeds while a live run holds the run lock, two landings serialise on the land lock, and the refusal names the holder's pid and which lock — proven against the real lock seam and a real process · test/integration/land-lock.test.ts @6315352 · by cli
 - [x] (code) `pleach land --sinks <id,…>` lands only the named verified sinks: a named node that is not verified is refused by name before any stack is built, the composition gate and publish cover only the subset, `land-start` journals `sinks`; without `--sinks` the all-or-nothing refusal is unchanged · test/loop/land-sinks.test.ts @8e67d22 · by cli
 - [x] (code) `--land-gate CMD` (repeatable; `{base}` → the target tip's sha before the merge) runs argv-style in the provisioned stack after the sinks' smokes; a non-zero exit refuses the landing with `land-gate-refused` {command, exitCode, outputTail} journaled and printed, the stack disposed and the checkout untouched; a bare shell operator is refused before anything runs · test/loop/land-gate-command.test.ts @8e9dfc7 · by cli
-- [x] (code) docs/journal.md documents `land-gate-refused` and `land-start`'s `sinks`; `KINDS` pins the event as `gate.result`; the CLI help and README list `--sinks` and `--land-gate` · test/unit/journal-doc.test.ts @2e9e158 · by cli
+- [x] (code) docs/journal.md documents `land-gate-refused` and `land-start`'s `sinks`; `KINDS` pins the event as `gate.result`; the CLI help and README list `--sinks` and `--land-gate` · test/unit/journal-doc.test.ts @77a9222 · by cli
 - [x] (code) Through the real CLI with real git: a landing whose stack moves a stamped evidence file is refused by a `--land-gate` that runs tend2's gate (skipped honestly when the binary is absent) and by a fixture gate script that reads `{base}`; after the gate is green the same landing lands; and `pleach land --sinks` lands one verified node while a second process holds the run lock · test/e2e/land-honestly.test.ts @03ef297 · by cli
 
-## Needs
-#cli-land #lock-journal #teardown-keeps-work
+## Needs #cli-land #lock-journal #teardown-keeps-work
 
-## For
-#operator
+## For #operator
 
 ## Tried
 - 2026-09-11 shaped on cape-town's word ("Land honestly" before "Fail before spend": a land gate that never reads the map left fifty-one stamps stale for three days and hid real drift — the wrong tier before the expensive one). Design: a land lock of its own rather than landing under the run's lock (the two never write the same thing, and a serial queue behind the run is the cost); a subset flag rather than "land one node" (the all-or-nothing rule stays the default because a partial landing the plan never verified is the thing it exists to prevent — a subset is the operator saying which verified sinks); a gate COMMAND with `{base}` rather than pleach calling tend2 (tend is an adapter, never a requirement; the signal is tend2's, the moment is pleach's). Rejected: keeping the gate's SARIF beside a receipt (a landing mints none — its record is the journal line and the merge commit); running `tend2 next` as the issue suggests (it reads the whole map; `tend2 gate --base` answers the exact question).
