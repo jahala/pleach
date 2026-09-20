@@ -66,13 +66,13 @@ shell operator such as `&&`, `|` or `>`, naming the node, the field, and the esc
 
 ## A gate that cannot run fails its node once
 
-A gate whose command never started is a fault of the plan or of the environment, never of
-the work. The no-shell guard's refusal is the plan's; a command the environment cannot
-spawn (a missing binary, exit 127) is the environment's.
-
-The node settles on that attempt with the verdict's `detail` naming which. No further
-attempt is spent and no worker is re-prompted. A gate that ran and failed still retries
-the worker with its output.
+A gate that cannot run is a fault of the plan or of the environment, never of the work, and
+the node fails once either way. The no-shell guard's refusal is the plan's; a command the
+environment cannot spawn (a missing binary, exit 127) is the environment's. The verdict's
+`detail` names which, in the words the loop itself uses: `plan` when the plan's gate cannot
+run, `environment` when the environment cannot run the gate. No further attempt is spent and
+no worker is re-prompted. A gate that ran and failed is different: that still retries the
+worker with its output.
 
 ## Halting a run never loses a node's work
 
@@ -102,10 +102,9 @@ from the marker scan through smoke and the cross-provider audit. The close recor
 The verified commit on `node/<id>` runs your repository's hooks, because a hook is the
 repository's own gate. A refused commit is a gate verdict like any other: the node settles
 `failed` under the `commit` gate, with the hook's output as the output tail in the journal
-and hashed into the receipt.
-
-The tree is kept on `quarantine/<id>`. That quarantine is a snapshot (`write-tree`,
-`commit-tree`, `update-ref`), so no hook runs on it and no hook can refuse it.
+and hashed into the receipt. The tree is kept on `quarantine/<id>`, and that quarantine is a
+snapshot (`write-tree`, `commit-tree`, `update-ref`), so no hook runs on it and no hook can
+refuse it.
 
 ## A seam's surprise keeps the work
 
@@ -121,14 +120,12 @@ from the quarantine.
 ## A lost journal is reported
 
 The journal at `<git-dir>/pleach/journal.jsonl` is one file, and the receipts beside it are
-kept per close.
-
-Right after `run-start`, every node whose latest receipt has no `verdict` line in the journal
-is journaled as `journal-gap`, so a journal that lost lines says so the next time anyone runs.
-
-Right after `run-end`, the run's lines from its `run-start` through its `run-end` are copied to
-`<git-dir>/pleach/receipts/runs/<runId>.journal.jsonl`, and the `run-end` line names that file
-as `journalCopy`. The record can be rebuilt from what is kept beside the receipts.
+kept per close. Right after `run-start`, every node whose latest receipt has no `verdict` line
+in the journal is journaled as `journal-gap`, so a journal that lost lines says so the next
+time anyone runs. Right after `run-end`, the run's lines from its `run-start` through its
+`run-end` are copied to `<git-dir>/pleach/receipts/runs/<runId>.journal.jsonl`, and the
+`run-end` line names that file as `journalCopy`. The record can be rebuilt from what is kept
+beside the receipts.
 
 ## A worker that writes BLOCKED.md has finished
 

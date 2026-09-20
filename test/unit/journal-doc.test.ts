@@ -173,6 +173,32 @@ const CLI_SRC = new URL('../../src/faces/cli.ts', import.meta.url).pathname;
 const DEPS_SRC = new URL('../../src/loop/deps.ts', import.meta.url).pathname;
 const README = new URL('../../README.md', import.meta.url).pathname;
 
+const REPO_ROOT = new URL('../../', import.meta.url).pathname;
+
+/**
+ * The README and every local markdown file it links to, concatenated.
+ *
+ * An operator starts at the README; a control documented one named click away is
+ * still findable, and the README's own link is what makes it so. Reading the
+ * linked files here means the link is load-bearing: break it and these tests go
+ * red, which is the point. A control that exists in code and nowhere an operator
+ * looks is a control nobody can find.
+ */
+function readmeSurface(): string {
+  const readme = readFileSync(README, 'utf8');
+  const linked = [...readme.matchAll(/\]\((?!https?:)([^)#]+\.md)[^)]*\)/g)]
+    .map((m) => m[1] as string)
+    .filter((rel, i, all) => all.indexOf(rel) === i)
+    .map((rel) => {
+      try {
+        return readFileSync(join(REPO_ROOT, rel), 'utf8');
+      } catch {
+        throw new Error(`README links ${rel}, which does not exist`);
+      }
+    });
+  return [readme, ...linked].join('\n');
+}
+
 /** A table row's cells; `\|` is content inside a cell, not a separator. */
 function rowCells(row: string): string[] {
   return row.split(/(?<!\\)\|/).map((cell) => cell.trim());
@@ -255,6 +281,8 @@ describe('journal doc — the halted-run vocabulary (D16)', () => {
 
 describe('operator surfaces — the CLI help and the README (D16)', () => {
   const help = helpText();
+  // Structural: this block parses the README's own `## Usage` table, so it reads
+  // the file itself rather than the wider documentation surface.
   const readme = readFileSync(README, 'utf8');
 
   test('both surfaces are read, not vacuously empty', () => {
@@ -367,7 +395,7 @@ const KEEPING_CONTROLS = ['pleach audit', '--fallback-provider', '--fresh'];
 
 describe('operator surfaces — the controls over kept work (D17)', () => {
   const help = helpText();
-  const readme = readFileSync(README, 'utf8');
+  const readme = readmeSurface();
 
   test('every control named here is one the CLI really has', () => {
     const real = [...dispatchedVerbs().map((verb) => `pleach ${verb}`), ...parsedFlags()];
@@ -458,7 +486,7 @@ describe('journal doc — the landing rows (D18)', () => {
 
 describe('operator surfaces — the landing controls (D18)', () => {
   const help = helpText();
-  const readme = readFileSync(README, 'utf8');
+  const readme = readmeSurface();
 
   test('every control named here is one the CLI really parses', () => {
     const phantom = LANDING_CONTROLS.filter((flag) => !parsedFlags().includes(flag)).sort();
@@ -694,7 +722,7 @@ function unsaid(text: string, topic: string, facts: string[]): string[] {
 
 describe('operator surfaces — faults refused before spend (D19)', () => {
   const help = helpText();
-  const readme = readFileSync(README, 'utf8');
+  const readme = readmeSurface();
   // The one wording validate and the exec guard share, read by calling it.
   const refusal = shellOperatorRefusal('true && true') ?? '';
   const hatch = refusal.split(': ').at(-1) ?? '';
@@ -830,7 +858,7 @@ describe('journal doc — the record survives (D21)', () => {
 });
 
 describe('operator surfaces — the record survives (D21)', () => {
-  const readme = readFileSync(README, 'utf8');
+  const readme = readmeSurface();
   const { dir, suffix } = runCopyPlace();
 
   test('the facts are read from the code, not vacuously empty', () => {
