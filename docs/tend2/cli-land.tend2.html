@@ -9,17 +9,17 @@
 <script type="text/markdown" id="loop">
 # pleach land: The Last Mile
 
-**Goal.** `pleach land <plan>` (and `pleach run --land`) merges a verified plan's sink branches onto the branch checked out in --repo-root, so a verified close ends with working code on the user's branch — not stranded on node/<id> refs.
+**Goal.** `pleach land <plan>` (and `pleach run --land`) merges a verified plan's sink branches onto the branch checked out in --repo-root. A verified close then ends with working code on the user's branch, rather than stranded on node/<id> refs.
 
-Ledger B3: the last mile was unspecified. Verified work sat on node/<id> branches; tend said verified while the working branch lacked the code. Every real adopter hit this wall first.
+Ledger B3: the last mile was unspecified. Verified work sat on node/<id> branches, so tend said verified while the working branch lacked the code. Every real adopter met this first.
 
 ## How
 
-Policy in src/loop/land.ts (all-or-nothing: refuses unless EVERY plan node is verified-closed; sinks resolve through the same B1/C5 baseRef chain as isolation), mechanics in IsolateSeam.land (src/seams/isolate.ts): merges build in a throwaway detached worktree and the user's checkout is only ever touched by a final `merge --ff-only` — a conflict, detached HEAD, moved branch, or overlapping uncommitted edit aborts with the repo byte-identical. Typed errors LandConflictError / LandBlockedError map to exit 1 at the face; every outcome journals.
+The policy lives in src/loop/land.ts. It is all-or-nothing, refusing unless EVERY plan node is verified-closed; sinks resolve through the same B1/C5 baseRef chain as isolation. The mechanics live in IsolateSeam.land (src/seams/isolate.ts). Merges build in a throwaway detached worktree, and the user's checkout is only ever touched by a final `merge --ff-only`. A conflict, detached HEAD, moved branch, or overlapping uncommitted edit aborts with the repo byte-identical. Typed errors LandConflictError / LandBlockedError map to exit 1 at the face, and every outcome journals.
 
 ## Impact
 
-One command takes an operator from 'plan verified' to 'code on my branch'. No hand-merging node branches, no half-landed plans, no way to land unverified work.
+One command takes an operator from 'plan verified' to 'code on my branch'. There is no hand-merging of node branches, no half-landed plan, and no way to land unverified work.
 
 ## Tests
 - [x] (code) landPlan refuses when any plan node is not verified-closed, naming the unverified nodes; nothing reaches the git seam · test/loop/land.test.ts @6501d9d · by cli

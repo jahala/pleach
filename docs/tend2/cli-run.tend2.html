@@ -9,31 +9,31 @@
 <script type="text/markdown" id="loop">
 # pleach run: Execute a Plan
 
-**Goal.** Execute a plan.json through the deterministic conductor loop, driving workers via the configured runner (umbel by default) and recording verdicts in the configured ledger (git ledger by default; tend when `--tend-module` is given). Exits 0 only when every node closes verified; partial/failed/blocked/skipped maps to exit 1. Re-running a plan resumes: nodes already verified in the ledger are skipped and reported — RunSummary.alreadyVerified lists them and stderr notes how many — so only unbuilt or previously-failed nodes run.
+**Goal.** Execute a plan.json through the deterministic conductor loop. Workers run via the configured runner (umbel by default), and verdicts go to the configured ledger (git ledger by default, tend when `--tend-module` is given). Exit 0 means every node closed verified; partial, failed, blocked, or skipped maps to exit 1. Re-running a plan resumes, so only unbuilt or previously-failed nodes run. Nodes already verified in the ledger are skipped and reported: RunSummary.alreadyVerified lists them, and stderr notes how many.
 
-The primary value of pleach: running a plan behind enforced gates (smoke, conflict-marker scan, cross-provider audit) with deterministic DAG ordering on git + any runner — tend and umbel are the batteries-included defaults, not requirements.
+This is pleach's primary value. A plan runs behind enforced gates (smoke, conflict-marker scan, cross-provider audit) in deterministic DAG order, on git plus any runner. tend and umbel are the batteries-included defaults, and neither is required.
 
 ## One command, one truth
 
-It's late. An operator queues a six-node plan before bed: claude builds the leaves, a second provider audits the integration node, and a ledger decides what counts as verified. They won't read every diff. The only glance they get is the exit code.
+An operator queues a six-node plan before bed. claude builds the leaves, a second provider audits the integration node, and a ledger decides what counts as verified. They won't read every diff. The exit code is the only glance they get.
 
-`pleach run plan.json` is what they type — standalone, on git + the bundled umbel runner + the git ledger. To verify through tend instead, they add `--tend-module ./missoula/dist/tend-ingester.js`; to wire any other runner or ledger, they drop a `pleach.config.ts`. `src/main.ts` delegates immediately to `src/faces/cli.ts:runCli`, which parses flags, reads the plan, resolves the seams, and calls `runPlan` — then maps the result to a process exit via the pure `summaryExitCode` function.
+They type `pleach run plan.json`, which runs standalone on git, the bundled umbel runner, and the git ledger. To verify through tend instead, they add `--tend-module ./missoula/dist/tend-ingester.js`. To wire any other runner or ledger, they drop in a `pleach.config.ts`. `src/main.ts` delegates immediately to `src/faces/cli.ts:runCli`, which parses flags, reads the plan, resolves the seams, and calls `runPlan`. The pure `summaryExitCode` function then maps the result to a process exit.
 
 ## Wiring is policy, not plumbing
 
-`parseFlags` resolves nine flags from argv and env. `--permission-mode` defaults to `bypassPermissions` because unattended workers cannot answer prompts — safety is external (disposable worktree, cross-provider audit, gate ladder). The ledger is not pinned: with no `--tend-module` and no `pleach.config.ts`, pleach runs standalone on `gitLedger` (the `node/*` branches are the record); `--tend-module` opts into the tend ledger; `--config <path>` points at an explicit config.
+`parseFlags` resolves nine flags from argv and env. `--permission-mode` defaults to `bypassPermissions` because unattended workers cannot answer prompts. Safety comes from outside the worker: a disposable worktree, a cross-provider audit, and the gate ladder. The ledger stays open. With no `--tend-module` and no `pleach.config.ts`, pleach runs standalone on `gitLedger`, where the `node/*` branches are the record. `--tend-module` opts into the tend ledger, and `--config <path>` points at an explicit config.
 
-`readPlan` is the only gatekeep before deps come alive. It reads the file, parses JSON, then runs `PlanSchema.safeParse` — a Zod structural check. A malformed plan throws `PlanInvalidError` with every failing path and message, exits 2, and nothing else runs. The plan that enters `runPlan` is schema-valid.
+`readPlan` is the only gatekeep before deps come alive. It reads the file, parses JSON, then runs the Zod structural check `PlanSchema.safeParse`. A malformed plan throws `PlanInvalidError` with every failing path and message, exits 2, and nothing else runs. The plan that enters `runPlan` is schema-valid.
 
-The runner and ledger come from `src/faces/config.ts:resolveSeams` — a `pleach.config.ts` if present, else the default `umbelRunner` plus `tendLedger` (when `--tend-module` is set) or `gitLedger`. `verbRun` then assembles `ConductorDeps` from pleach's own I/O seams (`createIsolateSeam`, `createLockSeam`, `createJournal`, `exec`) and the resolved runner + ledger. The [conductor loop](conductor-loop.tend2.html) receives a `ConductorDeps` object and never touches the filesystem or CLI args directly. The CLI is pure wiring; the engine is pure logic.
+The runner and ledger come from `src/faces/config.ts:resolveSeams`. It uses a `pleach.config.ts` if one is present, else the default `umbelRunner` plus `tendLedger` (when `--tend-module` is set) or `gitLedger`. `verbRun` then assembles `ConductorDeps` from pleach's own I/O seams (`createIsolateSeam`, `createLockSeam`, `createJournal`, `exec`) and the resolved runner and ledger. The [conductor loop](conductor-loop.tend2.html) receives that `ConductorDeps` object and never touches the filesystem or CLI args directly. The CLI is pure wiring; the engine is pure logic.
 
 ## Exit code is the contract
 
-`summaryExitCode` is a four-field boolean: if `failed`, `partial`, `blocked`, and `skipped` are all empty, return 0. Otherwise return 1. `partial` is not success — a node whose work landed but whose ledger verification was declined gets no free pass. The `RunSummary` JSON on stdout carries the per-bucket breakdown for any script that needs to tell them apart.
+`summaryExitCode` reads four fields. If `failed`, `partial`, `blocked`, and `skipped` are all empty, it returns 0. Otherwise it returns 1. `partial` counts as failure: a node whose work landed but whose ledger verification was declined gets no free pass. The `RunSummary` JSON on stdout carries the per-bucket breakdown for any script that needs to tell the buckets apart.
 
 Errors outside the loop collapse to typed exits: `LockHeldError` → 3 (another conductor holds this repo); `UsageError`, `PlanInvalidError`, or `ConfigError` → 2; `RebuildRequiredError` or `TendTransportError` → 1. Nothing falls through silently.
 
-Landing is manual by design — verified work publishes as `node/<id>` branches; the HELP text says so explicitly. There is no `--land` flag. The operator merges `node/<feature>` themselves. The sibling verbs round out the surface: [pleach validate](cli-validate.tend2.html) checks plan structure without running anything, and `pleach schema` emits the plan contract as JSON Schema for planners. The [conductor loop](conductor-loop.tend2.html) is the engine `run` drives; the [isolate](isolate-seam.tend2.html), [umbel](umbel-seam.tend2.html), and [tend](tend-seam.tend2.html) seams are the bundled adapters it wires into deps (see `docs/adapters.md` for swapping them). The [project bet](garden.tend2.html) is why those seams exist at all.
+Landing is manual by design. Verified work publishes as `node/<id>` branches, and the HELP text says so explicitly. There is no `--land` flag, so the operator merges `node/<feature>` themselves. The sibling verbs round out the surface: [pleach validate](cli-validate.tend2.html) checks plan structure without running anything, and `pleach schema` emits the plan contract as JSON Schema for planners. The [conductor loop](conductor-loop.tend2.html) is the engine `run` drives. The [isolate](isolate-seam.tend2.html), [umbel](umbel-seam.tend2.html), and [tend](tend-seam.tend2.html) seams are the bundled adapters it wires into deps (see `docs/adapters.md` for swapping them). The [project bet](garden.tend2.html) is why those seams exist at all.
 
 ## Where
 
@@ -45,7 +45,7 @@ parseFlags → readPlan (Zod) → assemble ConductorDeps via buildDeps → runPl
 
 ## Fit
 
-pleach's primary entry point — the operator's surface over the conductor loop.
+pleach's primary entry point: the operator's surface over the conductor loop.
 
 ## Impact
 

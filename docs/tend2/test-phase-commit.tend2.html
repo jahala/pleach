@@ -9,21 +9,21 @@
 <script type="text/markdown" id="loop">
 # The red phase is its own commit
 
-**Goal.** When a node's work carries a test phase (`{test, phases}`), pleach seals the red phase as its own commit the moment the RED gate passes — before the impl prompt is sent — so the failing-test state exists in `node/<id>` history: base → red → verified. The GREEN gate runs against the combined tree; the verified commit stacks on the red one.
+**Goal.** When a node's work carries a test phase (`{test, phases}`), pleach seals the red phase as its own commit the moment the RED gate passes, before the impl prompt is sent. The failing-test state then exists in `node/<id>` history: base → red → verified. The GREEN gate runs against the combined tree, and the verified commit stacks on the red one.
 
-Ledger D13. pleach 0.0.1 gated RED-must-fail and GREEN-must-pass in the worktree and then committed the whole tree once at settle. Nothing in history proved a failing test ever existed; `weeder bite` (rule B1, "a test passed without the change it covers") had no commit to check out, and copeca's corpus minting and the slice-coverage rule stand on the same missing commit. The umbrella's law (docs/building-the-garden.md §5) mandates the separate test-phase commit.
+Ledger D13. pleach 0.0.1 gated RED-must-fail and GREEN-must-pass in the worktree, then committed the whole tree once at settle. Nothing in history proved a failing test ever existed. `weeder bite` (rule B1, "a test passed without the change it covers") had no commit to check out, and copeca's corpus minting and the slice-coverage rule stand on the same missing commit. The umbrella's law (docs/building-the-garden.md §5) mandates the separate test-phase commit.
 
 ## How
 
-`runWork` (src/loop/run-work.ts) drives the phases; it is given a seal function by `runNode` (src/loop/run-node.ts) and calls it once, after the RED gate passes and before the impl phase's prompt is sent. The seal does what the close does, in miniature: scoped staging of the red phase's files (`filesTouched` ∪ `changedFiles`), the marker scan, the hygiene battery over the staged diff, then a commit on the detached HEAD (no branch moves — `node/<id>` is only ever published at settle). Subject `pleach: <id> red phase`, trailer `pleach-phase: red`. The journal records `phase-commit` with the sha and the sealed files. A red phase that changed no file fails the `red` gate with evidence instead of sealing nothing.
+`runWork` (src/loop/run-work.ts) drives the phases. `runNode` (src/loop/run-node.ts) gives it a seal function, which it calls once, after the RED gate passes and before the impl phase's prompt is sent. The seal does what the close does, in miniature. It stages only the red phase's files (`filesTouched` ∪ `changedFiles`), runs the marker scan and the hygiene battery over the staged diff, then commits on the detached HEAD. No branch moves, because `node/<id>` is only ever published at settle. The subject is `pleach: <id> red phase` and the trailer is `pleach-phase: red`. The journal records `phase-commit` with the sha and the sealed files. A red phase that changed no file fails the `red` gate with evidence instead of sealing nothing.
 
-Retries keep the seal honest. Once a red commit exists on the attempt's tree, a retry resumes at the impl phase carrying the evidence — the seal is never remade, because a second "red" taken from a tree that already holds impl work would be a lie. A red-gate failure before any seal restarts at red as before. Dead-and-resume re-isolates a fresh tree and the seal state resets with it.
+Retries keep the seal honest. Once a red commit exists on the attempt's tree, a retry resumes at the impl phase carrying the evidence. The seal is never remade, because a second "red" taken from a tree that already holds impl work would be a lie. A red-gate failure before any seal restarts at red as before. Dead-and-resume re-isolates a fresh tree, and the seal state resets with it.
 
-`pleach validate` warns on a node whose phases end on `impl`: no green gate ever runs, so the combined tree is never proven. The warning rides the JSON (`warnings[]`) and stderr; the plan stays valid.
+`pleach validate` warns on a node whose phases end on `impl`, because no green gate ever runs and the combined tree is never proven. The warning appears in the JSON (`warnings[]`) and on stderr. The plan stays valid.
 
 ## Impact
 
-`weeder bite` is a checkout and a run. Every phased node's history shows the failing test before the change that made it pass, and a worker that weakens a test during impl leaves that edit in the impl commit where `weeder check` judges it against the sealed red.
+`weeder bite` is a checkout and a run. Every phased node's history shows the failing test before the change that made it pass. A worker that weakens a test during impl leaves that edit in the impl commit, where `weeder check` judges it against the sealed red.
 
 ## Tests
 - [x] (code) A phased node seals the red phase as its own commit the moment the RED gate passes and before the impl prompt is sent: scoped-staged red files, subject `pleach: <id> red phase`, trailer `pleach-phase: red`; journal `phase-commit` {node, phase, sha, files}; the settle commit stacks on it · test/loop/phase-commit.test.ts @84ae7c0 · by cli
