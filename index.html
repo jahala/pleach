@@ -39,10 +39,16 @@
   /* product accent — plum is the one voice */
   --pp-pleach:  #97539B;
 
-  /* garden siblings — used only in the family footer (shared umbrella accents) */
+  /* garden siblings — used only in the family footer (shared umbrella accents,
+     canonical in plotplot's .brand/colors.md). Dots are decorative fills, so the
+     display-only accents (pollen, weeder on dark) are in their rated class here. */
   --pp-tilth:  #4E88A6;
   --pp-tend:   #D6502F;
   --pp-petals: #E588A0;
+  --pp-umbel:  #E89227;
+  --pp-copeca: #1F8A7B;
+  --pp-pollen: #C8B330;
+  --pp-weeder: #8E3B5E;
 
   /* terminal */
   --pp-term-bg:      #1C1610;
@@ -767,6 +773,19 @@ code {
 }
 .garden a:hover { background: rgba(250,245,233,0.12); color: var(--pp-bg); }
 .garden a.is-self { background: rgba(151,83,155,0.20); }
+/* A bed that exists but is not published yet: same chip, no link to a 404. */
+.garden .soon {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3xs);
+  font-family: var(--font-code);
+  font-size: var(--text-small);
+  padding: var(--sp-3xs) var(--sp-2xs);
+  border-radius: var(--r-full);
+  background: rgba(250,245,233,0.03);
+  color: rgba(250,245,233,0.45);
+}
+.garden .soon .dot { opacity: 0.45; }
 .garden .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .foot-bottom {
   margin-top: var(--sp-xl);
@@ -1131,28 +1150,34 @@ code {
   <div class="container">
     <div class="section-head reveal">
       <p class="kicker">built with itself</p>
-      <h2 id="proof-heading">pleach is tracked in its own tend garden</h2>
+      <h2 id="proof-heading">pleach is tracked in its own tend2 garden</h2>
       <p class="section-lede">
         The same gates that decide what lands in any other project decided what landed in pleach.
         The garden is real; the numbers are current.
       </p>
     </div>
 
+    <!-- Recompute before editing these; a stale number here is a lie on the front page.
+         loops    ls docs/tend2/*.tend2.html | grep -v garden | wc -l
+         verified loops whose checks are all [x]
+         checks   grep -hcE '^- \[[ x]\] \(' docs/tend2/*.tend2.html | paste -sd+ | bc
+         tests    bun test  (passing count)
+         Last recomputed 2026-09-20. -->
     <div class="stats-row" aria-label="Project statistics">
       <div class="stat-card reveal d1">
-        <span class="stat-num" data-target="11" aria-label="11 features">0</span>
-        <span class="stat-label">features</span>
+        <span class="stat-num" data-target="26" aria-label="26 loops">0</span>
+        <span class="stat-label">loops</span>
       </div>
       <div class="stat-card reveal d2">
-        <span class="stat-num" data-target="8" aria-label="8 verified">0</span>
-        <span class="stat-label">verified</span>
+        <span class="stat-num" data-target="16" aria-label="16 fully verified">0</span>
+        <span class="stat-label">fully verified</span>
       </div>
       <div class="stat-card reveal d3">
-        <span class="stat-num" data-target="82" aria-label="82 checks">0</span>
+        <span class="stat-num" data-target="135" aria-label="135 checks">0</span>
         <span class="stat-label">checks</span>
       </div>
       <div class="stat-card reveal d4">
-        <span class="stat-num" data-target="300" aria-label="300 tests passing">0</span>
+        <span class="stat-num" data-target="756" aria-label="756 tests passing">0</span>
         <span class="stat-label">tests passing</span>
       </div>
       <div class="stat-card reveal d5">
@@ -1162,8 +1187,10 @@ code {
     </div>
 
     <p class="proof-note reveal">
-      The proof run reaches a full verified close — built, cross-provider audited, verified, published.
-      One run, end to end, no human reviewing diffs.
+      The proof run reaches a full verified close: built, cross-provider audited, verified,
+      published, no human reviewing diffs. It also conducts outside this repo and outside
+      TypeScript — plotplot's stem, a released Rust binary, was built from
+      <a href="https://github.com/jahala/plotplot/tree/master/docs/dogfood" target="_blank" rel="noopener">pleach plans</a>.
     </p>
 
     <div style="margin-top: var(--sp-sm);" class="reveal">
@@ -1185,7 +1212,7 @@ code {
         <div class="scope-col-title" id="scope-for-label">for</div>
         <ul class="scope-list" role="list">
           <li>Unattended multi-step agent builds where gates decide what lands</li>
-          <li>A concrete plan — a real DAG of nodes, not a vague list (tend, the bundled pleach-plan skill, or any planner)</li>
+          <li>A concrete plan — a real DAG of nodes, not a vague list (tend2, the bundled pleach-plan skill, or any planner)</li>
           <li>Work you will not review diff-by-diff yourself</li>
           <li>Projects where a bad node silently poisoning its dependents is not acceptable</li>
           <li>Teams that need audit evidence, not just a green suite</li>
@@ -1217,7 +1244,7 @@ code {
     </div>
 
     <p class="start-family reveal d3">
-      Part of the plotplot garden — pleach runs standalone on git + any agent tool. With the claude and codex CLIs on PATH, <code>--runner direct-cli</code> needs nothing else; the bundled examples run on git + bun alone, no agent and no API keys; and your own code can drive the conductor with <code>import { runPlan } from 'pleach'</code>. tend and umbel are the batteries-included reference adapters; swap either via <code>pleach.config.ts</code>. <a href="docs/adapters.md" style="color:rgba(250,245,233,0.75)">Read the adapters guide →</a>
+      Part of the plotplot garden — pleach runs standalone on git + any agent tool. With the claude and codex CLIs on PATH, <code>--runner direct-cli</code> needs nothing else; the bundled examples run on git + bun alone, no agent and no API keys; and your own code can drive the conductor with <code>import { runPlan } from 'pleach'</code>. tend2 and umbel are the batteries-included reference adapters; swap either via <code>pleach.config.ts</code>. <a href="docs/adapters.md" style="color:rgba(250,245,233,0.75)">Read the adapters guide →</a>
     </p>
 
     <div class="start-actions reveal d4">
@@ -1254,12 +1281,17 @@ code {
         <h4>the plotplot garden</h4>
         <div class="garden">
           <a href="https://github.com/jahala/tilth" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-tilth)"></span>tilth</a>
-          <a href="https://github.com/jahala/tend" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-tend)"></span>tend</a>
-          <a href="https://github.com/jahala/petals" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-petals)"></span>petals</a>
+          <a href="https://github.com/jahala/weeder" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-weeder)"></span>weeder</a>
+          <a href="https://github.com/jahala/umbel" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-umbel)"></span>umbel</a>
+          <a href="https://github.com/jahala/copeca" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-copeca)"></span>copeca</a>
+          <a href="https://github.com/jahala/pollen" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-pollen)"></span>pollen</a>
           <a class="is-self" href="https://github.com/jahala/pleach" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-pleach)"></span>pleach</a>
-          <a href="https://github.com/jahala/umbel" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-accent)"></span>umbel</a>
+          <span class="soon"><span class="dot" style="background:var(--pp-tend)"></span>tend2</span>
+          <span class="soon"><span class="dot" style="background:var(--pp-petals)"></span>petals</span>
         </div>
-        <p class="foot-soft" style="margin-top:var(--sp-xs)">small, sharp tools for building with agents.</p>
+        <p class="foot-soft" style="margin-top:var(--sp-xs)">small, sharp tools for building with agents. The
+          dimmed two are built and not yet public. The umbrella — brand, law and contracts — is
+          <a href="https://github.com/jahala/plotplot" target="_blank" rel="noopener">plotplot</a>.</p>
       </div>
       <div class="reveal">
         <h4>read on</h4>

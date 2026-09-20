@@ -106,14 +106,14 @@ Rules:
 
 ### Reference implementation
 
-Copy this verbatim and change only the three marked spots — the **identity** column, the **`.is-current`** pill, and the repo **links**. Everything else (forest surface, garden row, bottom bar) stays identical across the garden; all colour resolves from the `--pp-*` tokens already inlined on every plotplot page, so it adapts without being re-specified.
+Copy this verbatim and change only the three marked spots: the **identity** column, the **`.is-current`** pill, and the repo **links**. Everything else (forest surface, garden row, bottom bar) stays identical across the garden; all colour resolves from the `--pp-*` tokens already inlined on every plotplot page, so it adapts without being re-specified.
 
 ```html
 <!-- garden footer · shared family surface. swap ONLY: (1) the identity column, (2) the .is-current pill, (3) the repo links -->
 <footer class="gf">
   <div class="gf-wrap">
 
-    <!-- 0 · plotplot band — same on every product page; links home. (the umbrella page omits this) -->
+    <!-- 0 · plotplot band: same on every product page; links home (the umbrella page omits this) -->
     <div class="gf-plot">
       <a class="gf-plotbrand" href="https://plotplot.ai" aria-label="plotplot home">
         <svg class="mark" viewBox="0 0 28 28" aria-hidden="true">
@@ -130,30 +130,33 @@ Copy this verbatim and change only the three marked spots — the **identity** c
 
     <div class="gf-grid">
 
-      <!-- 1 · identity — per product -->
+      <!-- 1 · identity: per product -->
       <div class="gf-col">
         <h4>umbel</h4>
-        <p class="gf-soft">fan many agent CLIs out from one stem — drive claude, codex, and gemini together in tmux.</p>
+        <p class="gf-soft">fan many agent CLIs out from one stem. drive claude, codex and gemini together in tmux.</p>
         <p class="gf-soft"><a href="https://github.com/jahala/umbel">github →</a> &nbsp;·&nbsp; MIT</p>
       </div>
 
-      <!-- 2 · the garden — identical on every page; add .is-current to THIS product -->
+      <!-- 2 · the garden: identical on every page; add .is-current to THIS product -->
       <div class="gf-col">
         <h4>the plotplot garden</h4>
         <nav class="gf-garden" aria-label="the garden">
           <a href="https://github.com/jahala/tilth"  style="--bloom:var(--pp-tilth)"><span class="gf-dot"></span>tilth</a>
-          <a href="https://github.com/jahala/tend"   style="--bloom:var(--pp-tend)"><span class="gf-dot"></span>tend</a>
+          <a href="https://github.com/jahala/tend"   style="--bloom:var(--pp-tend)"><span class="gf-dot"></span>tend2</a>
           <a href="https://github.com/jahala/petals" style="--bloom:var(--pp-petals)"><span class="gf-dot"></span>petals</a>
           <a href="https://github.com/jahala/pleach" style="--bloom:var(--pp-pleach)"><span class="gf-dot"></span>pleach</a>
           <a href="https://github.com/jahala/umbel"  style="--bloom:var(--pp-umbel)" class="is-current"><span class="gf-dot"></span>umbel</a>
+          <a href="https://github.com/jahala/copeca" style="--bloom:var(--pp-copeca)"><span class="gf-dot"></span>copeca</a>
+          <a href="https://github.com/jahala/pollen" style="--bloom:var(--pp-pollen)"><span class="gf-dot"></span>pollen</a>
+          <a href="https://github.com/jahala/weeder" style="--bloom:var(--pp-weeder)"><span class="gf-dot"></span>weeder</a>
         </nav>
         <p class="gf-soft">small, sharp tools for building with agents.</p>
       </div>
 
-      <!-- 3 · nearby — optional; drop the whole column if there's nothing -->
+      <!-- 3 · nearby: optional; drop the whole column if there's nothing -->
       <div class="gf-col">
         <h4>nearby</h4>
-        <p class="gf-soft"><a href="https://github.com/jahala/walkie-clawkie">walkie-clawkie</a> — push-to-talk between agents mid-turn.</p>
+        <p class="gf-soft"><a href="https://github.com/jahala/mrkd">mrkd</a>, a native markdown viewer for macOS.</p>
         <p class="gf-soft"><a href="https://buymeacoffee.com/jahala">buy me a coffee →</a></p>
       </div>
 
@@ -167,7 +170,7 @@ Copy this verbatim and change only the three marked spots — the **identity** c
 ```
 
 ```css
-/* garden footer · shared family surface — identical on every page; never re-tint to the product accent */
+/* garden footer · shared family surface: identical on every page; never re-tint to the product accent */
 .gf          { background: var(--pp-forest); color: var(--pp-term-text); }
 .gf-wrap     { max-width: var(--pp-container-max); margin: 0 auto;
                padding: var(--pp-space-xl) var(--pp-gutter) var(--pp-space-lg); }

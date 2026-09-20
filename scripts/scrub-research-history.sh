@@ -26,15 +26,10 @@ set -euo pipefail
 #
 # docs/research  — private by rule (.gitignore, CLAUDE.md). Absent from every branch
 #                  tip today, so dropping it changes no current content.
-# .brand         — NOT dropped by default, and a live decision. 14 files are tracked
-#                  at master tip. Four are pleach's own product layer, which .petalsrc
-#                  says is deliberately committed. The other ten are the plotplot
-#                  umbrella (DESIGN/colors/components/identity/layout/tokens/
-#                  typography/voice + the plotplot mark) pulled from
-#                  github.com/jahala/plotplot-ai, which is private. Publishing pleach
-#                  publishes them. If that is not wanted, add the umbrella paths here
-#                  AND delete them from the tip in a normal commit first — this script
-#                  only rewrites history, it does not decide what the tip should hold.
+# .brand         — checked, and deliberately NOT dropped. The umbrella files are cached
+#                  from github.com/jahala/plotplot, which is public, so publishing them
+#                  leaks nothing; the rest is pleach's own product layer, which .petalsrc
+#                  says is committed on purpose.
 PATHS_TO_DROP=(
   docs/research
 )

@@ -75,9 +75,9 @@ updated, the next session starts blind.
   records. Never re-track it; new research goes there and stays private. Cross-references to it from
   tracked docs are provenance labels for maintainers, not public links.
 - **`.brand/` is committed, not ignored** (14 files — see `.petalsrc`): `.brand/products/pleach/` is
-  pleach's own layer, deliberately committed; the other ten files are the plotplot umbrella pulled from
-  the private `jahala/plotplot-ai`. Going public publishes them, so the umbrella layer is a
-  pre-publish decision, not a cache. The landing page renders without either.
+  pleach's own layer, deliberately committed; the rest is the plotplot umbrella cached from the
+  PUBLIC `jahala/plotplot` at its pinned tag, so publishing it leaks nothing. Refresh the cache from
+  the tag, never edit those files in place. The landing page renders without either.
   `.mcp.json` is gitignored + machine-specific; its `tend` entry must be `tend2 mcp`
   (the v1 `dist/bin/tend.js serve` path is gone — a stale entry fails as CONNECTION_CLOSED at session
   start), and its pollen entry carries `POLLEN_ID=pleach` + `POLLEN_ALLOW`.

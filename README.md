@@ -12,16 +12,17 @@ ledger). Agents produce; code decides.
 > *Pleaching: the craft of training and interweaving living branches into a single structure.*
 
 **Status — v1.** The end-to-end proof run closes: a multi-step feature builds through real agent
-workers, is cross-provider audited, and verifies — and a six-feature product (a client-side PDF
-unifier) has been built the same way, plan to landed code, with zero human diff-reviews. pleach's
-own development is tracked in its verified garden: [`docs/tend2/garden.tend2.html`](docs/tend2/garden.tend2.html)
-(self-contained pages — open any of them in a browser).
+workers, is cross-provider audited, and verifies. Two things have been built the same way, plan to
+landed code, with zero human diff-reviews: a six-feature client-side PDF unifier, and the stem of
+[plotplot](https://github.com/jahala/plotplot), a released Rust binary in a different repository
+and a different language ([its plans are public](https://github.com/jahala/plotplot/tree/master/docs/dogfood)).
+pleach's own development is tracked in its verified garden:
+[`docs/tend2/garden.tend2.html`](docs/tend2/garden.tend2.html) (self-contained pages, open any of
+them in a browser).
 
-> **New to the plotplot tools?** pleach is *day 2* — reach for it when work runs unattended,
-> in parallel, or must be trusted later. Day 1 is a single verifier loop
-> (tend2's quickstart, linked here when it publishes); a two-line edit you review
-> yourself needs neither. The full when-to-use ladder: [`docs/journal.md`](docs/journal.md)'s
-> companion in the joint doc, and each tool's skill carries its own "not for" list.
+> **New to the plotplot tools?** pleach is *day 2*: reach for it when work runs unattended, in
+> parallel, or must be trusted later. Day 1 is a single verifier loop (tend2, not public yet).
+> A two-line edit you review yourself needs neither.
 
 ## Install
 
@@ -240,6 +241,11 @@ Doctrine: [`ENGINEERING.md`](ENGINEERING.md) · Plan contract: [`docs/contract/p
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/jahala)
 
-MIT licensed ([`LICENSE`](LICENSE)). Part of the plot-plot suite with
-[umbel](https://github.com/jahala/umbel), the agent-worker boundary. tend2, the feature
-ledger, is not published yet.
+MIT licensed ([`LICENSE`](LICENSE)). A bed in the
+[plotplot](https://github.com/jahala/plotplot) garden, alongside
+[tilth](https://github.com/jahala/tilth) (code intelligence),
+[weeder](https://github.com/jahala/weeder) (the judge of the diff),
+[umbel](https://github.com/jahala/umbel) (fans out agent CLIs in tmux),
+[pollen](https://github.com/jahala/pollen) (agent-to-agent messaging) and
+[copeca](https://github.com/jahala/copeca) (cost per correct answer). tend2, the feature
+ledger, and petals, the brand checker, are built but not public yet.
