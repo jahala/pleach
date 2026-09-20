@@ -240,4 +240,6 @@ Doctrine: [`ENGINEERING.md`](ENGINEERING.md) · Plan contract: [`docs/contract/p
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/jahala)
 
-MIT licensed ([`LICENSE`](LICENSE)). Part of the plot-plot suite alongside [tend](https://github.com/plot-plot) and umbel.
+MIT licensed ([`LICENSE`](LICENSE)). Part of the plot-plot suite with
+[umbel](https://github.com/jahala/umbel), the agent-worker boundary. tend2, the feature
+ledger, is not published yet.

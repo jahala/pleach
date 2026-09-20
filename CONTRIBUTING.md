@@ -31,7 +31,9 @@ Enforced in review (and most by CI). Full detail in `ENGINEERING.md`:
 | `PLEACH_UMBEL_BIN` | path to the `umbel` binary |
 | `PLEACH_TEND_MODULE` | path to a tend ingester module |
 
-They also need `git >= 2.38` and `tmux` on PATH. With the vars unset those suites skip — which is exactly how CI runs.
+They also need `git >= 2.38` and `tmux` on PATH. With the vars unset most of those suites skip — which is exactly how CI runs.
+
+Two exceptions, worth knowing before your first `bun run check`. `test/integration/umbel-abort.test.ts` and `test/integration/umbel-idle.test.ts` fall back to whatever `umbel` is on PATH, so they run for anyone who has the binary installed even with `PLEACH_UMBEL_BIN` unset. Against umbel 0.0.1 built after 2026-09-16 four of their tests fail: umbel's `kill` and `wait` contract moved and pleach's adapter has not followed it yet. That is [issue #118](https://github.com/jahala/pleach/issues/118), not something you broke. CI has no umbel binary, so CI does not see it.
 
 ## Pull requests
 
@@ -57,6 +59,8 @@ asserted — so an open issue is always "not yet triaged," never "known broken."
 
 ## Brand checks are local
 
-`.brand/` is a pulled cache (see `.petalsrc`) and is not in the repo, so CI cannot brand-check.
+`.brand/` is committed (see `.petalsrc`): pleach's own product layer under
+`.brand/products/pleach/`, plus the plotplot umbrella pulled from the brand repo. CI has no
+petals tooling, so it cannot brand-check either way.
 Landing-page and copy changes are checked locally with the petals skill (`/petals check index.html`)
 before committing — the page's "passes /petals check" badge is a maintainer promise, not a CI gate.

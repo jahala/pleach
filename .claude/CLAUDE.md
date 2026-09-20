@@ -74,8 +74,11 @@ updated, the next session starts blind.
 - **`docs/research/` is local-only** (gitignored, untracked): candid competitor analysis and internal
   records. Never re-track it; new research goes there and stays private. Cross-references to it from
   tracked docs are provenance labels for maintainers, not public links.
-- **`.brand/` is a pulled cache** (gitignored, untracked — see `.petalsrc`); the landing page renders
-  without it. `.mcp.json` is gitignored + machine-specific; its `tend` entry must be `tend2 mcp`
+- **`.brand/` is committed, not ignored** (14 files — see `.petalsrc`): `.brand/products/pleach/` is
+  pleach's own layer, deliberately committed; the other ten files are the plotplot umbrella pulled from
+  the private `jahala/plotplot-ai`. Going public publishes them, so the umbrella layer is a
+  pre-publish decision, not a cache. The landing page renders without either.
+  `.mcp.json` is gitignored + machine-specific; its `tend` entry must be `tend2 mcp`
   (the v1 `dist/bin/tend.js serve` path is gone — a stale entry fails as CONNECTION_CLOSED at session
   start), and its pollen entry carries `POLLEN_ID=pleach` + `POLLEN_ALLOW`.
 - **Dogfood record:** every conducted loop keeps `docs/dogfood/<loop>.md` (faults, misunderstandings,
