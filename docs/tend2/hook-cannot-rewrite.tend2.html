@@ -15,12 +15,12 @@ Ledger D24, from the repository audit of 2026-09-23. A pre-commit hook can chang
 
 ## Compare the trees, then move the branch
 
-`commitBranch` writes the staged tree before the commit. After the commit it compares that tree with the committed one. If they differ, HEAD goes back to its parent, the branch is never moved, and `CommitAlteredError` names the changed paths. The loop already settles any throw from the verified commit as a refusal under the `commit` gate, so no loop code changes. The quarantine holds what the index held, the hook's change included, standing on the node's base.
+Every commit pleach makes through `git commit`, the verified commit and the red-phase seal (D13) alike, writes the staged tree first. After the commit it compares that tree with the committed one. If they differ, HEAD goes back to its parent, the branch is never moved, and `CommitAlteredError` names the changed paths. The loop already settles any throw from the verified commit as a refusal under the `commit` gate, so no loop code changes. The quarantine holds what the index held, the hook's change included, standing on the node's base.
 
 A check against hook tampering in general was considered and rejected. pleach does not sandbox the worker, and a worker that can write hooks can write anything its user can. The tree comparison is the check that protects what pleach promises: nothing a gate did not judge is published.
 
 ## Tests
-- [x] (code) A pre-commit hook that stages a file of its own, or rewrites a staged file, makes `commitBranch` throw `CommitAlteredError` naming the changed paths, and `node/<id>` never exists; a hook that only checks and changes nothing still runs, and the commit publishes as before · test/integration/commit-altered.test.ts @60f8eb6 · by cli
+- [ ] (code) A pre-commit hook that stages a file of its own, or rewrites a staged file, makes `commitBranch` throw `CommitAlteredError` naming the changed paths, and `node/<id>` never exists; the red-phase seal refuses the same way and leaves HEAD where it was; a hook that only checks and changes nothing still runs, and the commit publishes as before · test/integration/commit-altered.test.ts @60f8eb6 · by cli
 - [x] (code) Through the real CLI, a repository whose pre-commit hook stages its own file: the node settles failed under the `commit` gate with the changed path in the output tail, `quarantine/<id>` holds the judged work on the node's base, the receipt is written, and no `node/*` branch exists · test/e2e/commit-altered.test.ts @e79f1e2 · by cli
 - [x] (code) The README surface says a hook that changes the verified commit fails the node under the `commit` gate and keeps its tree on `quarantine/<id>` · test/unit/journal-doc.test.ts @0b8e791 · by cli
 
@@ -30,5 +30,6 @@ A check against hook tampering in general was considered and rejected. pleach do
 
 ## Tried
 - 2026-09-23 shaped and built from the repository audit's finding F3. Red first: the seam test failed on two of three cases (the pass-through case passed), and the e2e test showed today's behaviour, where the node closed with the hook's file published (exit 0). Built the tree comparison in `commitBranch`, then restored HEAD to the parent with `update-ref` under `core.hooksPath=/dev/null`, as the snapshot does. Proved the quarantine-on-base assertion discriminates by removing the restore for one run (red), then putting it back. Rejected the audit reviewer's fix, `core.hooksPath=/dev/null` on every git call, because it reverses D21. Rejected a hooks-directory tripwire as a false wall for an unsandboxed worker.
+- 2026-09-23 the lead's review of the batch found the red-phase seal (D13) committing through the same hooks with no check, so a hook could put a file into the seal commit, below the close's staged diff and so out of the hygiene gate's sight. Red first (a seal test failed), then one `commitJudged` helper serves both commits.
 </script>
 <script src="./loop.js"></script>

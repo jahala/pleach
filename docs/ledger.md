@@ -388,9 +388,10 @@ checkpoint but have different lifetimes and trust domains.**
   pointer, so a hook written by one node runs in every later node's commit. `commitBranch` committed
   whatever the hook left and moved `node/<id>` to it, so bytes no gate saw were published as verified.
   Reproduced in a scratch repository: a hook planted from one worktree added a file to a commit made in
-  another. **Fix:** `commitBranch` writes the staged tree before the commit and compares it with the
-  committed tree; on any difference HEAD goes back to its parent, the branch never moves, and
-  `CommitAlteredError` names the changed paths. The loop settles that like a refused commit (D21):
+  another. **Fix:** every commit pleach makes with hooks (the verified commit and the red-phase seal,
+  D13) writes the staged tree before the commit and compares it with the committed tree; on any
+  difference HEAD goes back to its parent, no branch moves, and `CommitAlteredError` names the changed
+  paths. The loop settles that like a refused commit (D21):
   failed under the `commit` gate, the tree quarantined on the node's base, the receipt written. Hooks
   still run and may still refuse. Tests: `test/integration/commit-altered.test.ts`,
   `test/e2e/commit-altered.test.ts`.

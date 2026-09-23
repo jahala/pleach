@@ -109,3 +109,23 @@ test('a pre-commit hook that checks and changes nothing: the commit publishes as
     await iso.dispose();
   }
 }, 30_000);
+
+// ledger: D24 — the red-phase seal (D13) runs the same hooks and holds the same line.
+test('a pre-commit hook that stages a file into the red-phase seal: refused, HEAD stays put', async () => {
+  const seam = createIsolateSeam(exec, repo);
+  const iso = await seam.isolate(NODE, ['HEAD']);
+  try {
+    const before = await gitIn(iso.cwd, 'rev-parse', 'HEAD');
+    await writeFile(join(iso.cwd, 'red.test.txt'), 'the failing test\n');
+    await seam.stage(iso.cwd, ['red.test.txt']);
+    await plantPreCommit('echo smuggled > smuggled.txt\ngit add smuggled.txt');
+
+    const err = await seam.commit(iso.cwd, 'red phase').catch((e) => e);
+
+    expect(err).toBeInstanceOf(CommitAlteredError);
+    expect((err as CommitAlteredError).changed).toContain('smuggled.txt');
+    expect(await gitIn(iso.cwd, 'rev-parse', 'HEAD')).toBe(before);
+  } finally {
+    await iso.dispose();
+  }
+}, 30_000);
