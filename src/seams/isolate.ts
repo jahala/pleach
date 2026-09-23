@@ -42,6 +42,17 @@ async function gitMust(exec: ExecFn, cwd: string, ...args: string[]): Promise<st
 // ── createIsolateSeam ────────────────────────────────────────────────────────
 
 export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
+  // `git worktree add`, `remove` and `list` each read every registered
+  // worktree's admin dir, and one another command has half-written fails them
+  // ("failed to read .git/worktrees/wt/commondir"). A run isolates its ready
+  // nodes concurrently, so this seam runs them one at a time (D27).
+  let worktreeTail: Promise<unknown> = Promise.resolve();
+  function worktreeGit(cwd: string, ...args: string[]) {
+    const run = worktreeTail.then(() => git(exec, cwd, 'worktree', ...args));
+    worktreeTail = run.catch(() => undefined);
+    return run;
+  }
+
   async function worktreeBase(root: string): Promise<string> {
     const base = join(resolveGitDir(root), 'pleach', 'worktrees');
     await mkdir(base, { recursive: true });
@@ -65,15 +76,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     const worktreePath = join(tmpBase, 'wt');
 
     // Detach at baseRefs[0]
-    const addResult = await git(
-      exec,
-      repoRoot,
-      'worktree',
-      'add',
-      '--detach',
-      worktreePath,
-      baseRefs[0],
-    );
+    const addResult = await worktreeGit(repoRoot, 'add', '--detach', worktreePath, baseRefs[0]);
 
     if (addResult.exitCode !== 0) {
       throw new IsolateCatastrophicError(
@@ -84,7 +87,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
 
     // dispose helper (idempotent)
     const dispose = async (): Promise<void> => {
-      const r = await git(exec, repoRoot, 'worktree', 'remove', '--force', worktreePath);
+      const r = await worktreeGit(repoRoot, 'remove', '--force', worktreePath);
       // "is not a working tree" or "not found" are acceptable — already removed
       if (r.exitCode !== 0) {
         if (!r.output.includes('is not a working tree') && !r.output.includes('not found')) {
@@ -505,7 +508,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
   // The worktree that has `branch` checked out, or null. -z keeps any path
   // intact: every attribute ends in NUL, and `worktree` opens each record.
   async function checkedOutAt(cwd: string, branch: string): Promise<string | null> {
-    const list = await git(exec, cwd, 'worktree', 'list', '--porcelain', '-z');
+    const list = await worktreeGit(cwd, 'list', '--porcelain', '-z');
     if (list.exitCode !== 0) {
       throw new IsolateCatastrophicError(
         'git worktree list',
@@ -563,13 +566,13 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     // the final fast-forward.
     const tmpBase = await mkdtemp(join(await worktreeBase(landRepoRoot), 'land-'));
     const worktreePath = join(tmpBase, 'wt');
-    const add = await git(exec, landRepoRoot, 'worktree', 'add', '--detach', worktreePath, branch);
+    const add = await worktreeGit(landRepoRoot, 'add', '--detach', worktreePath, branch);
     if (add.exitCode !== 0) {
       await rm(tmpBase, { recursive: true, force: true });
       throw new IsolateCatastrophicError(branch, `git worktree add failed: ${add.output}`);
     }
     const dispose = async (): Promise<void> => {
-      const r = await git(exec, landRepoRoot, 'worktree', 'remove', '--force', worktreePath);
+      const r = await worktreeGit(landRepoRoot, 'remove', '--force', worktreePath);
       if (r.exitCode !== 0) {
         if (!r.output.includes('is not a working tree') && !r.output.includes('not found')) {
           throw new IsolateCatastrophicError(

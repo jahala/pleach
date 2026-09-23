@@ -133,6 +133,8 @@ reasons, conflict-file list) is a bug, not a retry.
   ("rebuild required"). Never silently fall back to HEAD.
 - **Startup reconciliation:** every closed id must resolve to a commit before the loop starts.
 - **Defensive copies:** never mutate what a seam returned.
+- **One worktree command at a time:** the isolate seam serialises `git worktree` add, remove and list;
+  concurrent ones read each other's half-written admin dirs (D27).
 - **Trust boundary (declared):** Plans are trusted input. Even so: `exec` is arg-array only (no `sh -c`
   string interpolation anywhere), and `Node.id` charset is schema-enforced.
   **pleach does not sandbox the worker** (SECURITY.md). A worker runs as the operator's user, and a
@@ -164,7 +166,7 @@ raise a timeout to "fix" a flake — find the race.
   real tend transport. **No mocks. Ever.**
 - **Proof runs** — real claude builds and real codex audits against `examples/`, driven by
   `scripts/proof-run.sh`. Burns subscription; run by hand, never in CI.
-- **The ledger is the test plan.** `docs/ledger.md` items (A1–A3, B1–B4, C1–C5, D1–D26 with
+- **The ledger is the test plan.** `docs/ledger.md` items (A1–A3, B1–B4, C1–C5, D1–D27 with
   D20 unused, SEC4)
   each map to at least one named test (`// ledger: B2` comment at the test). The §6 cases from the bridge
   spec (fan-out, join-conflict, concurrency invariant, commit-on-verified, dead-retry-re-isolates,

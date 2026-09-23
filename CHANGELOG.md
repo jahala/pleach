@@ -7,6 +7,7 @@ Entries carry the defect-ledger id where one exists (`D8`, `D21`, ...); the ledg
 ## [Unreleased]
 
 ### Fixed
+- Nodes that start together no longer race into their worktrees: a node could fail at `isolate` with no tree and no reason when a sibling's `git worktree add` was half-written (D27).
 - The verified commit holds exactly the tree its gates judged. A git hook that changes the commit (a formatter rewriting a file, or a hook staging its own) now fails the node under the `commit` gate, keeps the tree on `quarantine/<id>` and publishes nothing. Before, the changed commit was published as verified. Hooks still run and may still refuse (D24).
 
 ### Changed
