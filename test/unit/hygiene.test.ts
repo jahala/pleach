@@ -1,6 +1,6 @@
-// Adoption ladder §E — the hygiene gate's pure detectors. Two real incident
-// classes from Bernstein's archive ("verified but did nothing", "verified but
-// destructive") plus the credential class every public repo fears. High
+// The hygiene gate's pure detectors. Two incident classes ("verified but did
+// nothing", "verified but destructive") plus the credential class every
+// public repo fears. High
 // precision over recall: a noisy gate gets disabled by its users, which is
 // worse than a narrow one.
 import { describe, expect, test } from 'bun:test';

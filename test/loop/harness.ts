@@ -478,7 +478,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       }
       return null;
     },
-    // Staged landing (W1 of the adoption ladder): the loop gates the merged
+    // Staged landing: the loop gates the merged
     // stack between build and publish. The stack's cwd encodes the merged
     // refs so execScript-driven tests can simulate interaction failures.
     async landStack(_repoRoot, refs) {

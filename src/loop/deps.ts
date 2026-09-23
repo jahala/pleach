@@ -114,7 +114,7 @@ export interface IsolateSeam {
   // repo exactly as it was.
   // Staged landing: build the sink-merge stack in a throwaway worktree,
   // hand the loop its cwd for the land gate, publish only on explicit call
-  // (ff-only, the sole touch on the checkout). Adoption ladder §A.
+  // (ff-only, the sole touch on the checkout).
   landStack(repoRoot: string, refs: readonly string[]): Promise<LandStack>;
 }
 

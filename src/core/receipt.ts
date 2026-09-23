@@ -3,8 +3,8 @@
 // facts imply, and seals both under a sha256 the node commit's trailer pins
 // into immutable git history.
 //
-// The freeze point is load-bearing (the loki lesson: their verifier accused
-// honest receipts of forgery over post-derivation appends). Facts freeze
+// The freeze point is load-bearing: a verifier that hashes facts appended after
+// derivation will accuse an honest receipt of forgery. Facts freeze
 // BEFORE the commit exists, so the commit SHA cannot live inside the hashed
 // envelope — git binds them instead: the trailer rides in the commit whose
 // SHA is the diffRef. Likewise the ledger's dual-close decision lands after
