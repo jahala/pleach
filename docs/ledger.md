@@ -414,6 +414,16 @@ checkpoint but have different lifetimes and trust domains.**
   every `src/**/*.ts` import and `new Error(` and holds them to the rules (the ports in `loop/deps.ts`
   are the one type-only upward edge); `GitDirUnrecognizedError`; the plan path asked for per verb.
   Tests: `test/unit/architecture.test.ts`, `test/unit/gitdir.test.ts`, `test/e2e/cli.test.ts`.
+- **D27 ⚠ [ci] Parallel nodes raced each other into their worktrees.** Found 2026-09-23 when
+  `run --land --sinks` failed once on CI and once in 48 local runs under load: node `later` settled failed
+  at `isolate HEAD` after 12 ms, with no tree and no detail. A run isolates its ready nodes concurrently,
+  and `git worktree add` reads every registered worktree's admin dir while registering its own; one that
+  another add has half-written fails it ("failed to read .git/worktrees/wt/commondir"). Plain git shows it:
+  1 in 300 paired adds in a fresh repository. **Fix:** the isolate seam runs every `git worktree` add,
+  remove and list one at a time. Eight concurrent isolates in a fresh repository, 25 rounds, failed every
+  run before and pass after; the end-to-end stress went from 1 in 48 to 0 in 64. The queue is per seam,
+  so a `pleach land` in another process can still meet a run's add; that stays rare and open. Tests:
+  `test/integration/isolate-concurrent.test.ts`.
 
 ### Verified-sound (attacks refuted — do not relitigate)
 

@@ -103,11 +103,13 @@ Every node builds in a disposable worktree off its verified dependencies. The sc
 - [x] (code) `resolveGitDir` returns an absolute git dir for a relative repo root, for a plain clone and for a linked worktree alike — under `--repo-root .` on a plain clone the relative `.git` reached the isolate seam, whose `git -C <path>` with `cwd: <path>` resolved it twice and failed with ENOTDIR after the first worker stopped (D22, jahala/pleach#102) · test/unit/gitdir.test.ts @4f8ef0f · by cli
 
 - [x] (code) A relative `--repo-root` that is not `.`, run from another cwd, closes a node: the face resolves the root once, so the isolate and clean seams' `git -C <root>` with `cwd: <root>` never resolve a relative path twice (D22, jahala/pleach#102) · test/e2e/repo-root-relative.test.ts @988fed1 · by cli
+- [x] (code) Eight nodes isolating at once in a fresh repository all get a tree: the seam runs `git worktree` add, remove and list one at a time, so none reads another's half-written admin dir · test/integration/isolate-concurrent.test.ts @ff07847 · by cli
 
 ## For #developer #operator
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/isolate-seam.tend.html) by `loop migrate`
 - 2026-09-11 D22 (jahala/pleach#102): conducting umbel's first loop on a plain clone with `--repo-root .` failed every node after the worker stopped — ENOTDIR from a relative git dir resolved twice; fixed by hand during a hold (no workers), test first, and verified with the pinned tend2.
+- 2026-09-23 a CI flake in `run --land --sinks` traced to concurrent `git worktree add` calls reading each other's half-written admin dirs (reproduced in plain git, 1 in 300 paired adds). Red first: eight concurrent isolates over 25 fresh repositories failed every run. The seam now queues its worktree commands; the test passed three runs in a row, and the end-to-end stress went from 1 failure in 48 to 0 in 64. A retry on that git error was rejected: it hides the race instead of removing it. Cross-process landing still shares the risk (D27).
 </script>
 <script src="./loop.js"></script>
