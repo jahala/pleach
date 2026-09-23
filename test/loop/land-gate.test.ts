@@ -1,4 +1,4 @@
-// Adoption ladder §A — the land gate: nodes verify on their own merged-from-
+// The land gate: nodes verify on their own merged-from-
 // deps trees, but the landed COMBINATION of sinks was never gate-tested until
 // now. The gate = the union of the sinks' own smoke commands (deduped, exact
 // string) run on the stack tip in the throwaway worktree; one flaky retry of

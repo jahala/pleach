@@ -78,7 +78,7 @@ updated, the next session starts blind.
   is FROZEN history at `docs/tend/` — never run a formatter over either garden (`biome.json` includes
   `**`; a bare `biome check --write .` rewrites the polyglots and tend2's renderer; the `lint` script is
   scoped to `src test` for that reason).
-- **`docs/research/` is local-only** (gitignored, untracked): candid competitor analysis and internal
+- **`docs/research/` is local-only** (gitignored, untracked): internal notes and
   records. Never re-track it; new research goes there and stays private. Cross-references to it from
   tracked docs are provenance labels for maintainers, not public links.
 - **`.brand/` is committed, not ignored** (14 files — see `.petalsrc`): `.brand/products/pleach/` is

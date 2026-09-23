@@ -1,6 +1,6 @@
-// Adoption ladder §D — the close receipt's pure heart. A receipt is minted at
-// settle from facts frozen at classify time (the loki lesson: hash nothing
-// that settles later — refs and the ledger's close decision ride OUTSIDE the
+// The close receipt's pure heart. A receipt is minted at settle from facts
+// frozen at classify time (hash nothing that settles later — refs and the
+// ledger's close decision ride OUTSIDE the
 // integrity envelope, bound by git instead). deriveStatus is the shared
 // recomputation the mint and verify paths both run; degraded[] makes "no
 // coverage is not coverage" a recorded fact.

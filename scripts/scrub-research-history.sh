@@ -3,9 +3,8 @@
 #
 # WHY: docs/research/ was tracked on master from 2026-06-18 until commit 2bd65bc
 # deleted it. Seven files survive in history and are reachable from master and from
-# 49 of the 50 remote branches: candid competitor analysis naming real companies and
-# their production failures, an internal whole-project audit, and a verbatim dialogue
-# archive. Flipping the repository to public publishes all of it. After the flip it is
+# 49 of the 50 remote branches: internal notes, an internal whole-project audit, and a
+# verbatim dialogue archive. Flipping the repository to public publishes all of it. After the flip it is
 # in GitHub's caches, in forks, and in archives, so the scrub has to happen first.
 #
 #   scripts/scrub-research-history.sh prepare
@@ -66,7 +65,7 @@ MIRROR="$WORK_ROOT/rewritten.git"
 # repository on purpose: one line per sensitive string, never committed.
 #
 # This script used to hard-code the canaries. That was the leak it exists to prevent:
-# three competitor names sat in plain text in a tracked file, so publishing the repo
+# three of those strings sat in plain text in a tracked file, so publishing the repo
 # would have published exactly the references the scrub removes. Its own canary scan
 # caught it on 2026-09-20, in three blobs, all of them earlier versions of this file.
 #
