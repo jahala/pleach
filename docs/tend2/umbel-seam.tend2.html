@@ -118,11 +118,11 @@ The execution boundary between [the conductor loop](conductor-loop.tend2.html) a
 Stochastic agents are driven through one spawn/send/wait/kill boundary, with dead, timeout and blocked surfaced as typed reasons. What [the conductor loop](conductor-loop.tend2.html) does with each of them is its decision, not this seam's.
 
 ## Tests
-- [x] (code) Happy path: spawn→send→wait(stop)→kill; finalMessage non-empty and contains sent text; filesTouched is array; telemetry defined; actions manifest has numeric turnCount. (inferred from test/integration/umbel-seam.test.ts — requires real umbel binary + fake-claude) · test/integration/umbel-seam.test.ts @500c316 · by cli
-- [x] (code) Two-turn conversation: sinceMtime threads correctly; r2.finalMessage reflects turn-two prompt, not stale turn-one stop. (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @aeb9181 · by cli
-- [x] (code) Timeout: second wait without new send returns reason=timeout (sinceMtime advances past existing stop file). (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @adb0b61 · by cli
-- [x] (code) Dead: killing tmux session out-of-band returns reason=dead. (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @7ddc935 · by cli
-- [x] (code) Spawn failure on nonexistent cwd throws WorkerSpawnError. (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @8740ea3 · by cli
+- [x] (code) Happy path: spawn→send→wait(stop)→kill; finalMessage non-empty and contains sent text; filesTouched is array; telemetry defined; actions manifest has numeric turnCount. (inferred from test/integration/umbel-seam.test.ts — requires real umbel binary + fake-claude) · test/integration/umbel-seam.test.ts @90997ff · by cli
+- [x] (code) Two-turn conversation: sinceMtime threads correctly; r2.finalMessage reflects turn-two prompt, not stale turn-one stop. (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @2fcdda7 · by cli
+- [x] (code) Timeout: second wait without new send returns reason=timeout (sinceMtime advances past existing stop file). (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @15a1030 · by cli
+- [x] (code) Dead: killing tmux session out-of-band returns reason=dead. (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @bfa2ba4 · by cli
+- [x] (code) Spawn failure on nonexistent cwd throws WorkerSpawnError. (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @38c3730 · by cli
 
 ## For #developer #operator
 

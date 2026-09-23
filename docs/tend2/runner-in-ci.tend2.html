@@ -20,8 +20,8 @@ The fake worker writes its pid, and the dead test kills that process while the w
 The canary job builds tend2 from its repository. On CI a canary with no tend2 fails; locally it still skips. Until tend2's repository is public, that job is red, which is the truth.
 
 ## Tests
-- [ ] (code) With the real umbel binary, killing the worker process out of band while its reply is pending makes `wait` return `dead` with an empty final message · test/integration/umbel-seam.test.ts
-- [ ] (code) ci.yml's `runner` job pins umbel to a full commit and runs every suite that reads `PLEACH_UMBEL_BIN` without a tend module, canary.yml's `umbel-head` job runs the same list, and on CI a canary with no tend2 exits 1 while locally it skips with exit 0 · test/integration/ci-runner.test.ts
+- [x] (code) With the real umbel binary, killing the worker process out of band while its reply is pending makes `wait` return `dead` with an empty final message · test/integration/umbel-seam.test.ts @02b2c82 · by cli
+- [x] (code) ci.yml's `runner` job pins umbel to a full commit and runs every suite that reads `PLEACH_UMBEL_BIN` without a tend module, canary.yml's `umbel-head` job runs the same list, and on CI a canary with no tend2 exits 1 while locally it skips with exit 0 · test/integration/ci-runner.test.ts @9d032bc · by cli
 
 ## Needs #umbel-seam
 
