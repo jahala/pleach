@@ -35,8 +35,14 @@ touch "${JSONL_FILE}"
 
 while IFS= read -r line || [[ -n "${line:-}" ]]; do
   [[ "${line:-}" == "/exit" ]] && exit 0
-  # Work started: a file in the tree, one line in the pane.
-  printf 'started work\n' > "${WORK_FILE}"
+  # Work started: a file in the tree, one line in the pane. Written once and
+  # renamed into place, never truncated again: umbel's kill closes stdin, which
+  # runs this body one last time while pleach snapshots the tree, and a
+  # truncate-then-write there could leave the snapshot an empty file (D25).
+  if [[ ! -e "${WORK_FILE}" ]]; then
+    printf 'started work\n' > "${WORK_FILE}.tmp"
+    mv "${WORK_FILE}.tmp" "${WORK_FILE}"
+  fi
   printf 'working on it\n'
   # Record the prompt as a user turn, then produce nothing further — ever.
   printf '{"type":"human","message":{"role":"user","content":[{"type":"text","text":"prompt"}]},"uuid":"u-%s","timestamp":"%s"}\n' \
