@@ -10,7 +10,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -33,11 +33,11 @@ jobs:
     steps:
       - name: Install tmux
         run: sudo apt-get update && sudo apt-get install -y tmux
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: bun install --frozen-lockfile
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jahala/umbel
           ref: ${{ env.UMBEL_REF }}
