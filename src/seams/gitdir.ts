@@ -1,5 +1,6 @@
 import { readFileSync, statSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
+import { GitDirUnrecognizedError } from '../core/errors.ts';
 
 // Resolve a checkout's real git directory. In a normal clone `.git` is a
 // directory; in a linked worktree (git-worktree(1)) it is a FILE containing
@@ -26,7 +27,7 @@ export function resolveGitDir(repoRoot: string): string {
   const text = readFileSync(dotGit, 'utf8');
   const match = text.match(/^gitdir:\s*(.+?)\s*$/m);
   if (match === null || match[1] === undefined) {
-    throw new Error(`unrecognized .git file at ${dotGit} — expected a "gitdir: <path>" pointer`);
+    throw new GitDirUnrecognizedError(dotGit);
   }
   return isAbsolute(match[1]) ? match[1] : join(root, match[1]);
 }

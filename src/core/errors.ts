@@ -286,3 +286,17 @@ export class JournalRunMissingError extends Error {
     this.runId = runId;
   }
 }
+
+// ledger: D26 — a `.git` file that isn't a `gitdir: <path>` worktree pointer
+// (corrupted, hand-edited, or written by another tool in a shape pleach
+// doesn't parse). Named so the face can catch it by type instead of a bare
+// `new Error` reaching the operator unclassified.
+export class GitDirUnrecognizedError extends Error {
+  readonly name = 'GitDirUnrecognizedError';
+  readonly path: string;
+
+  constructor(path: string) {
+    super(`unrecognized .git file at ${path} — expected a "gitdir: <path>" pointer`);
+    this.path = path;
+  }
+}

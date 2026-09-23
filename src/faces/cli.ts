@@ -603,19 +603,24 @@ export async function runCli(argv: readonly string[]): Promise<number> {
       return await verbReceipt(planPath, flags);
     }
 
-    if (planPath === undefined) throw new UsageError(`${verb}: <plan.json> is required`);
+    // The plan path is asked for per verb, so an unknown verb is named as
+    // unknown even when no plan path follows it.
+    const plan = (): string => {
+      if (planPath === undefined) throw new UsageError(`${verb}: <plan.json> is required`);
+      return planPath;
+    };
 
     switch (verb) {
       case 'run':
-        return await verbRun(planPath, flags);
+        return await verbRun(plan(), flags);
       case 'audit':
-        return await verbAudit(planPath, positionals[2], flags);
+        return await verbAudit(plan(), positionals[2], flags);
       case 'land':
-        return await verbLand(planPath, flags);
+        return await verbLand(plan(), flags);
       case 'stop':
-        return await verbStop(planPath, flags);
+        return await verbStop(plan(), flags);
       case 'validate':
-        return await verbValidate(planPath);
+        return await verbValidate(plan());
       default:
         throw new UsageError(`unknown verb '${verb}'`);
     }

@@ -93,6 +93,14 @@ describe('pleach CLI — validate and usage', () => {
     expect(r2.code).toBe(2);
     expect(r2.stdout).toContain('pleach');
   });
+
+  // ledger: D26 — an unknown verb with no plan path was reported as a missing plan.
+  test('unknown verb with no plan path still names the verb as unknown, not the missing plan', async () => {
+    const r = await pleach(['frobnicate']);
+    expect(r.code).toBe(2);
+    expect(r.stderr).toContain("unknown verb 'frobnicate'");
+    expect(r.stderr).not.toContain('plan.json');
+  });
 });
 
 // ── full stack ────────────────────────────────────────────────────────────────

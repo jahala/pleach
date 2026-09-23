@@ -381,6 +381,27 @@ checkpoint but have different lifetimes and trust domains.**
   retryable, an unnamed reason terminal and journaled `seam-violation`. Tests:
   `test/unit/umbel-wait-reasons.test.ts`, `test/loop/surprise-settles.test.ts`,
   `test/unit/runner-contract.test.ts`, `test/unit/journal-doc.test.ts`, `test/e2e/seam-keeps-tree.test.ts`.
+- **D24 ⚠ [audit] The verified commit could hold a tree its gates never judged.** Repository audit
+  2026-09-23. The verified commit runs the repository's hooks (D21), and a pre-commit hook can change the
+  index while `git commit` runs: a formatter rewrites a file, or a hook stages one of its own. Every
+  worktree shares the repository's hooks directory, and a worker reaches it through its tree's `.git`
+  pointer, so a hook written by one node runs in every later node's commit. `commitBranch` committed
+  whatever the hook left and moved `node/<id>` to it, so bytes no gate saw were published as verified.
+  Reproduced in a scratch repository: a hook planted from one worktree added a file to a commit made in
+  another. **Fix:** `commitBranch` writes the staged tree before the commit and compares it with the
+  committed tree; on any difference HEAD goes back to its parent, the branch never moves, and
+  `CommitAlteredError` names the changed paths. The loop settles that like a refused commit (D21):
+  failed under the `commit` gate, the tree quarantined on the node's base, the receipt written. Hooks
+  still run and may still refuse. Tests: `test/integration/commit-altered.test.ts`,
+  `test/e2e/commit-altered.test.ts`.
+- **D26 ◦ [audit] The doctrine was prose.** Repository audit 2026-09-23. ENGINEERING.md's layer rules
+  and "no bare `new Error` outside `core/errors.ts`" had no test and no lint rule. The layering held,
+  but the error rule was already broken once: `seams/gitdir.ts` threw a bare `Error` for a `.git` file
+  that is not a worktree pointer, which reached `classify` as unknown. The same audit found the face
+  naming an unknown verb as a missing plan when no plan path followed it. **Fix:** a test that reads
+  every `src/**/*.ts` import and `new Error(` and holds them to the rules (the ports in `loop/deps.ts`
+  are the one type-only upward edge); `GitDirUnrecognizedError`; the plan path asked for per verb.
+  Tests: `test/unit/architecture.test.ts`, `test/unit/gitdir.test.ts`, `test/e2e/cli.test.ts`.
 
 ### Verified-sound (attacks refuted — do not relitigate)
 
