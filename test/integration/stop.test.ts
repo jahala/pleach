@@ -127,6 +127,29 @@ describe('pleach stop — the drain marker, through the real lock seam', () => {
     expect(await createLockSeam().stopRequested(repo, SOURCE)).toBe(true);
   }, 20000);
 
+  // ledger: B4 — one conductor per (repo, source): a second run is refused.
+  test('B4: run while a live run holds the lock → exit 3, nothing built, the holder untouched', async () => {
+    holder = await startHolder(repo, SOURCE);
+
+    const run = await pleach(['run', planPath, '--repo-root', repo], repo);
+    expect(run.code).toBe(3);
+    expect(run.stderr).toMatch(/run lock held by pid \d+/);
+    const branch = Bun.spawnSync([
+      'git',
+      '-C',
+      repo,
+      'rev-parse',
+      '--verify',
+      '--quiet',
+      'node/only',
+    ]);
+    expect(branch.exitCode).not.toBe(0);
+    expect(
+      (await pleachFiles(repo)).filter((f) => f.startsWith('pleach-') && f.endsWith('.lock')),
+    ).toHaveLength(1);
+    expect(holder.exitCode).toBeNull();
+  }, 20000);
+
   test('D16: no run holds the lock → exit 3 and no marker', async () => {
     const stop = await pleach(['stop', planPath, '--repo-root', repo], repo);
     expect(stop.code).toBe(3);

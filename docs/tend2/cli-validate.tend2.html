@@ -38,15 +38,15 @@ The pre-flight check for [pleach run](cli-run.tend2.html), sharing the same sche
 Invalid plans fail in milliseconds with a precise reason instead of deadlocking or corrupting a run. The run-side refusal that pairs with this one is [pleach run](cli-run.tend2.html)'s, taken before it acquires the lock.
 
 ## Tests
-- [x] (code) Valid proof plan → exit 0; {valid:true, order:[...]} where last element is 'wordcount'. (inferred from test/e2e/cli.test.ts:validate on proof plan) · test/e2e/cli.test.ts @bb813f6 · by cli
-- [ ] (code) Duplicate node IDs → exit 2; PlanInvalidError reasons mention the dup id. (inferred from test/unit/validate.test.ts)
-- [ ] (code) Unknown needs reference → exit 2; reason names the ghost id. (inferred from test/unit/validate.test.ts)
-- [ ] (code) Dependency cycle detected → exit 2; reason contains 'cycle'. (inferred from test/unit/validate.test.ts)
-- [ ] (code) Audit provider === worker provider → exit 2 with model-diversity rule reason. (inferred from test/unit/validate.test.ts)
-- [x] (code) Unknown verb → exit 2; no args → help on stdout + exit 2. (inferred from test/e2e/cli.test.ts:unknown verb) · test/e2e/cli.test.ts @a0892b5 · by cli
+- [x] (code) Valid proof plan → exit 0; {valid:true, order:[...]} where last element is 'wordcount'. (inferred from test/e2e/cli.test.ts:validate on proof plan) · test/e2e/cli.test.ts @06caa9c · by cli
+- [x] (code) Duplicate node IDs → exit 2; PlanInvalidError reasons mention the dup id. · test/unit/validate.test.ts @ffb5111 · by cli
+- [x] (code) Unknown needs reference → exit 2; reason names the ghost id. · test/unit/validate.test.ts @84d7a43 · by cli
+- [x] (code) Dependency cycle detected → exit 2; reason contains 'cycle'. · test/unit/validate.test.ts @4238a25 · by cli
+- [x] (code) Audit provider === worker provider → exit 2 with model-diversity rule reason. · test/unit/validate.test.ts @c533169 · by cli
+- [x] (code) Unknown verb → exit 2; no args → help on stdout + exit 2. (inferred from test/e2e/cli.test.ts:unknown verb) · test/e2e/cli.test.ts @e4fccf4 · by cli
 - [x] (code) validatePlan returns execution waves: a diamond A->{B,C}->D yields [[A],[B,C],[D]]; order stays a valid linearisation. · test/unit/validate-describe.test.ts @8980fb6
 - [x] (code) nodeSummaries reports each node's work-type (command/prompt/phases) and only the gates it declares (setup/smoke/audit:<provider>). · test/unit/validate-describe.test.ts @8b204e6
-- [ ] (code) pleach validate stdout JSON includes waves and nodes in addition to {valid, order}.
+- [x] (code) pleach validate stdout JSON (validateReport) carries order, waves, and nodes alongside {valid:true}. · test/unit/validate-phases.test.ts @af57262 · by cli
 
 ## Needs #cli-run
 
@@ -54,6 +54,7 @@ Invalid plans fail in milliseconds with a precise reason instead of deadlocking 
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/cli-validate.tend.html) by `loop migrate`
+- 2026-09-23 gave evidence paths to the 5 unearnable checks (4 carried an `(inferred from ...)` note with no ` · evidence-path`; one, "pleach validate stdout JSON includes waves and nodes in addition to {valid, order}", had neither). All 4 duplicate/unknown-needs/cycle/model-diversity claims were verified true against test/unit/validate.test.ts and cited as-is. The stdout-shape claim was reworded to name the real function (validateReport) and cited to test/unit/validate-phases.test.ts, whose "the existing report keys survive alongside warnings" test is the one that actually asserts order/waves/nodes together on the JSON line. None were false, none were retired. `tend2 verify` stamped all 9 checks; `tend2 lint --strict` is clean.
 - 2026-08-18 v1: enabled by #cli-run (same v1 user-journey edge, recorded on this side too)
 </script>
 <script src="./loop.js"></script>

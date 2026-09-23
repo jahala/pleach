@@ -18,9 +18,9 @@ Ledger D26, from the repository audit of 2026-09-23. The audit read every import
 `test/unit/architecture.test.ts` walks every `src/**/*.ts` file. It resolves each relative import, re-export and dynamic import to a layer and checks the direction: `core/` imports no other layer, `loop/` imports only `core/`, even for types, and `seams/` and `adapters/` import `loop/deps.ts` for types only, since the ports live there. The same test refuses `new Error(` anywhere but `core/errors.ts`. It reads files and runs nothing, like the drift tests beside it.
 
 ## Tests
-- [ ] (code) Every relative import in `src/` follows the layer rules, a planted `loop/` → `seams/` type import fails naming its file and line, and no `new Error(` appears outside `core/errors.ts` · test/unit/architecture.test.ts
-- [ ] (code) A `.git` file that is not a `gitdir:` pointer makes `resolveGitDir` throw `GitDirUnrecognizedError` carrying the path · test/unit/gitdir.test.ts
-- [ ] (code) `pleach frobnicate` with no further argument exits 2 naming the unknown verb, and never asks for a plan file · test/e2e/cli.test.ts
+- [x] (code) Every relative import in `src/` follows the layer rules, a planted `loop/` → `seams/` type import fails naming its file and line, and no `new Error(` appears outside `core/errors.ts` · test/unit/architecture.test.ts @8ddc055 · by cli
+- [x] (code) A `.git` file that is not a `gitdir:` pointer makes `resolveGitDir` throw `GitDirUnrecognizedError` carrying the path · test/unit/gitdir.test.ts @ba7d1ad · by cli
+- [x] (code) `pleach frobnicate` with no further argument exits 2 naming the unknown verb, and never asks for a plan file · test/e2e/cli.test.ts @6ba40f3 · by cli
 
 ## Needs #conductor-loop #cli-run
 
