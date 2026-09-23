@@ -106,6 +106,13 @@ and hashed into the receipt. The tree is kept on `quarantine/<id>`, and that qua
 snapshot (`write-tree`, `commit-tree`, `update-ref`), so no hook runs on it and no hook can
 refuse it.
 
+A hook may refuse the verified commit, but if it changes what the commit holds (a formatter
+rewriting a file, or a hook staging one of its own), the commit is no longer the tree its gates
+judged. pleach compares the two, and when a hook changes anything the node settles `failed`
+under the `commit` gate, with the changed paths as the output tail. `node/<id>` never moves. The
+tree is kept on `quarantine/<id>`, standing on the node's base, and the receipt is written. Run
+a formatter as part of the node's work or its smoke, where the gates see its output.
+
 ## A seam's surprise keeps the work
 
 The runner's reason is read from its output whatever its exit code, so a timeout, a provider

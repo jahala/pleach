@@ -92,6 +92,19 @@ export class GateFailedError extends Error {
   }
 }
 
+// ledger: D24 — the verified commit holds a tree its gates never judged: a
+// hook changed the index while `git commit` ran. `changed` is the name-status
+// diff between the judged tree and the committed one.
+export class CommitAlteredError extends Error {
+  readonly name = 'CommitAlteredError';
+  readonly changed: string;
+
+  constructor(changed: string) {
+    super(`a hook changed the verified commit after its gates ran:\n${changed}`);
+    this.changed = changed;
+  }
+}
+
 // ledger: D19 — a gate that never ran a command: the no-shell guard refused
 // it, or the exec seam could not spawn it. Distinct from GateFailedError on
 // purpose: that one is a red the work can fix and retries; this one names the

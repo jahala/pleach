@@ -71,6 +71,7 @@ tree on `quarantine/<id>` and writes a receipt.
 | A worker goes quiet | `--idle-ms` ends the wait; settles blocked, tree kept |
 | A worker is stuck | It writes `BLOCKED.md` and is not asked again |
 | A git hook refuses the commit | Gate verdict like any other; tree kept on a snapshot no hook can refuse |
+| A git hook changes the commit | The node fails; nothing a gate did not judge is published |
 | A seam throws mid-node | Settles under `seam:<lane>`; the verdict names the next step |
 | The journal loses lines | Reported as `journal-gap` at the next run; each run keeps its own copy |
 

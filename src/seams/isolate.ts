@@ -1,7 +1,12 @@
 import type { Dirent } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { IsolateCatastrophicError, LandBlockedError, LandConflictError } from '../core/errors.ts';
+import {
+  CommitAlteredError,
+  IsolateCatastrophicError,
+  LandBlockedError,
+  LandConflictError,
+} from '../core/errors.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, IsolateSeam, Isolation } from '../loop/deps.ts';
 import { resolveGitDir } from './gitdir.ts';
@@ -424,9 +429,39 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     branch: string,
     message: string,
   ): Promise<{ sha: string }> {
+    // The judged tree is what staging left in the index; the repository's hooks
+    // run inside `git commit` (D21) and may change the index there (D24). A
+    // commit whose tree differs publishes nothing: HEAD goes back to its parent,
+    // the index keeps what the hook did for the quarantine, and the branch
+    // never moves.
+    const parent = await gitMust(exec, cwd, 'rev-parse', 'HEAD');
+    const judged = await gitMust(exec, cwd, 'write-tree');
     // --allow-empty because a verified command-node may legitimately change nothing
     // (ledger B2 — loop calls this BEFORE emitVerdict)
     await gitMust(exec, cwd, 'commit', '--allow-empty', '-m', message);
+    const committed = await gitMust(exec, cwd, 'rev-parse', 'HEAD^{tree}');
+    if (committed !== judged) {
+      const changed = await gitMust(
+        exec,
+        cwd,
+        'diff-tree',
+        '-r',
+        '--name-status',
+        judged,
+        committed,
+      );
+      await gitMust(
+        exec,
+        cwd,
+        '-c',
+        'core.hooksPath=/dev/null',
+        'update-ref',
+        '--no-deref',
+        'HEAD',
+        parent,
+      );
+      throw new CommitAlteredError(changed);
+    }
     await gitMust(exec, cwd, 'branch', '-f', branch, 'HEAD');
     const sha = await gitMust(exec, cwd, 'rev-parse', 'HEAD');
     return { sha };

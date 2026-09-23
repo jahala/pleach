@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hook-cannot-rewrite · pleach</title>
+<link rel="stylesheet" href="./loop.css">
+<body>
+<noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
+<script type="text/markdown" id="loop">
+# A hook may refuse the verified commit but never change it
+
+**Goal.** What publishes on `node/<id>` is exactly the tree the gates judged. The repository's hooks still run on the verified commit and may still refuse it (D21). A hook that changes what the commit holds fails the node the same way a refusal does: the branch never moves, the tree is quarantined, and the receipt is written.
+
+Ledger D24, from the repository audit of 2026-09-23. A pre-commit hook can change the index while `git commit` runs. A formatter rewrites a file, or a hook stages one of its own. Every worktree shares the repository's hooks directory, and a worker reaches it through its tree's `.git` pointer, so a hook written by one node runs in every later node's commit. `commitBranch` committed whatever the hook left and moved the branch to it. The audit reproduced this in a scratch repository: a hook planted from one worktree added a file to a commit made in another.
+
+## Compare the trees, then move the branch
+
+`commitBranch` writes the staged tree before the commit. After the commit it compares that tree with the committed one. If they differ, HEAD goes back to its parent, the branch is never moved, and `CommitAlteredError` names the changed paths. The loop already settles any throw from the verified commit as a refusal under the `commit` gate, so no loop code changes. The quarantine holds what the index held, the hook's change included, standing on the node's base.
+
+A check against hook tampering in general was considered and rejected. pleach does not sandbox the worker, and a worker that can write hooks can write anything its user can. The tree comparison is the check that protects what pleach promises: nothing a gate did not judge is published.
+
+## Tests
+- [ ] (code) A pre-commit hook that stages a file of its own, or rewrites a staged file, makes `commitBranch` throw `CommitAlteredError` naming the changed paths, and `node/<id>` never exists; a hook that only checks and changes nothing still runs, and the commit publishes as before · test/integration/commit-altered.test.ts
+- [ ] (code) Through the real CLI, a repository whose pre-commit hook stages its own file: the node settles failed under the `commit` gate with the changed path in the output tail, `quarantine/<id>` holds the judged work on the node's base, the receipt is written, and no `node/*` branch exists · test/e2e/commit-altered.test.ts
+- [ ] (code) The README surface says a hook that changes the verified commit fails the node under the `commit` gate and keeps its tree on `quarantine/<id>` · test/unit/journal-doc.test.ts
+
+## Needs #record-survives #isolate-seam
+
+## For #operator
+
+## Tried
+- 2026-09-23 shaped and built from the repository audit's finding F3. Red first: the seam test failed on two of three cases (the pass-through case passed), and the e2e test showed today's behaviour, where the node closed with the hook's file published (exit 0). Built the tree comparison in `commitBranch`, then restored HEAD to the parent with `update-ref` under `core.hooksPath=/dev/null`, as the snapshot does. Proved the quarantine-on-base assertion discriminates by removing the restore for one run (red), then putting it back. Rejected the audit reviewer's fix, `core.hooksPath=/dev/null` on every git call, because it reverses D21. Rejected a hooks-directory tripwire as a false wall for an unsandboxed worker.
+</script>
+<script src="./loop.js"></script>
