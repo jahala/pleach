@@ -9,6 +9,7 @@
 #
 #   scripts/scrub-research-history.sh prepare
 #   scripts/scrub-research-history.sh push
+#   scripts/scrub-research-history.sh verify-remote   (read-only; any time)
 #
 # `prepare` touches nothing published: it backs up the remote, rewrites a throwaway
 # mirror, and proves the result. Read its report, then run `push`.
@@ -38,6 +39,13 @@
 # A mirror clone of a GitHub repo also carries `refs/pull/*` (67 here). Those are
 # rewritten like anything else, but GitHub refuses pushes to them, so they must stay
 # local. The explicit refspecs handle that too.
+#
+# The after-push check had the same blind spot the other way round: it scanned
+# GitHub's copy with `--branches --tags` only. GitHub keeps every pull request's
+# head on `refs/pull/<n>/head`, and no push can rewrite those or a merged pull
+# request's diff. The check now reads every ref GitHub serves, and
+# `verify-remote` runs it on its own. Only GitHub Support, or a fresh
+# repository, removes what pull requests hold.
 
 set -euo pipefail
 
@@ -248,6 +256,30 @@ this scrub removes. Run: trash '$MIRROR' && $0 prepare"
   say "All checks passed."
 }
 
+# Read-only. Mirror-clones GitHub afresh and scans EVERY ref it serves, pull
+# request heads included: those are public and no push can rewrite them.
+verify_remote() {
+  local check="$WORK_ROOT/verify-remote.git"
+  [ -e "$check" ] && trash "$check"
+  git clone --quiet --mirror "$REMOTE_URL" "$check"
+  local branch_hits pull_refs=0 ref
+  branch_hits=$(git -C "$check" log --branches --tags --oneline -- "${PATHS_TO_DROP[@]}" 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$branch_hits" = "0" ]; then ok "no branch or tag reaches a commit touching: ${PATHS_TO_DROP[*]}"
+  else bad "$branch_hits commits on branches or tags still touch the dropped paths"; fi
+  while IFS= read -r ref; do
+    if [ -n "$(git -C "$check" rev-list -1 "$ref" -- "${PATHS_TO_DROP[@]}")" ]; then
+      pull_refs=$((pull_refs + 1))
+    fi
+  done < <(git -C "$check" for-each-ref --format='%(refname)' refs/pull)
+  if [ "$pull_refs" = "0" ]; then ok "no pull request ref reaches one either"
+  else bad "$pull_refs pull request refs still reach commits touching the dropped paths"; fi
+  if [ "$branch_hits" != "0" ] || [ "$pull_refs" != "0" ]; then
+    die "GitHub still serves the dropped paths. Branches and tags: re-run push.
+Pull request refs: no push can rewrite them; ask GitHub Support to purge them.
+Keep the repository private until this check passes."
+  fi
+}
+
 cmd_prepare() {
   require_tools
   mkdir -p "$WORK_ROOT"
@@ -350,16 +382,7 @@ EOF
   fi
 
   say "Pushed. Re-cloning from GitHub to confirm the remote is actually clean"
-  local check="$WORK_ROOT/verify-after-push.git"
-  [ -e "$check" ] && trash "$check"
-  git clone --mirror "$REMOTE_URL" "$check"
-  local hits
-  hits=$(git -C "$check" log --branches --tags --oneline -- "${PATHS_TO_DROP[@]}" 2>/dev/null | wc -l | tr -d ' ')
-  if [ "$hits" = "0" ]; then
-    ok "GitHub's copy carries no commit touching: ${PATHS_TO_DROP[*]}"
-  else
-    die "GitHub still has $hits such commits. Do NOT make the repository public."
-  fi
+  verify_remote
 
   cat <<EOF
 
@@ -375,5 +398,6 @@ EOF
 case "${1:-}" in
   prepare) cmd_prepare ;;
   push)    cmd_push ;;
-  *)       echo "usage: $0 prepare|push" >&2; exit 2 ;;
+  verify-remote) verify_remote ;;
+  *)       echo "usage: $0 prepare|push|verify-remote" >&2; exit 2 ;;
 esac
