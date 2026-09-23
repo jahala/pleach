@@ -1,8 +1,9 @@
 # The tend2 × pleach integration canary (joint decision sheet #8).
-# DORMANT until the repo is public (Actions is inert on the current plan);
-# the schedule + dispatch triggers activate with no edits the day it flips.
-# Red blocks the release lane and is reported on the agent channel — a canary
-# nobody gates on is theater.
+# The canary job builds tend2 from jahala/tend and drives it. While that
+# repository is private the checkout fails and the job is red, which is the
+# truth: nothing was checked. It goes green with no edit once tend2 is public.
+# The umbel-head job runs the runner suites against umbel's default branch, so
+# a move in umbel's contract shows here within a week (ledger D25).
 name: canary
 on:
   workflow_dispatch:
@@ -15,4 +16,35 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
+      - uses: actions/checkout@v4
+        with:
+          repository: jahala/tend
+          path: tend-src
+      - name: Build tend2
+        run: cd tend-src && npm ci && npm run build
+      - name: Resolve tend2 for the canary
+        run: echo "PLEACH_CANARY_TEND2=node $GITHUB_WORKSPACE/tend-src/dist/cli.js" >> "$GITHUB_ENV"
       - run: bash scripts/canary.sh
+
+  umbel-head:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - uses: actions/checkout@v4
+        with:
+          repository: jahala/umbel
+          path: umbel-src
+      - name: Build umbel
+        run: cd umbel-src && bun install && bun run build
+      - name: Runner suites (umbel HEAD)
+        env:
+          PLEACH_UMBEL_BIN: ${{ github.workspace }}/umbel-src/dist/umbel
+        run: >
+          bun test
+          test/integration/umbel-seam.test.ts
+          test/integration/umbel-idle.test.ts
+          test/integration/umbel-abort.test.ts

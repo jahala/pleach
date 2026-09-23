@@ -9,6 +9,10 @@ Entries carry the defect-ledger id where one exists (`D8`, `D21`, ...); the ledg
 ### Fixed
 - The verified commit holds exactly the tree its gates judged. A git hook that changes the commit (a formatter rewriting a file, or a hook staging its own) now fails the node under the `commit` gate, keeps the tree on `quarantine/<id>` and publishes nothing. Before, the changed commit was published as verified. Hooks still run and may still refuse (D24).
 
+### Changed
+- CI runs the suites that drive the real umbel binary, against a pinned umbel commit on every push and against umbel's default branch weekly. It installs with `--frozen-lockfile`. On CI the canary fails when it cannot resolve tend2, where it used to skip and report green (D25).
+- The architecture rules in ENGINEERING.md are a test. `pleach <unknown-verb>` names the verb as unknown even with no plan path after it (D26).
+
 ### Removed
 - The retired tend v1 skills under `.claude/skills/tend*`. tend v1 is sunset upstream; `pleach-plan` is the one skill this repository ships.
 

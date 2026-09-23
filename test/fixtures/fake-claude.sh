@@ -6,6 +6,8 @@
 #   FAKE_CLAUDE_DELAY     optional, ms to sleep before responding (default 0)
 #   FAKE_CLAUDE_JSONL_DIR optional, write JSONL here instead of ~/.claude/projects/...
 #   FAKE_CLAUDE_HOOK      optional, exec this (stop.sh) when done
+#   With FAKE_CLAUDE_JSONL_DIR set, writes its pid to <dir>/<session>.pid so a
+#   test can kill the worker out of band (D25).
 
 set -euo pipefail
 
@@ -15,6 +17,7 @@ SESSION_ID="${UMBEL_SESSION_ID:-fake-session}"
 if [[ -n "${FAKE_CLAUDE_JSONL_DIR:-}" ]]; then
   mkdir -p "${FAKE_CLAUDE_JSONL_DIR}"
   JSONL_FILE="${FAKE_CLAUDE_JSONL_DIR}/${SESSION_ID}.jsonl"
+  printf '%s' "$$" > "${FAKE_CLAUDE_JSONL_DIR}/${SESSION_ID}.pid"
 else
   ENCODED_CWD="$(echo -n "$(pwd)" | sed 's/[^a-zA-Z0-9]/-/g')"
   JSONL_FILE="${HOME}/.claude/projects/${ENCODED_CWD}/${SESSION_ID}.jsonl"

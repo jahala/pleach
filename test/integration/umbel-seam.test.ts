@@ -20,7 +20,7 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { randomBytes } from 'node:crypto';
-import { access, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { createUmbelSeam } from '../../src/adapters/umbel.ts';
@@ -74,7 +74,10 @@ async function teardownState(): Promise<void> {
 
 type Seam = ReturnType<typeof createUmbelSeam>;
 
-function makeSeam(extra: { allowedTools?: string; permissionMode?: string } = {}): Seam {
+function makeSeam(
+  extra: { allowedTools?: string; permissionMode?: string } = {},
+  delayMs = 0,
+): Seam {
   return makeUmbel(exec, {
     ...extra,
     bin: UMBEL_BIN,
@@ -89,7 +92,7 @@ function makeSeam(extra: { allowedTools?: string; permissionMode?: string } = {}
       // Explicitly 0 — overrides any FAKE_CLAUDE_DELAY left in tmux global env
       // by a prior test run (umbel spawn.ts copies the full process.env to the
       // worker, which inherits tmux global env if the shell was opened from tmux).
-      FAKE_CLAUDE_DELAY: '0',
+      FAKE_CLAUDE_DELAY: String(delayMs),
     },
   });
 }
@@ -182,20 +185,38 @@ describe.skipIf(!binPresent)('umbel seam integration', () => {
     }
   }, 60_000);
 
-  // ledger: D2 — dead: spawn, kill the tmux session out of band, wait → reason dead
-  test('dead: killing tmux session out-of-band returns reason dead', async () => {
-    const seam = makeSeam();
+  // ledger: D2 — dead: spawn, kill the worker process out of band, wait → reason dead.
+  // umbel gives each session its own tmux socket, so the worker's own pid is
+  // the one handle that does not depend on umbel's socket scheme (D25).
+  test('dead: killing the worker out of band returns reason dead', async () => {
+    const seam = makeSeam({}, 20_000);
     let worker: Awaited<ReturnType<Seam['spawnWorker']>> | undefined;
     try {
       worker = await seam.spawnWorker({ cwd: '/tmp' });
       const name = worker.__name;
 
+      const pidFile = join(jsonlDir, `${name}.pid`);
+      let pid: number | undefined;
+      for (let attempt = 0; attempt < 50; attempt++) {
+        try {
+          const raw = await readFile(pidFile, 'utf8');
+          const parsed = Number.parseInt(raw.trim(), 10);
+          if (Number.isFinite(parsed)) {
+            pid = parsed;
+            break;
+          }
+        } catch {
+          // Not written yet.
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      if (pid === undefined) {
+        throw new Error(`fake-claude never wrote a pid file at ${pidFile}`);
+      }
+
+      // The worker sleeps before it answers, so the kill always lands first.
       await worker.send('a prompt');
-      // Kill the tmux session directly before fake-claude can respond
-      await exec(['tmux', 'kill-session', '-t', `umbel-${name}`], {
-        cwd: '/tmp',
-        timeoutMs: 5000,
-      });
+      process.kill(pid, 'SIGKILL');
 
       const result = await worker.wait({ timeoutMs: 30_000 });
       expect(result.reason).toBe('dead');

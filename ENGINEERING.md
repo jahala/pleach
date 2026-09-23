@@ -177,9 +177,10 @@ raise a timeout to "fix" a flake — find the race.
   reviewer; the audit note goes in the PR/commit body).
 - Work in *this* repo lands on `master` via short-lived branches. Work in **umbel** and
   **tend** is PRs only, never direct pushes; cite the ledger/letter item each PR answers.
-- CI (GitHub Actions): typecheck + lint + the test suite on ubuntu, with git only. There is no tmux
-  and no umbel binary there, so the suites that drive the real runner skip — a green CI is not on its
-  own proof that the runner seam holds. Proof runs are manual.
+- CI (GitHub Actions): typecheck + lint + the test suite on ubuntu. A second job builds umbel at a
+  pinned commit and runs the suites that drive the real runner; the weekly canary runs them against
+  umbel's default branch (D25). The suites that also need a tend module run locally only. Proof runs
+  are manual.
 - Docs: decisions → this file or `docs/plan.md` the moment they're made; agent reports →
   `docs/research/`, which is gitignored and stays local.
 - No `console.log` in committed code. The journal seam is the only runtime narrator; stderr only —

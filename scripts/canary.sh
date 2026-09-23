@@ -12,7 +12,8 @@
 #
 # tend2 CLI resolution: $PLEACH_CANARY_TEND2 (full invocation, e.g.
 # "node /path/to/dist/cli.js"), else `tend2` on PATH (post-#49).
-# Unresolvable → SKIP (exit 0) locally; CI treats the published CLI as required.
+# Unresolvable → SKIP (exit 0) locally, RED (exit 1) when CI=true: a green CI
+# run that checked nothing is no canary (ledger D25).
 #
 # Failure protocol (agreed on-channel 2026-08-17): a red canary BLOCKS both
 # release lanes and gets reported on the walkie channel.
@@ -33,6 +34,10 @@ if [ -z "$VERIFY_BIN" ] && command -v tend2 > /dev/null 2>&1; then
   VERIFY_BIN="tend2"
 fi
 if [ -z "$VERIFY_BIN" ]; then
+  if [ "${CI:-}" = "true" ]; then
+    echo "canary: RED — no tend2 CLI on a CI run (set PLEACH_CANARY_TEND2 or put tend2 on PATH)" >&2
+    exit 1
+  fi
   echo "canary: SKIP — no tend2 CLI (set PLEACH_CANARY_TEND2 or install tend2)" >&2
   exit 0
 fi
