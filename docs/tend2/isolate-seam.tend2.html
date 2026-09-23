@@ -103,7 +103,7 @@ Every node builds in a disposable worktree off its verified dependencies. The sc
 - [x] (code) `resolveGitDir` returns an absolute git dir for a relative repo root, for a plain clone and for a linked worktree alike — under `--repo-root .` on a plain clone the relative `.git` reached the isolate seam, whose `git -C <path>` with `cwd: <path>` resolved it twice and failed with ENOTDIR after the first worker stopped (D22, jahala/pleach#102) · test/unit/gitdir.test.ts @4f8ef0f · by cli
 
 - [x] (code) A relative `--repo-root` that is not `.`, run from another cwd, closes a node: the face resolves the root once, so the isolate and clean seams' `git -C <root>` with `cwd: <root>` never resolve a relative path twice (D22, jahala/pleach#102) · test/e2e/repo-root-relative.test.ts @988fed1 · by cli
-- [ ] (code) Eight nodes isolating at once in a fresh repository all get a tree: the seam runs `git worktree` add, remove and list one at a time, so none reads another's half-written admin dir · test/integration/isolate-concurrent.test.ts
+- [x] (code) Eight nodes isolating at once in a fresh repository all get a tree: the seam runs `git worktree` add, remove and list one at a time, so none reads another's half-written admin dir · test/integration/isolate-concurrent.test.ts @ff07847 · by cli
 
 ## For #developer #operator
 
