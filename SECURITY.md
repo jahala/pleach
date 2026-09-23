@@ -26,5 +26,9 @@ pleach is a conductor for **agent-produced code**: it spawns agent workers, runs
 - The gates (conflict-marker scan, smoke, cross-provider audit) and the deterministic loop decide what publishes. Agent output is parsed evidence, never trusted control flow.
 - pleach does **not** sandbox the worker itself; isolating the host (containers, VMs, restricted permissions) is the operator's responsibility. Workers spawn `--unattended` by default and no permission mode is set unless you pass
   `--permission-mode`; either way the assumption is that external safety is in place.
+- A worktree is not a wall. Through its `.git` pointer a worker can reach the repository's shared
+  refs, hooks and config. pleach checks the channels that could make unjudged work publish as
+  verified: refs are re-verified before use, the audit command is integrity-checked, and the
+  verified commit must hold exactly the tree its gates judged, whatever a hook does.
 
 Treat a pleach run like a CI job that executes arbitrary code: give it only the access it needs.

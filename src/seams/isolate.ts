@@ -1,7 +1,12 @@
 import type { Dirent } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { IsolateCatastrophicError, LandBlockedError, LandConflictError } from '../core/errors.ts';
+import {
+  CommitAlteredError,
+  IsolateCatastrophicError,
+  LandBlockedError,
+  LandConflictError,
+} from '../core/errors.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, IsolateSeam, Isolation } from '../loop/deps.ts';
 import { resolveGitDir } from './gitdir.ts';
@@ -407,14 +412,47 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
 
   // ── commit ───────────────────────────────────────────────────────────────
 
+  // Commit what is staged and refuse a commit whose tree is not the staged one
+  // (D24). The repository's hooks run inside `git commit` (D21) and may change
+  // the index there; bytes no gate judged must never be committed as judged.
+  // On a difference HEAD goes back to its parent (no hook runs on that, as for
+  // the snapshot) and the index keeps what the hook did, for the quarantine.
+  async function commitJudged(cwd: string, ...args: string[]): Promise<string> {
+    const parent = await gitMust(exec, cwd, 'rev-parse', 'HEAD');
+    const judged = await gitMust(exec, cwd, 'write-tree');
+    await gitMust(exec, cwd, 'commit', ...args);
+    const committed = await gitMust(exec, cwd, 'rev-parse', 'HEAD^{tree}');
+    if (committed !== judged) {
+      const changed = await gitMust(
+        exec,
+        cwd,
+        'diff-tree',
+        '-r',
+        '--name-status',
+        judged,
+        committed,
+      );
+      await gitMust(
+        exec,
+        cwd,
+        '-c',
+        'core.hooksPath=/dev/null',
+        'update-ref',
+        '--no-deref',
+        'HEAD',
+        parent,
+      );
+      throw new CommitAlteredError(changed);
+    }
+    return gitMust(exec, cwd, 'rev-parse', 'HEAD');
+  }
+
   // The phase seal (D13): a commit on the worktree's detached HEAD. No branch
   // move — `node/<id>` is published at settle only, so the close commits on top
   // of this one and the history reads base → red → verified. No --allow-empty
   // either: an empty seal would claim a red state that changed nothing.
   async function commit(cwd: string, message: string): Promise<{ sha: string }> {
-    await gitMust(exec, cwd, 'commit', '-m', message);
-    const sha = await gitMust(exec, cwd, 'rev-parse', 'HEAD');
-    return { sha };
+    return { sha: await commitJudged(cwd, '-m', message) };
   }
 
   // ── commitBranch ─────────────────────────────────────────────────────────
@@ -426,9 +464,8 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
   ): Promise<{ sha: string }> {
     // --allow-empty because a verified command-node may legitimately change nothing
     // (ledger B2 — loop calls this BEFORE emitVerdict)
-    await gitMust(exec, cwd, 'commit', '--allow-empty', '-m', message);
-    await gitMust(exec, cwd, 'branch', '-f', branch, 'HEAD');
-    const sha = await gitMust(exec, cwd, 'rev-parse', 'HEAD');
+    const sha = await commitJudged(cwd, '--allow-empty', '-m', message);
+    await gitMust(exec, cwd, 'branch', '-f', branch, sha);
     return { sha };
   }
 

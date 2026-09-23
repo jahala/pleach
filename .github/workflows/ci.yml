@@ -13,10 +13,42 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
       - name: Typecheck
         run: bun run typecheck
       - name: Lint
         run: bun run lint
       - name: Test
         run: bun run test
+
+  # The suites that drive the real umbel binary skip in the check job, which
+  # has neither umbel nor tmux (ledger D25). test/integration/ci-runner.test.ts
+  # holds this list to every such suite.
+  runner:
+    runs-on: ubuntu-latest
+    env:
+      # umbel has no releases, so a commit is the pin. Bump it once canary.yml's
+      # umbel-head job is green on the new commit.
+      UMBEL_REF: 74cd093a5d4c6df0831fe1056c5a8f23dc1075b1
+    steps:
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - uses: actions/checkout@v4
+        with:
+          repository: jahala/umbel
+          ref: ${{ env.UMBEL_REF }}
+          path: umbel-src
+      - name: Build umbel
+        run: cd umbel-src && bun install && bun run build
+      - name: Runner suites
+        env:
+          PLEACH_UMBEL_BIN: ${{ github.workspace }}/umbel-src/dist/umbel
+        run: >
+          bun test
+          test/integration/umbel-seam.test.ts
+          test/integration/umbel-idle.test.ts
+          test/integration/umbel-abort.test.ts

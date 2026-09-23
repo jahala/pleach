@@ -1,8 +1,7 @@
 # Pages-first public face (joint decision sheet #4): serve the repo DIRECTLY —
 # the landing page and every garden polyglot are already self-contained
 # webpages; the served page IS the repo file at the merged commit, so no
-# derived artifact and no parallel truth exist. DORMANT until the repo is
-# public and Pages is enabled (Settings → Pages → Source: GitHub Actions).
+# derived artifact and no parallel truth exist. Pages source: GitHub Actions.
 name: pages
 on:
   push:

@@ -32,7 +32,7 @@ Retries keep the seal honest. Once a red commit exists on the attempt's tree, a 
 - [x] (code) A retry after a sealed red resumes at the impl phase carrying the evidence — no second red prompt, no second seal; a red-gate failure before any seal restarts at red · test/loop/phase-commit-retry.test.ts @ab21104 · by cli
 - [x] (code) The seal is gated like the close: conflict markers or a secret in the red files fail `marker` / `hygiene:secret` with no commit made · test/loop/phase-commit-hygiene.test.ts @e9113bf · by cli
 - [x] (code) `pleach validate` warns on a node whose phases end on impl: `warnings[]` in the JSON, one stderr line, exit stays 0 · test/unit/validate-phases.test.ts @01a0ece · by cli
-- [x] (code) docs/journal.md documents `phase-commit`, and every event name the source appends is documented there (the stability promise, pinned) · test/unit/journal-doc.test.ts @26492b6 · by cli
+- [x] (code) docs/journal.md documents `phase-commit`, and every event name the source appends is documented there (the stability promise, pinned) · test/unit/journal-doc.test.ts @1e8e193 · by cli
 
 ## Needs #conductor-loop #isolate-seam #lock-journal
 

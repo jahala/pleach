@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>doctrine-enforced · pleach</title>
+<link rel="stylesheet" href="./loop.css">
+<body>
+<noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
+<script type="text/markdown" id="loop">
+# The doctrine's rules are tests, not prose
+
+**Goal.** A rule in ENGINEERING.md that nothing checks is a wish. The layer rules and "no bare `new Error` outside `core/errors.ts`" fail the build when broken, and the file that broke the error rule throws a typed error instead.
+
+Ledger D26, from the repository audit of 2026-09-23. The audit read every import in `src/` and found the layering intact, but only human review kept it that way. The error rule was already broken once: `seams/gitdir.ts` threw a bare `Error` for a malformed `.git` file, and it reached `classify` as unknown. The audit also found the face calling an unknown verb a missing plan when no plan path followed it.
+
+## One test reads the source tree
+
+`test/unit/architecture.test.ts` walks every `src/**/*.ts` file. It resolves each relative import, re-export and dynamic import to a layer and checks the direction: `core/` imports no other layer, `loop/` imports only `core/`, even for types, and `seams/` and `adapters/` import `loop/deps.ts` for types only, since the ports live there. The same test refuses `new Error(` anywhere but `core/errors.ts`. It reads files and runs nothing, like the drift tests beside it.
+
+## Tests
+- [x] (code) Every relative import in `src/` follows the layer rules, a planted `loop/` → `seams/` type import fails naming its file and line, and no `new Error(` appears outside `core/errors.ts` · test/unit/architecture.test.ts @8ddc055 · by cli
+- [x] (code) A `.git` file that is not a `gitdir:` pointer makes `resolveGitDir` throw `GitDirUnrecognizedError` carrying the path · test/unit/gitdir.test.ts @ba7d1ad · by cli
+- [x] (code) `pleach frobnicate` with no further argument exits 2 naming the unknown verb, and never asks for a plan file · test/e2e/cli.test.ts @6ba40f3 · by cli
+
+## Needs #conductor-loop #cli-run
+
+## For #developer
+
+## Tried
+- 2026-09-23 shaped and built from the repository audit's findings F8, F11 and F12. Red first: the architecture test failed on exactly `src/seams/gitdir.ts:29`, and its layering half passed; a planted type import from `loop/` into `seams/` made it fail naming the line, and it passed again once removed. The gitdir test failed on the missing class; the CLI test failed with "frobnicate: <plan.json> is required". Rejected a hand-kept verb list in the face, which duplicated the switch and left its default branch dead; the plan path is now asked for inside each verb's case. Rejected a biome import rule: biome cannot express "type-only from this one file".
+</script>
+<script src="./loop.js"></script>

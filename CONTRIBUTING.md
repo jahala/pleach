@@ -30,10 +30,13 @@ Enforced in review (and most by CI). Full detail in `ENGINEERING.md`:
 |---|---|
 | `PLEACH_UMBEL_BIN` | path to the `umbel` binary |
 | `PLEACH_TEND_MODULE` | path to a tend ingester module |
+| `PLEACH_CANARY_TEND2` | how `scripts/canary.sh` invokes tend2 (e.g. `node /path/to/dist/cli.js`); defaults to `tend2` on PATH |
 
-They also need `git >= 2.38` and `tmux` on PATH. With the vars unset most of those suites skip, which is exactly how CI runs.
+They also need `git >= 2.38` and `tmux` on PATH. With the vars unset most of those suites skip.
 
-Two exceptions worth knowing about. `test/integration/umbel-abort.test.ts` and `test/integration/umbel-idle.test.ts` fall back to whatever `umbel` is on PATH, so they run for anyone who has the binary installed, even with `PLEACH_UMBEL_BIN` unset. They drive the real runner, so they go red when umbel's `wait` or `kill` contract moves under them. CI has no umbel binary and never sees this, which means a green CI is not on its own proof that the runner seam still holds. Run them locally against the umbel you actually use.
+`test/integration/umbel-abort.test.ts` and `test/integration/umbel-idle.test.ts` fall back to whatever `umbel` is on PATH, so they run for anyone who has the binary installed, even with `PLEACH_UMBEL_BIN` unset.
+
+CI runs the suites that need only umbel in two places. The `runner` job in `ci.yml` builds umbel at the commit pinned in `UMBEL_REF` and runs them on every push and pull request. The weekly `umbel-head` job in `canary.yml` runs them against umbel's default branch, so a move in umbel's `wait` or `kill` contract shows within a week. Bump `UMBEL_REF` once `umbel-head` is green on the new commit. The suites that also need a tend module still run only locally.
 
 ## Pull requests
 

@@ -48,19 +48,21 @@ pleach's primary entry point: the operator's surface over [the conductor loop](c
 One command turns a plan into verified branches, and the exit code alone says whether to trust the run or intervene. Which branches get published is decided by [the conductor loop](conductor-loop.tend2.html), never here.
 
 ## Tests
-- [x] (code) All nodes close verified → exit 0; RunSummary.closed contains all node IDs; failed/blocked/skipped empty. (inferred from test/e2e/cli.test.ts — requires real umbel binary + missoula module) · test/e2e/cli.test.ts @d75b7a9 · by cli
-- [ ] (code) partial/failed/blocked nodes → exit 1; JSON summary has non-empty bucket(s). (inferred from src/faces/cli.ts:summaryExitCode + test/unit/cli-summary.test.ts)
-- [x] (code) Invalid plan JSON → exit 2; error message on stderr. (inferred from test/e2e/cli.test.ts:invalid plan JSON) · test/e2e/cli.test.ts @d4f8d25 · by cli
-- [ ] (code) Missing --tend-module (and no $PLEACH_TEND_MODULE) → exit 2 with usage error. (inferred from src/faces/cli.ts:verbRun guard) · plan.json
-- [ ] (code) Lock held by live process → exit 3 with error on stderr. (inferred from src/faces/cli.ts catch LockHeldError → return 3)
-- [x] (code) Retry ladder: flaky command node (fails once) retries and closes; node/id branch published with retry evidence. (inferred from test/e2e/cli.test.ts — requires real umbel + missoula) · test/e2e/cli.test.ts @71462a2 · by cli
+- [x] (code) All nodes close verified → exit 0; RunSummary.closed contains all node IDs; failed/blocked/skipped empty. (inferred from test/e2e/cli.test.ts — requires real umbel binary + missoula module) · test/e2e/cli.test.ts @11ed26a · by cli
+- [x] (code) summaryExitCode returns 1 whenever partial, failed, blocked, skipped, or aborted is non-empty; 0 only when all five are empty. · test/unit/cli-summary.test.ts @a80d881 · by cli
+- [x] (code) Invalid plan JSON → exit 2; error message on stderr. (inferred from test/e2e/cli.test.ts:invalid plan JSON) · test/e2e/cli.test.ts @75f00f7 · by cli
+- [x] (code) No --tend-module (and no $PLEACH_TEND_MODULE) → resolveSeams defaults to gitLedger; the run proceeds, no usage error. · test/integration/config-resolve.test.ts @0c91296 · by cli
+- [x] (code) A run started while a live run holds the lock for the same (repo, source) exits 3 naming the holder's pid, builds nothing and leaves the holder running · test/integration/stop.test.ts @43984b8 · by cli
+- [x] (code) Retry ladder: flaky command node (fails once) retries and closes; node/id branch published with retry evidence. (inferred from test/e2e/cli.test.ts — requires real umbel + missoula) · test/e2e/cli.test.ts @5c0e8fc · by cli
 - [x] (code) Resume surfacing: an already-verified node is reported, not re-run — RunSummary.alreadyVerified lists it and verbRun's stderr says 'skipped N already-verified node(s)'. · test/loop/run-plan.test.ts @84ed1ac
 
 ## For #operator
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/cli-run.tend.html) by `loop migrate`
+- 2026-09-23 gave evidence paths to the 3 unearnable checks. Rewrote "partial/failed/blocked nodes -> exit 1" to name all five failing buckets and cite test/unit/cli-summary.test.ts, which the old note only gestured at. Found "Missing --tend-module ... -> exit 2 with usage error" false: src/faces/cli.ts has no such guard, and the default ledger is gitLedger, not tend — rewrote it to the true behaviour (no --tend-module -> gitLedger default, run proceeds) proven by test/integration/config-resolve.test.ts. Retired "Lock held by live process -> exit 3": the catch(LockHeldError) -> 3 mapping in src/faces/cli.ts is real, but no existing test drives it through `pleach run`; the only exit-3-on-live-lock test (test/e2e/cli.test.ts) covers `pleach clean`'s own early return, a different code path, so it cannot serve as evidence here. `tend2 verify` stamped all 6 remaining checks; `tend2 lint --strict` is clean.
 - 2026-08-18 v1: enabled #cli-validate (user-journey edge — v2 `## Needs` is dependency-only; not migrated as a graph edge)
 - 2026-08-18 v1: enabled by #pluggable-adapters (same v1 user-journey edge, recorded on this side too)
+- 2026-09-23 restored the lock-held check retired above with evidence of its own: a B4 case in test/integration/stop.test.ts starts a real lock holder, then `pleach run` on the same source; exit 3, no `node/<id>`, holder alive. Proved it discriminates by pointing the holder at another source for one run (red).
 </script>
 <script src="./loop.js"></script>

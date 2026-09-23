@@ -111,23 +111,23 @@ The heart of pleach. Every gate, retry and close decision lives here, and the re
 An operator runs a whole DAG unattended, and only verified work publishes a branch. There is no diff-by-diff review, and no garbage reaches dependents.
 
 ## Tests
-- [ ] (code) Diamond A→{B,C}→D: B and C run after A closes; concurrency cap honored. (inferred from test/loop/run-plan.test.ts — in-memory seam harness, not mocked behavior)
-- [ ] (code) A1 dual close: non-audit node closes on done (conductor decides, no tend gate needed). (inferred from test/loop/run-plan.test.ts:A1 dual close)
-- [ ] (code) B2 commit-before-emit: commitBranch precedes emitVerdict; verdict.evidence.diffRef === sha. (inferred from test/loop/run-plan.test.ts:B2)
-- [ ] (code) emitVerdict {closed:false} on audit node → partial (not failed); dependents skipped; journal records done verdict + not-closed event. (inferred from test/loop/run-plan.test.ts:commit-on-verified)
-- [ ] (code) B1 startup reconciliation: closed dep with recorded sha but no branch → isolate receives the sha as baseRef. (inferred from test/loop/run-plan.test.ts:B1)
-- [ ] (code) B1 rebuild required: closed dep with neither branch nor sha → RebuildRequiredError before any node runs. (inferred from test/loop/run-plan.test.ts:B1)
-- [ ] (code) Blocked node (input reason) → RunSummary.blocked; dependents skipped; no retry spawn. (inferred from test/loop/run-plan.test.ts:blocked)
-- [ ] (code) C4 audit reaudit: garbage egress first time → only auditor respawned (budget 2); good egress closes node; builder spawned once. (inferred from test/loop/run-plan.test.ts:C4)
-- [ ] (code) M3 defensive copy: mutating tend's Map after readClosed does not affect the run. (inferred from test/loop/run-plan.test.ts:M3)
-- [ ] (code) dispose-before-visibility: dependent's isolate never precedes dep's dispose (cross-node wake race). (inferred from test/loop/run-plan.test.ts:lead review)
-- [ ] (code) Seed closure: closed integration node seeds transitive ancestors; ancestors don't re-run. (inferred from test/loop/run-plan.test.ts:seed closure)
-- [ ] (code) Pre-commit marker safety: markers written after in-node gate (auditor droppings) fail node; no commit. (inferred from test/loop/run-plan.test.ts:pre-commit marker safety)
-- [ ] (code) Node execution ladder order: setup exec precedes build send; scanMarkers precedes stage; smoke exec precedes audit spawn. (inferred from test/loop/run-node.test.ts:ladder ordering)
-- [ ] (code) Worker always killed after wait resolves (all paths). (inferred from test/loop/run-node.test.ts:worker always killed)
-- [ ] (code) Smoke gate fail evidence: re-prompt on retry contains the smoke output tail. (inferred from test/loop/run-node.test.ts:retry carries evidence A3)
-- [ ] (code) {command} work: exit 0 → synthetic stop WorkerResult; non-zero → GateFailedError(command). (inferred from test/loop/run-work.test.ts:{command})
-- [ ] (code) {test,phases} work: RED must fail (exit 0 throws GateFailedError(red)); GREEN must pass (non-zero throws GateFailedError(green)). (inferred from test/loop/run-work.test.ts:{test,phases})
+- [x] (code) Diamond A→{B,C}→D: B and C run after A closes; concurrency cap honored. · test/loop/run-plan.test.ts @51eba21 · by cli
+- [x] (code) A1 dual close: non-audit node closes on done (conductor decides, no tend gate needed). · test/loop/run-plan.test.ts @8a924a4 · by cli
+- [x] (code) B2 commit-before-emit: commitBranch precedes emitVerdict; verdict.evidence.diffRef === sha. · test/loop/run-plan.test.ts @a9848b4 · by cli
+- [x] (code) emitVerdict {closed:false} on audit node → partial (not failed); dependents skipped; journal records done verdict + not-closed event. · test/loop/run-plan.test.ts @b414ed9 · by cli
+- [x] (code) B1 startup reconciliation: closed dep with recorded sha but no branch → isolate receives the sha as baseRef. · test/loop/run-plan.test.ts @0cb03ad · by cli
+- [x] (code) B1 rebuild required: closed dep with neither branch nor sha → RebuildRequiredError before any node runs. · test/loop/run-plan.test.ts @0f0d806 · by cli
+- [x] (code) Blocked node (input reason) → RunSummary.blocked; dependents skipped; no retry spawn. · test/loop/run-plan.test.ts @b168c75 · by cli
+- [x] (code) C4 audit reaudit: garbage egress first time → only auditor respawned (budget 2); good egress closes node; builder spawned once. · test/loop/run-plan.test.ts @d27b479 · by cli
+- [x] (code) M3 defensive copy: mutating tend's Map after readClosed does not affect the run. · test/loop/run-plan.test.ts @19d91f8 · by cli
+- [x] (code) dispose-before-visibility: dependent's isolate never precedes dep's dispose (cross-node wake race). · test/loop/run-plan.test.ts @8a4ff35 · by cli
+- [x] (code) Seed closure: closed integration node seeds transitive ancestors; ancestors don't re-run. · test/loop/run-plan.test.ts @407fc02 · by cli
+- [x] (code) Pre-commit marker safety: markers written after in-node gate (auditor droppings) fail node; no commit. · test/loop/run-plan.test.ts @0bb0406 · by cli
+- [x] (code) Node execution ladder order: setup exec precedes build send; scanMarkers precedes stage; smoke exec precedes audit spawn. · test/loop/run-node.test.ts @76bfeb4 · by cli
+- [x] (code) Worker always killed after wait resolves (all paths). · test/loop/run-node.test.ts @ffe31fd · by cli
+- [x] (code) Smoke gate fail evidence: re-prompt on retry contains the smoke output tail. · test/loop/run-node.test.ts @9838a04 · by cli
+- [x] (code) {command} work: exit 0 → synthetic stop WorkerResult; non-zero → GateFailedError(command). · test/loop/run-work.test.ts @1ecb94a · by cli
+- [x] (code) {test,phases} work: RED must fail (exit 0 throws GateFailedError(red)); GREEN must pass (non-zero throws GateFailedError(green)). · test/loop/run-work.test.ts @f435d2a · by cli
 - [x] (code) Lazy worker spawn: a {command} node reaches a verified close without the runner ever spawning a worker. · test/loop/run-node.test.ts @1d3c34b · by cli
 - [x] (code) Resume: a node already verified in the ledger is reported in RunSummary.alreadyVerified and never re-run. · test/loop/run-plan.test.ts @fb9024e
 - [x] (code) accept.audit.model: the cross-provider auditor is spawned at the requested model when the plan pins one. · test/loop/run-node.test.ts @057c667 · by cli
@@ -136,5 +136,6 @@ An operator runs a whole DAG unattended, and only verified work publishes a bran
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/conductor-loop.tend.html) by `loop migrate`
+- 2026-09-23 gave evidence paths to the 17 checks migrated with an unearnable `(inferred from ...)` note instead of a ` · evidence-path` suffix; all 17 claims were verified true against current src and test, then reworded to drop the note and cite the proving test file (test/loop/run-plan.test.ts for the 12 scheduler/close/ordering checks, test/loop/run-node.test.ts for the 3 ladder/kill/retry checks, test/loop/run-work.test.ts for the 2 work-shape checks); none were false, none were retired. `tend2 verify` stamped all 20 checks; `tend2 lint --strict` is clean.
 </script>
 <script src="./loop.js"></script>

@@ -77,6 +77,9 @@ core/      plan.ts  validate.ts  classify.ts  errors.ts    ← pure, total
   `faces/`). `faces/` wires everything.
 - **Nothing reaches across layers.** A face never calls git; the loop never spawns a process; a seam
   never makes a scheduling decision.
+- The port interfaces (`RunnerSeam`, `IsolateSeam`, `ExecFn`, …) live in `loop/deps.ts`, so `seams/` and
+  `adapters/` import them **type-only**; that is the one upward edge. `test/unit/architecture.test.ts`
+  enforces these rules and the no-bare-`new Error` rule below (D26).
 
 ## Stack
 
@@ -131,12 +134,18 @@ reasons, conflict-file list) is a bug, not a retry.
 - **Startup reconciliation:** every closed id must resolve to a commit before the loop starts.
 - **Defensive copies:** never mutate what a seam returned.
 - **Trust boundary (declared):** Plans are trusted input. Even so: `exec` is arg-array only (no `sh -c`
-  string interpolation anywhere), `Node.id` charset is schema-enforced, and tend state is read only from
-  paths **outside** any worker-writable worktree. SHAs of refs pleach created are verified before use —
-  a worker can reach shared git refs from inside a worktree; never trust a ref it could have moved.
-  The audit gate is protected the same way (SEC4): audit commands live outside worker-writable paths
-  or are integrity-checked against the staged set before the auditor spawns, and the auditor's prompt
-  treats repository content as untrusted data, never instructions.
+  string interpolation anywhere), and `Node.id` charset is schema-enforced.
+  **pleach does not sandbox the worker** (SECURITY.md). A worker runs as the operator's user, and a
+  worktree is not a wall: through its `.git` pointer a worker reaches the shared git dir (refs, hooks,
+  config, `<git-dir>/pleach/`). Isolating the host is the operator's job. What pleach owns is that a
+  worker cannot make unjudged work publish as verified, so every channel that could forge a pass is
+  checked where it is used:
+  - SHAs of refs pleach created are verified before use; never trust a ref a worker could have moved.
+  - The audit gate (SEC4): audit commands live outside worker-writable paths or are integrity-checked
+    against the staged set before the auditor spawns, and the auditor's prompt treats repository content
+    as untrusted data, never instructions.
+  - The verified commit (D24): the repository's hooks run on it (D21), but the committed tree must equal
+    the staged tree the gates judged, or nothing publishes.
 
 ## Testing doctrine
 
@@ -155,7 +164,7 @@ raise a timeout to "fix" a flake — find the race.
   real tend transport. **No mocks. Ever.**
 - **Proof runs** — real claude builds and real codex audits against `examples/`, driven by
   `scripts/proof-run.sh`. Burns subscription; run by hand, never in CI.
-- **The ledger is the test plan.** `docs/ledger.md` items (A1–A3, B1–B4, C1–C5, D1–D23 with
+- **The ledger is the test plan.** `docs/ledger.md` items (A1–A3, B1–B4, C1–C5, D1–D26 with
   D20 unused, SEC4)
   each map to at least one named test (`// ledger: B2` comment at the test). The §6 cases from the bridge
   spec (fan-out, join-conflict, concurrency invariant, commit-on-verified, dead-retry-re-isolates,
@@ -168,9 +177,10 @@ raise a timeout to "fix" a flake — find the race.
   reviewer; the audit note goes in the PR/commit body).
 - Work in *this* repo lands on `master` via short-lived branches. Work in **umbel** and
   **tend** is PRs only, never direct pushes; cite the ledger/letter item each PR answers.
-- CI (GitHub Actions): typecheck + lint + the test suite on ubuntu, with git only. There is no tmux
-  and no umbel binary there, so the suites that drive the real runner skip — a green CI is not on its
-  own proof that the runner seam holds. Proof runs are manual.
+- CI (GitHub Actions): typecheck + lint + the test suite on ubuntu. A second job builds umbel at a
+  pinned commit and runs the suites that drive the real runner; the weekly canary runs them against
+  umbel's default branch (D25). The suites that also need a tend module run locally only. Proof runs
+  are manual.
 - Docs: decisions → this file or `docs/plan.md` the moment they're made; agent reports →
   `docs/research/`, which is gitignored and stays local.
 - No `console.log` in committed code. The journal seam is the only runtime narrator; stderr only —

@@ -873,6 +873,12 @@ describe('operator surfaces — the record survives (D21)', () => {
     expect(unsaid(readme, 'hook', facts)).toEqual([]);
   });
 
+  // ledger: D24 — a hook may refuse the verified commit but never change it.
+  test('the README says a hook that changes the verified commit fails the node and keeps its tree', () => {
+    const facts = [refusedCommitGate(), 'failed', 'judged', 'quarantine/<id>'];
+    expect(unsaid(readme, 'changes', facts)).toEqual([]);
+  });
+
   test('the README says a lost journal is reported, and where each run keeps its copy', () => {
     expect(unsaid(readme, 'journal-gap', ['run-start', 'run-end', dir, suffix])).toEqual([]);
   });

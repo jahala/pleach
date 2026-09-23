@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>runner-in-ci · pleach</title>
+<link rel="stylesheet" href="./loop.css">
+<body>
+<noscript>This page renders its markdown payload with JavaScript — enable JS, or read the raw payload in the page source.</noscript>
+<script type="text/markdown" id="loop">
+# CI sees the runner, and a green canary means it checked
+
+**Goal.** A change in umbel's runner contract turns CI red within a week, not whenever someone happens to run the suites by hand. A canary that could not run is red, never green.
+
+Ledger D25, from the repository audit of 2026-09-23. The suites that drive the real umbel binary skip without it, and CI had neither umbel nor tmux. umbel moved to one tmux socket per session, so the D2 "dead" test's `tmux kill-session` on the default socket did nothing, and the test failed on every run without anyone seeing it. The weekly canary exited 0 with "SKIP" when no tend2 CLI resolved. GitHub's runners never had one, so all five scheduled runs were green having checked nothing.
+
+## Two umbel jobs, one honest canary
+
+The fake worker writes its pid, and the dead test kills that process while the worker is still asleep before its reply, so the kill always lands first and umbel sees a real death. CI's `runner` job installs tmux, builds umbel at the commit pinned in `UMBEL_REF`, and runs every suite that needs only umbel. The weekly `umbel-head` job runs the same suites against umbel's default branch, so a contract move shows before anyone bumps the pin. A test holds both jobs to the list of such suites, so a new one cannot skip in CI unnoticed.
+
+The canary job builds tend2 from its repository. On CI a canary with no tend2 fails; locally it still skips. Until tend2's repository is public, that job is red, which is the truth.
+
+## Tests
+- [x] (code) With the real umbel binary, killing the worker process out of band while its reply is pending makes `wait` return `dead` with an empty final message · test/integration/umbel-seam.test.ts @02b2c82 · by cli
+- [x] (code) ci.yml's `runner` job pins umbel to a full commit and runs every suite that reads `PLEACH_UMBEL_BIN` without a tend module, canary.yml's `umbel-head` job runs the same list, and on CI a canary with no tend2 exits 1 while locally it skips with exit 0 · test/integration/ci-runner.test.ts @9d032bc · by cli
+
+## Needs #umbel-seam
+
+## For #developer
+
+## Tried
+- 2026-09-23 shaped and built from the repository audit's findings F5, F6 and F9. First guess at the dead test, a zero-delay race, was refuted: with a 3 s delay it still failed; the cause was umbel's per-session tmux socket. Killing the worker before the send was tried and rejected, because umbel refuses a send to a dead session. The worker now sleeps 20 s before replying in this one test, so the kill wins every time: 7 of 7 umbel-seam tests passed three runs in a row, and 13 of 13 umbel suite tests passed against both the installed umbel and umbel master at 74cd093. The canary test was red on the old script and green on the new one. The umbel-seam check skips without umbel, so it was stamped with `PLEACH_UMBEL_BIN` set in the runner; CI's `runner` job is what keeps it honest from here. The CI jobs themselves are proven only by their first run on GitHub.
+</script>
+<script src="./loop.js"></script>

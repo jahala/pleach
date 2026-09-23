@@ -14,9 +14,10 @@
  */
 import { expect, test } from 'bun:test';
 import { realpathSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
+import { GitDirUnrecognizedError } from '../../src/core/errors.ts';
 import { resolveGitDir } from '../../src/seams/gitdir.ts';
 import { createRepo, gitIn } from '../support/git-repo.ts';
 
@@ -53,5 +54,26 @@ test('a linked worktree named by a relative root resolves to an absolute git dir
     await gitIn(repo, 'worktree', 'remove', '--force', wt).catch(() => undefined);
     await rm(wtParent, { recursive: true, force: true });
     await cleanup();
+  }
+});
+
+// ledger: D26 — a `.git` file that is not a worktree pointer threw a bare Error.
+test('a .git file that is not a recognizable gitdir pointer throws GitDirUnrecognizedError', async () => {
+  const tmp = await mkdtemp(join(tmpdir(), 'pleach-gitdir-bad-'));
+  try {
+    const dotGit = join(tmp, '.git');
+    await writeFile(dotGit, 'not a gitdir pointer at all\n');
+
+    const err = (() => {
+      try {
+        return resolveGitDir(tmp);
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(GitDirUnrecognizedError);
+    expect((err as GitDirUnrecognizedError).path).toBe(dotGit);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
   }
 });
