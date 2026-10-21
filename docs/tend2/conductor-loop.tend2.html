@@ -132,10 +132,14 @@ An operator runs a whole DAG unattended, and only verified work publishes a bran
 - [x] (code) Resume: a node already verified in the ledger is reported in RunSummary.alreadyVerified and never re-run. · test/loop/run-plan.test.ts @fb9024e
 - [x] (code) accept.audit.model: the cross-provider auditor is spawned at the requested model when the plan pins one. · test/loop/run-node.test.ts @057c667 · by cli
 
+- [x] (code) A smoke gate that writes into the tree and fails is rewound before the retry: attempt 2 starts without the gate's write, `gate-writes-restored` names the path, and the published tree does not carry it · test/loop/gate-writes-restored.test.ts @3649edf · by cli
+- [x] (code) Through the real CLI, a smoke that appends `[!]` to a file and fails once leaves no `[!]` on `node/<id>` once the retry passes · test/e2e/gate-writes-restored.test.ts @07c7cf5 · by cli
+- [x] (code) The isolate seam records the whole working tree without touching the index and restores exactly what changed since: a gate's modification, deletion and new file are undone, the friction journal is kept, and a worker's untracked file the gate never touched is neither rewritten nor named · test/integration/isolate.test.ts @b24dca8 · by cli
 ## For #operator #developer
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/conductor-loop.tend.html) by `loop migrate`
 - 2026-09-23 gave evidence paths to the 17 checks migrated with an unearnable `(inferred from ...)` note instead of a ` · evidence-path` suffix; all 17 claims were verified true against current src and test, then reworded to drop the note and cite the proving test file (test/loop/run-plan.test.ts for the 12 scheduler/close/ordering checks, test/loop/run-node.test.ts for the 3 ladder/kill/retry checks, test/loop/run-work.test.ts for the 2 work-shape checks); none were false, none were retired. `tend2 verify` stamped all 20 checks; `tend2 lint --strict` is clean.
+- 2026-10-21 D32 (#131): a failed gate's writes are rewound before the retry, built by a DeepSeek V4 Pro worker through umbel. The lead's review found the restore treating every untracked file as changed, so it rewrote and named worker files no gate touched; it now records the tree after the gate and restores exactly the difference. Rejected collecting a passing gate's writes into the commit: the commit holds what was staged and judged (D24), and whole-map artefacts are re-earned at land (#112).
 </script>
 <script src="./loop.js"></script>

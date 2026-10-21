@@ -444,6 +444,29 @@ checkpoint but have different lifetimes and trust domains.**
   relative specifier from the importing module, `src/faces/`. **Fix:** `resolveSeams` resolves the path
   against the working directory before the import, so the library path is fixed too; the default
   `<repo-root>/pleach.config.ts` was already absolute (D22). Tests: `test/e2e/config-relative.test.ts`.
+- **D31 ⚠ [field] A conductor could only learn a run's state by polling its log.** jahala/pleach#114
+  (806 `tail` polls across 25 sessions, about 200k tokens of log read back, and `until … sleep` loops
+  killed by a ten-minute command cap). **Fix:** `pleach status <plan>` and `pleach wait <plan>` read the
+  run's state from the journal alone, through a pure fold (`core/run-state.ts`); `run-start` names its
+  `source` and `run-end` its `runId`, so a shared journal's runs are told apart exactly; liveness is the
+  lock's live holder. `wait` exits 0 when every node is closed or was already verified, 1 on any other
+  end, 124 on `--timeout`. Tests: `test/unit/run-state.test.ts`, `test/e2e/status-wait.test.ts`.
+- **D32 ⚠ [field] A failed gate's writes were inherited by the retry and published.** jahala/pleach#131
+  (jahala/quadrat, 2026-09-18): a whole-page `tend2 verify` smoke stamped `[!]` on a flaked check, the
+  retry inherited the mark, and the passing gate admitted a commit carrying it. **Fix:** the isolate seam
+  records the whole working tree through a temporary index before a gate (`recordTree`) and, after a red
+  run, restores exactly what the gate changed (`restoreTree`, a diff of the trees before and after),
+  keeping the never-delivered set; the loop does this for setup, smoke (both runs of the D10 retry) and
+  the phase gates, journaling `gate-writes-restored`. A passing gate's writes are still not collected
+  (D24). Tests: `test/integration/isolate.test.ts`, `test/loop/gate-writes-restored.test.ts`,
+  `test/e2e/gate-writes-restored.test.ts`.
+- **D33 ◦ [field] An ordinary check as the audit command failed only at the egress.** jahala/pleach#149
+  (jahala/cfanalytics, 2026-10-21): the auditor relays a `tend-audit-result` block the command must print,
+  and nothing a planner reads said so, so the mistake cost a full build and an audit. **Fix:**
+  `pleach audit-wrap -- <check>` runs any check and prints one block (pass on exit 0, fail otherwise,
+  the exit code and last 20 lines as reasons); the docs and the pleach-plan skill say the command must
+  print the block. Tests: `test/unit/audit-egress.test.ts`, `test/e2e/audit-wrap.test.ts`,
+  `test/loop/audit-wrap.test.ts`.
 
 ### Verified-sound (attacks refuted — do not relitigate)
 

@@ -32,7 +32,9 @@ export interface Isolation {
 // worktree at the target branch's tip. The loop gates in `cwd`, then either
 // publishes (ff-only) or disposes without a trace. Gate commands MAY write to
 // the worktree (a verifier stamping its own page is by design — never assert
-// a clean tree after a gate).
+// a clean tree after a PASSING gate). After a FAILED gate the tree is restored
+// to what it was just before the gate ran (issue #131), so a passing gate's
+// writes stay uncollected and a failed gate's never leak into the retry.
 export interface LandStack {
   cwd: string;
   // The target branch's tip as it was BEFORE these merges — the one fact an
@@ -84,6 +86,19 @@ export interface IsolateSeam {
   // manifest is unavailable; combined with never re-staging at commit time it
   // keeps auditor droppings out of verified commits (ledger S1/C2).
   changedFiles(cwd: string): Promise<string[]>;
+  // Record the whole working tree as a git tree object (issue #131), written
+  // through a TEMPORARY index so the real index and staging are untouched.
+  // Untracked files are included and `.gitignore` respected. Returns the tree
+  // sha — an opaque handle for `restoreTree`, never a commit.
+  recordTree(cwd: string): Promise<string>;
+  // Restore the working tree to a recorded tree (issue #131): paths changed or
+  // deleted since are restored from it (`git restore --source=<tree>
+  // --worktree`, never touching the index), and paths created since are removed
+  // with fs (never `git clean -fdx`). Paths under the never-delivered set
+  // (`.loop-scratch`, `.plotplot/friction`) are excluded — the gate's own
+  // writing surface stays, so settle still collects the friction journal. The
+  // real index is untouched throughout. Returns the restored paths.
+  restoreTree(cwd: string, tree: string): Promise<string[]>;
   // Commit what is staged on the detached HEAD, moving NO branch — the phase
   // seal (D13). The red state must exist in history before impl is prompted,
   // but nothing is published before settle, so the close's commit stacks on
@@ -208,6 +223,10 @@ export interface JournalSeam {
   // the journal holds them — the run's own copy at run-end (D21). A journal
   // that no longer holds that run-start throws JournalRunMissingError.
   linesSince(runId: string): Promise<string[]>;
+  // Every parsed line the journal holds, in file order — the read surface for
+  // `pleach status` / `pleach wait` (#114). An absent journal holds none; a
+  // line the seam did not write whole is dropped, exactly like verdictNodes.
+  readAll(): Promise<Record<string, unknown>[]>;
 }
 
 // A node's latest close as the store holds it (D21). `closedAt` is when the

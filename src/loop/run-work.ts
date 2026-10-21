@@ -86,6 +86,12 @@ export interface RunWorkOpts {
   // its gate runs over the explanation or a later phase builds on it. run-node
   // supplies it and reads the file itself once the attempt returns.
   wroteBlocked?: () => Promise<boolean>;
+  // Record the whole working tree before a phase command gate runs, and restore
+  // it when that gate goes red (issue #131): a gate never edits what the next
+  // attempt starts from. run-node supplies both — it owns the isolate seam and
+  // the journal, and restoreGateTree names the gate that went red.
+  recordGateTree?: () => Promise<string>;
+  restoreGateTree?: (tree: string, gate: 'red' | 'green') => Promise<void>;
 }
 
 // The base worker prompt for a node, plus an optional clearly-delimited
@@ -188,6 +194,7 @@ export async function runWork(
       if (opts.wroteBlocked !== undefined && (await opts.wroteBlocked())) return last;
 
       if (phase.phase === 'red') {
+        const before = opts.recordGateTree ? await opts.recordGateTree() : undefined;
         const { output, exitCode } = await guardedExec(exec, work.test, {
           cwd,
           timeoutMs: opts.timeoutMs,
@@ -196,19 +203,28 @@ export async function runWork(
         // already passes means no failing test was written — the TDD
         // guarantee is void.
         refuseIfCannotRun('red', output, exitCode);
-        if (exitCode === 0) throw new GateFailedError('red', output, exitCode);
+        if (exitCode === 0) {
+          // The gate went red over a tree nothing named as failing — rewind
+          // whatever the test command wrote before the retry starts from it.
+          if (before !== undefined) await opts.restoreGateTree?.(before, 'red');
+          throw new GateFailedError('red', output, exitCode);
+        }
         // The red state is sealed as its own commit before the next prompt goes
         // out (D13) — after that the tree carries impl work and nothing can
         // prove the test ever failed. A red phase that wrote nothing fails the
         // gate here instead of sealing.
         if (opts.sealRed) await opts.sealRed(last, exitCode, i);
       } else if (phase.phase === 'green') {
+        const before = opts.recordGateTree ? await opts.recordGateTree() : undefined;
         const { output, exitCode } = await guardedExec(exec, work.test, {
           cwd,
           timeoutMs: opts.timeoutMs,
         });
         refuseIfCannotRun('green', output, exitCode);
-        if (exitCode !== 0) throw new GateFailedError('green', output, exitCode);
+        if (exitCode !== 0) {
+          if (before !== undefined) await opts.restoreGateTree?.(before, 'green');
+          throw new GateFailedError('green', output, exitCode);
+        }
       }
     }
     // The guard above ran at least one phase, so last is set.

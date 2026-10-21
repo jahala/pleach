@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { cpus } from 'node:os';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
+import { OUTPUT_TAIL_LINES, renderAuditResultBlock } from '../core/audit-egress.ts';
 import {
   AuditRefusedError,
   ConfigError,
@@ -15,6 +16,12 @@ import {
 } from '../core/errors.ts';
 import { type Plan, PlanSchema } from '../core/plan.ts';
 import { receiptPrefix } from '../core/receipt.ts';
+import {
+  foldRunState,
+  type NodeRunState,
+  type NodeStatus,
+  type RunState,
+} from '../core/run-state.ts';
 import { planJsonSchema } from '../core/schema-json.ts';
 import { nodeSummaries, planWarnings, validatePlan } from '../core/validate.ts';
 import { auditNode } from '../loop/audit-node.ts';
@@ -24,7 +31,9 @@ import { verifyReceipt } from '../loop/receipt-verify.ts';
 import { runPlan } from '../loop/run-plan.ts';
 import { sweepOrphanWorktrees, sweepStaleLocks } from '../seams/clean.ts';
 import { exec } from '../seams/exec.ts';
-import { requestStop, signalRun } from '../seams/lock.ts';
+import { resolveGitDir } from '../seams/gitdir.ts';
+import { createJournal } from '../seams/journal.ts';
+import { hasLiveHolder, requestStop, signalRun } from '../seams/lock.ts';
 import { buildDeps, receiptDeps, resolveSeams } from './config.ts';
 import { narrateEvent } from './narrate.ts';
 
@@ -47,8 +56,21 @@ Usage:
   pleach land <plan.json> [flags]    Merge a verified plan's sinks onto the checked-out branch
   pleach audit <plan.json> <node>    Re-run ONLY the cross-provider audit on a quarantined
                                      node whose build was green (--repo-root applies)
+  pleach audit-wrap [--check ID] -- CMD [args…]
+                                     Run CMD (argv-style, no shell), capture its output, and print
+                                     one fenced \`tend-audit-result\` block: verdict pass on exit 0,
+                                     fail otherwise, reasons = the exit code plus the last 20 lines
+                                     of output. Exits 0 once the block printed (the egress reads the
+                                     block, not the exit code) — wrap an ordinary check in it for
+                                     accept.audit.command.
   pleach stop <plan.json> [flags]    Drain a running plan: no new nodes launch, in-flight nodes
                                      settle; --now aborts them (SIGINT to the run)
+  pleach status <plan.json> [flags]  Print the latest run's state as one JSON object (stdout) plus
+                                     a per-node table (stderr). Exit 3 when no run of this source
+                                     holds the lock.
+  pleach wait <plan.json> [flags]    Block until the run ends (or --node <id> settles), then print
+                                     like \`status\`. Exit 0 when every node closed, 1 when any
+                                     failed/blocked/partial/aborted/skipped, 124 on --timeout.
   pleach validate <plan.json>        Parse + validate a plan; print the topo order. Refuses
                                      (exit 2) a command string holding a bare shell operator
                                      (&&, |, >, ;): pleach execs without a shell — wrap shell
@@ -121,6 +143,16 @@ Flags (stop):
   --now                   Abort the in-flight nodes too: SIGINT to the run's process. Their
                           trees are quarantined as they stand and their receipts written.
 
+Flags (status / wait):
+  --repo-root PATH        Git repo the run's journal lives in (default: cwd)
+  --journal PATH          Run journal JSONL (default: <git-dir>/pleach/journal.jsonl)
+  --node ID               (wait) wait for this node to settle instead of the whole run
+  --timeout SECONDS       (wait) give up after this long and exit 124, naming the nodes still
+                          pending or running
+
+Flags (audit-wrap):
+  --check ID              The check id the verdict block reports (default: the command text)
+
 Landing: verified work is published as node/<id> branches; \`pleach land\` merges
 the plan's sinks onto the branch checked out in --repo-root. It refuses unless
 EVERY plan node is verified (with --sinks, unless every named one is), and a
@@ -153,10 +185,11 @@ node/<id> and closes; anything else writes a new quarantine receipt. It refuses
 audit verdict over an unproven build proves nothing.
 
 Exit codes:
-  0  every plan node closed (verified)
+  0  every plan node closed (verified) — for \`wait\`, the run ended with every node closed
   1  one or more nodes failed / partial / blocked / skipped (summary on stdout says which)
   2  usage error, unreadable or invalid plan
   3  lock: another conductor holds this (repo, source) — or, for \`stop\`, no run holds it
+ 124  \`wait\` timed out (--timeout) with nodes still pending or running
 
 Receipts: every close and quarantine mints a sealed receipt (facts frozen at
 classify time, sha256 pinned as a receipt-sha256 trailer in the node's commit,
@@ -186,7 +219,10 @@ interface Flags {
   landGates: string[];
   now: boolean;
   quiet: boolean;
+  node?: string;
+  timeoutSeconds?: number;
   runnerKind?: 'umbel' | 'direct-cli';
+  check?: string;
 }
 
 // The conductor's idle policy (D16): a worker quiet this long has stopped
@@ -258,6 +294,14 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         flags.journal = takeValue(arg, next);
         i += 1;
         break;
+      case '--node':
+        flags.node = takeValue(arg, next);
+        i += 1;
+        break;
+      case '--timeout':
+        flags.timeoutSeconds = takeNumber(arg, next);
+        i += 1;
+        break;
       case '--umbel-bin':
         flags.umbelBin = takeValue(arg, next);
         i += 1;
@@ -313,6 +357,16 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         i += 1;
         break;
       }
+      case '--check':
+        flags.check = takeValue(arg, next);
+        i += 1;
+        break;
+      case '--':
+        // audit-wrap: everything after -- is the command, argv-style. The
+        // separator stops flag parsing so a command's own flags survive.
+        positionals.push(...argv.slice(i + 1));
+        i = argv.length - 1;
+        break;
       default:
         throw new UsageError(`unknown flag '${arg}'`);
     }
@@ -554,6 +608,158 @@ async function verbStop(planPath: string, flags: Flags): Promise<number> {
   return 0;
 }
 
+// ── status / wait (issue #114) ──────────────────────────────────────────────
+//
+// The journal is the only source of run state; `status` folds it once and
+// `wait` re-folds it until the run ends. Both print the same one-object JSON on
+// stdout (for agents to parse) and a short per-node table on stderr. Liveness
+// comes from the lock seam: a started-but-unended run is `running` only while
+// the (repo, source) lock has a live holder, else `interrupted`.
+
+type RunLevel = 'none' | 'starting' | 'running' | 'interrupted' | 'ended';
+
+const WAIT_INTERVAL_MS = 500;
+
+function runLevel(state: RunState, live: boolean): RunLevel {
+  if (state.ended) return 'ended';
+  if (!state.started) return live ? 'starting' : 'none';
+  return live ? 'running' : 'interrupted';
+}
+
+function defaultJournalPath(repoRoot: string): string {
+  return join(resolveGitDir(repoRoot), 'pleach', 'journal.jsonl');
+}
+
+// The lock is read BEFORE the journal: run-end is written before the lock is
+// released, so a released lock followed by a journal read can never miss a
+// just-written run-end and misread a finished run as interrupted.
+async function readRunState(
+  plan: Plan,
+  flags: Flags,
+): Promise<{ state: RunState; level: RunLevel }> {
+  const live = await hasLiveHolder(flags.repoRoot, plan.source);
+  const journal = createJournal(flags.journal ?? defaultJournalPath(flags.repoRoot));
+  const state = foldRunState(
+    await journal.readAll(),
+    plan.source,
+    plan.nodes.map((n) => n.id),
+  );
+  return { state, level: runLevel(state, live) };
+}
+
+interface StatusReport {
+  started: boolean;
+  ended: boolean;
+  run: RunLevel;
+  runId?: string;
+  nodes: Record<string, NodeRunState>;
+}
+
+function statusReport(state: RunState, level: RunLevel): StatusReport {
+  return {
+    started: state.started,
+    ended: state.ended,
+    run: level,
+    ...(state.runId !== undefined ? { runId: state.runId } : {}),
+    nodes: state.nodes,
+  };
+}
+
+function renderTable(plan: Plan, state: RunState, level: RunLevel): string {
+  const ids = plan.nodes.map((n) => n.id);
+  const rows: string[][] = ids.map((id) => {
+    const n = state.nodes[id] ?? { status: 'pending' as const };
+    return [
+      id,
+      n.status,
+      n.attempts === undefined ? '' : String(n.attempts),
+      n.durationMs === undefined ? '' : String(n.durationMs),
+    ];
+  });
+  const header = ['node', 'status', 'attempts', 'duration(ms)'];
+  const all = [header, ...rows];
+  const widths = [0, 1, 2, 3].map((c) => Math.max(...all.map((r) => (r[c] ?? '').length)));
+  const line = (r: string[]): string =>
+    r
+      .map((cell, c) => cell.padEnd(widths[c] ?? 0))
+      .join('  ')
+      .trimEnd();
+  return [`pleach: ${plan.source} — ${level}`, ...all.map(line)].join('\n');
+}
+
+function isTerminal(status: NodeStatus | undefined): boolean {
+  return (
+    status === 'closed' ||
+    status === 'verified' ||
+    status === 'failed' ||
+    status === 'blocked' ||
+    status === 'partial' ||
+    status === 'aborted'
+  );
+}
+
+// Closed in this run or verified before it: both are verified work.
+const settledGreen = (status: NodeStatus | undefined): boolean =>
+  status === 'closed' || status === 'verified';
+
+function waitExitCode(state: RunState, node?: string): number {
+  if (node !== undefined) return settledGreen(state.nodes[node]?.status) ? 0 : 1;
+  return Object.values(state.nodes).every((n) => settledGreen(n.status)) ? 0 : 1;
+}
+
+async function verbStatus(planPath: string, flags: Flags): Promise<number> {
+  const plan = await readPlan(planPath);
+  const { state, level } = await readRunState(plan, flags);
+  if (level === 'none') throw new NoRunError(plan.source);
+  process.stdout.write(`${JSON.stringify(statusReport(state, level))}\n`);
+  process.stderr.write(`${renderTable(plan, state, level)}\n`);
+  return 0;
+}
+
+async function verbWait(planPath: string, flags: Flags): Promise<number> {
+  const plan = await readPlan(planPath);
+  const nodeIds = plan.nodes.map((n) => n.id);
+  if (flags.node !== undefined && !nodeIds.includes(flags.node)) {
+    throw new UsageError(`wait: node '${flags.node}' is not in the plan`);
+  }
+  const timeoutMs = flags.timeoutSeconds !== undefined ? flags.timeoutSeconds * 1000 : undefined;
+  const startedAt = Date.now();
+
+  for (;;) {
+    const { state, level } = await readRunState(plan, flags);
+    if (level === 'none') throw new NoRunError(plan.source);
+    // Started but no live holder: the run died (or threw before run-end) and
+    // no run-end is coming — waiting would never observe one.
+    if (level === 'interrupted') {
+      process.stderr.write(
+        `pleach: run for '${plan.source}' is interrupted — it started but no live lock holder remains\n`,
+      );
+      return 3;
+    }
+    const done =
+      flags.node !== undefined
+        ? isTerminal(state.nodes[flags.node]?.status) || state.ended
+        : state.ended;
+    if (done) {
+      const code = waitExitCode(state, flags.node);
+      process.stdout.write(`${JSON.stringify(statusReport(state, level))}\n`);
+      process.stderr.write(`${renderTable(plan, state, level)}\n`);
+      return code;
+    }
+    if (timeoutMs !== undefined && Date.now() - startedAt >= timeoutMs) {
+      const pending = nodeIds.filter((id) => {
+        const s = state.nodes[id]?.status;
+        return s === 'pending' || s === 'running';
+      });
+      process.stderr.write(
+        `pleach: wait timed out after ${flags.timeoutSeconds}s — still pending or running: ${pending.join(', ')}\n`,
+      );
+      return 124;
+    }
+    await new Promise((r) => setTimeout(r, WAIT_INTERVAL_MS));
+  }
+}
+
 // D12 (bandung P5): sweep a killed run's leavings. Stale locks always clear;
 // the worktree sweep refuses while any LIVE lock exists — a run may be in
 // flight, and cleaning under it would be the tmux-kill-server lesson replayed.
@@ -573,18 +779,41 @@ async function verbClean(flags: Flags): Promise<number> {
   return 0;
 }
 
+// issue #149 — turn an ordinary check into an audit-egress block. Runs the
+// command argv-style (no shell, through the exec seam like the other gates) and
+// prints exactly one fenced tend-audit-result block holding a valid
+// AuditResult. The block is the verdict: this verb exits 0 when a block was
+// printed, never to report the check passed — the egress reads the block, not
+// the exit code.
+async function verbAuditWrap(command: string[], flags: Flags): Promise<number> {
+  if (command.length === 0) {
+    throw new UsageError(
+      "audit-wrap: a command is required after `--` (e.g. audit-wrap -- bash -lc 'npm test')",
+    );
+  }
+  const { output, exitCode } = await exec(command, { cwd: process.cwd() });
+  const tail = output.split('\n').slice(-OUTPUT_TAIL_LINES).join('\n');
+  const check = flags.check ?? command.join(' ');
+  process.stdout.write(`${renderAuditResultBlock(check, exitCode, tail)}\n`);
+  return 0;
+}
+
 export async function runCli(argv: readonly string[]): Promise<number> {
   try {
     // Help rides ahead of flag parsing — parseFlags rejects unknown flags, and
     // the one flag every user tries first must never be "unknown" (ledger D-help).
-    if (argv.includes('--help') || argv.includes('-h')) {
+    // Only pleach's own flags count: after `--`, every word is a wrapped
+    // command's (audit-wrap), its own --help and --version included.
+    const separator = argv.indexOf('--');
+    const own = separator === -1 ? argv : argv.slice(0, separator);
+    if (own.includes('--help') || own.includes('-h')) {
       process.stdout.write(HELP);
       return 0;
     }
 
     // Same rule as help (P6a): a bed's garden.lock needs a version for every
     // judge, and the flag every tool tries must never be "unknown".
-    if (argv.includes('--version')) {
+    if (own.includes('--version')) {
       process.stdout.write(`${await pleachVersion()}\n`);
       return 0;
     }
@@ -616,10 +845,16 @@ export async function runCli(argv: readonly string[]): Promise<number> {
         return await verbRun(plan(), flags);
       case 'audit':
         return await verbAudit(plan(), positionals[2], flags);
+      case 'audit-wrap':
+        return await verbAuditWrap(positionals.slice(1), flags);
       case 'land':
         return await verbLand(plan(), flags);
       case 'stop':
         return await verbStop(plan(), flags);
+      case 'status':
+        return await verbStatus(plan(), flags);
+      case 'wait':
+        return await verbWait(plan(), flags);
       case 'validate':
         return await verbValidate(plan());
       default:

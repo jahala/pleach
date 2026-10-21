@@ -1,3 +1,4 @@
+import { isNeverDelivery } from '../../src/core/delivery.ts';
 import {
   IsolateCatastrophicError,
   JournalRunMissingError,
@@ -111,6 +112,16 @@ export class InMemoryGit {
   // handed that the tree actually changed (a named path with no change stages
   // nothing), emptied by a commit (D19).
   readonly index = new Map<string, string[]>();
+  // worktree cwd → worktree-relative path → file contents. The working tree as
+  // the worker and the gates leave it (issue #131): recordTree snapshots it,
+  // restoreTree rewinds it, and stage copies it into the index.
+  readonly worktree = new Map<string, Map<string, string>>();
+  // worktree cwd → staged path → the contents stage() copied — the index, the
+  // only thing a commit carries. A gate's write after staging is not in here.
+  readonly staged = new Map<string, Map<string, string>>();
+  // sha → the tree content a commit/snapshot carried (path → content), so a
+  // test can assert what a published `node/<id>` actually holds.
+  readonly commitTrees = new Map<string, Map<string, string>>();
   // worktree cwd → marker files present (conflict markers gate)
   readonly markers = new Map<string, string[]>();
   // worktree cwd → paths this tree's git ignores (the collection gate, D14)
@@ -203,10 +214,13 @@ export interface HarnessOpts {
   // naming only `output` models a child that wrote nothing to stderr, so the
   // interleaved stream IS its stdout; a script naming `stdout` too models one
   // whose stderr also spoke — `output` interleaved, `stdout` the child's own
-  // stream, which is the only one a findings log can be read from (D14).
+  // stream, which is the only one a findings log can be read from (D14). The
+  // third argument is the in-memory git, so a gate can write into the working
+  // tree it runs in (issue #131).
   execScript?: (
     argv: readonly string[],
     cwd: string,
+    git: InMemoryGit,
   ) => { output: string; stdout?: string; exitCode: number };
   // pre-seeded refs (id/sha) — e.g. recorded SHAs for B1 reconciliation tests.
   refs?: Record<string, string>;
@@ -223,6 +237,10 @@ export interface HarnessOpts {
   conflicts?: Record<string, string[]>;
   // changed files a worker leaves in its cwd, keyed by node id.
   changedByNode?: Record<string, string[]>;
+  // The contents of those files, keyed by node id then path — the working tree
+  // a gate can write into and restoreTree can rewind (issue #131). Absent, a
+  // changed file holds a `content of <path>` placeholder.
+  worktreeContentByNode?: Record<string, Record<string, string>>;
   // Staged diff text per node id (the hygiene gate's raw material); numstat
   // defaults to one-added-line per changed file unless given.
   stagedDiffByNode?: Record<string, string>;
@@ -296,6 +314,10 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   // Per-worker wait index.
   let liveWorkers = 0;
   const state = { maxConcurrent: 0 };
+  // Recorded working trees, keyed by the opaque id recordTree returns (issue
+  // #131) — restoreTree rewinds from one.
+  const recordedTrees = new Map<string, Map<string, string>>();
+  let treeSeq = 0;
 
   const defaultEgress = '```tend-audit-result\n{"verdicts":[{"check":"c","verdict":"pass"}]}\n```';
 
@@ -310,7 +332,9 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   // ── exec ──────────────────────────────────────────────────────────────────
   const exec: ExecFn = async (argv, execOpts) => {
     log.push('exec', undefined, argv.join(' '));
-    const r = opts.execScript ? opts.execScript(argv, execOpts.cwd) : { output: '', exitCode: 0 };
+    const r = opts.execScript
+      ? opts.execScript(argv, execOpts.cwd, git)
+      : { output: '', exitCode: 0 };
     return { output: r.output, stdout: r.stdout ?? r.output, exitCode: r.exitCode };
   };
 
@@ -332,6 +356,8 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     git.refs.set(branch, sha);
     git.commitMessages.set(branch, message);
     git.commitMessages.set(sha, message);
+    git.commitTrees.set(sha, new Map(git.staged.get(cwd) ?? []));
+    git.staged.delete(cwd);
     git.index.delete(cwd);
     log.push(kind, branch, sha);
     return { sha };
@@ -355,6 +381,11 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       const produced = opts.changedByNode?.[node.id] ?? ['work.out'];
       if (produced.length > 0) {
         git.changed.set(cwd, [...produced]);
+        const wt = new Map<string, string>();
+        for (const f of produced) {
+          wt.set(f, opts.worktreeContentByNode?.[node.id]?.[f] ?? `content of ${f}\n`);
+        }
+        git.worktree.set(cwd, wt);
         git.stagedDiffs.set(cwd, opts.stagedDiffByNode?.[node.id] ?? '+++ b/work.out\n+ok\n');
         git.stagedNumstats.set(
           cwd,
@@ -420,6 +451,15 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       const held = git.index.get(cwd) ?? [];
       const added = files.filter((f) => changed.includes(f) && !held.includes(f));
       git.index.set(cwd, [...held, ...added]);
+      // The index is a snapshot at stage time: copy the worktree contents, so a
+      // gate's later write never reaches the commit (issue #131).
+      const wt = git.worktree.get(cwd) ?? new Map();
+      const staged = new Map(git.staged.get(cwd) ?? []);
+      for (const f of added) {
+        const content = wt.get(f);
+        if (content !== undefined) staged.set(f, content);
+      }
+      git.staged.set(cwd, staged);
     },
     async stagedPaths(cwd): Promise<string[]> {
       return [...(git.index.get(cwd) ?? [])];
@@ -427,6 +467,47 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     async changedFiles(cwd): Promise<string[]> {
       log.push('changedFiles', undefined, cwd);
       return git.changed.get(cwd) ?? [];
+    },
+    // Record the working tree as an opaque snapshot (issue #131): the real seam
+    // writes a git tree through a temporary index; here the snapshot is the
+    // in-memory tree itself, keyed by the returned id.
+    async recordTree(cwd): Promise<string> {
+      log.push('recordTree', undefined, cwd);
+      const id = `tree-${treeSeq++}`;
+      recordedTrees.set(id, new Map(git.worktree.get(cwd) ?? []));
+      return id;
+    },
+    // Rewind the working tree to a recorded snapshot, mirroring the real seam:
+    // changed or deleted paths go back to the recorded content, created paths
+    // are dropped, and never-delivery paths (the friction journal) are kept.
+    // Returns the restored paths.
+    async restoreTree(cwd, tree): Promise<string[]> {
+      const snap = recordedTrees.get(tree);
+      if (snap === undefined) {
+        throw new IsolateCatastrophicError(tree, 'no such recorded tree (harness)');
+      }
+      const current = new Map(git.worktree.get(cwd) ?? []);
+      const paths = new Set([...snap.keys(), ...current.keys()]);
+      const restored: string[] = [];
+      const next = new Map<string, string>();
+      for (const p of paths) {
+        if (isNeverDelivery(p)) {
+          const keep = current.get(p);
+          if (keep !== undefined) next.set(p, keep);
+          continue;
+        }
+        const before = snap.get(p);
+        const after = current.get(p);
+        if (before === after) {
+          if (after !== undefined) next.set(p, after);
+          continue;
+        }
+        restored.push(p);
+        if (before !== undefined) next.set(p, before);
+      }
+      git.worktree.set(cwd, next);
+      log.push('restoreTree', undefined, cwd);
+      return restored;
     },
     async stagedDiff(cwd): Promise<string> {
       return git.stagedDiffs.get(cwd) ?? '';
@@ -441,6 +522,8 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       git.commitMessages.set(sha, message);
       const stat = git.statOf(cwd);
       if (stat !== null) git.commitStats.set(sha, stat);
+      git.commitTrees.set(sha, new Map(git.staged.get(cwd) ?? []));
+      git.staged.delete(cwd);
       git.index.delete(cwd);
       log.push('commit', undefined, `${cwd}:${sha}`);
       return { sha };
@@ -640,6 +723,9 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
         }
       }
       throw new JournalRunMissingError(JOURNAL_PATH, runId);
+    },
+    async readAll(): Promise<Record<string, unknown>[]> {
+      return [...journalEvents];
     },
   };
 

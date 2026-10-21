@@ -40,15 +40,18 @@ The contract that makes the cross-provider audit gate trustworthy. The gate itse
 The auditor's verdict is recovered verbatim and parsed deterministically, so a bad relay cannot burn a node whose gates were green. What happens to such a node is [the conductor loop](conductor-loop.tend2.html)'s: it quarantines, and `pleach audit` re-adjudicates it.
 
 ## Tests
-- [x] (code) Single fenced tend-audit-result block: JSON parsed and returned correctly. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @10627ce
-- [x] (code) Multiple blocks: LAST block wins; earlier blocks ignored. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @6950317
-- [x] (code) No fenced block → AuditParseError carrying the raw message. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @99e4250
-- [x] (code) Block present but content not valid JSON → AuditParseError. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @832eb42
-- [x] (code) buildAuditPrompt contains exact command and instructs auditor to reproduce block verbatim. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @0825421
+- [x] (code) Single fenced tend-audit-result block: JSON parsed and returned correctly. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @26d80ff · by cli
+- [x] (code) Multiple blocks: LAST block wins; earlier blocks ignored. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @895bc07 · by cli
+- [x] (code) No fenced block → AuditParseError carrying the raw message. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @91bdaa2 · by cli
+- [x] (code) Block present but content not valid JSON → AuditParseError. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @c1d0afa · by cli
+- [x] (code) buildAuditPrompt contains exact command and instructs auditor to reproduce block verbatim. (inferred from test/unit/audit-egress.test.ts) · test/unit/audit-egress.test.ts @37ea5b9 · by cli
 
+- [x] (code) The audit block renderer's output parses back through `extractAuditJson` into a valid `AuditResult`, pass on exit 0 and fail otherwise, with the exit code and output tail as reasons, backticks in the tail included · test/unit/audit-egress.test.ts @136326b · by cli
+- [x] (code) `pleach audit-wrap -- <command>` prints one block, pass or fail by the command's exit, names `--check`, leaves the wrapped command's own `--help` and `--version` to it, and a missing command exits 2 · test/e2e/audit-wrap.test.ts @82f8667 · by cli
 ## For #developer #operator
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/audit-egress.tend.html) by `loop migrate`
+- 2026-10-21 D33 (#149): `pleach audit-wrap`, built by a DeepSeek V4 Pro worker through umbel; the docs and the pleach-plan skill say an audit command must print the block. The lead's review found `--help` and `--version` read from the whole command line, which swallowed a wrapped command's own flags, and added that the auditor needs `pleach` on its PATH. Rejected a `validate` warning for audit commands that may not print a block: a guess would be noise.
 </script>
 <script src="./loop.js"></script>

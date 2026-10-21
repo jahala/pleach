@@ -326,6 +326,8 @@ export async function runNode(
             redSealedAt = phaseIndex;
           },
           wroteBlocked: async () => (await deps.isolate.readBlocked(cwd)) !== null,
+          recordGateTree: () => deps.isolate.recordTree(cwd),
+          restoreGateTree: (tree, gate) => restoreGateWrites(deps, node.id, gate, cwd, tree),
         });
       } catch (err) {
         await worker?.kill();
@@ -830,14 +832,48 @@ export async function execGateWithRetry(
   command: string,
   opts: { cwd: string; timeoutMs: number },
 ): Promise<ExecResult> {
+  // Issue #131: a gate never edits what the next attempt starts from. Record the
+  // tree before the gate; every red run is rewound so its writes are not
+  // inherited — the D10 gate-only retry runs on the tree as it was before the
+  // first run, and a final red leaves the tree clean for the worker retry or
+  // the quarantine.
+  const before = await deps.isolate.recordTree(opts.cwd);
   const first = await guardedExec(deps.exec, command, opts);
   if (first.exitCode === 0 || gateFault(first.exitCode) !== null) return first;
   await deps.journal.append({ event: 'gate-retry', node: nodeId, gate });
+  await restoreGateWrites(deps, nodeId, gate, opts.cwd, before);
   const retry = await guardedExec(deps.exec, command, opts);
   if (retry.exitCode === 0) {
     await deps.journal.append({ event: 'gate-flaky', node: nodeId, gate });
+    return retry; // green: a passing gate's writes are still not collected.
   }
-  return retry; // green: proceed; red: the RETRY run is the evidence.
+  // red: the RETRY run's writes are rewound too, so the worker retry (or the
+  // quarantine snapshot) starts from the pre-gate tree.
+  await restoreGateWrites(deps, nodeId, gate, opts.cwd, before);
+  return retry;
+}
+
+// Rewind a failed gate's writes and name what was restored (issue #131). The
+// journal list is capped — a gate that rewrites a whole map would otherwise
+// flood the line — with the real total carried beside it.
+const RESTORED_PATHS_CAP = 50;
+
+async function restoreGateWrites(
+  deps: ConductorDeps,
+  node: string,
+  gate: string,
+  cwd: string,
+  tree: string,
+): Promise<void> {
+  const paths = await deps.isolate.restoreTree(cwd, tree);
+  if (paths.length === 0) return;
+  await deps.journal.append({
+    event: 'gate-writes-restored',
+    node,
+    gate,
+    paths: paths.slice(0, RESTORED_PATHS_CAP),
+    count: paths.length,
+  });
 }
 
 // ── the deterministic scans (shared by the close and the seal) ───────────────
