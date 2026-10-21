@@ -40,6 +40,21 @@ async function extractMinimalConfig(): Promise<string> {
   return `${doc.slice(codeStart, fenceClose).trim()}\n`;
 }
 
+// The install command the doc gives a consumer, read from the `sh` block that
+// precedes the example config. The test runs THAT command, with the GitHub
+// spec swapped for this checkout so it needs no network: drop the step from
+// the doc and the import goes back to "Cannot find module".
+const DOCUMENTED_SPEC = 'github:jahala/pleach';
+
+async function documentedInstall(): Promise<string[]> {
+  const doc = await readFile(ADAPTERS_DOC, 'utf8');
+  const end = doc.indexOf('A minimal `pleach.config.ts`');
+  const block = [...doc.slice(0, end).matchAll(/```sh\n([^`]*?)\n```/g)].at(-1)?.[1] ?? '';
+  const argv = block.trim().split(/\s+/);
+  expect(argv).toEqual(['bun', 'add', '-d', DOCUMENTED_SPEC]);
+  return argv.map((a) => (a === DOCUMENTED_SPEC ? `file:${CHECKOUT}` : a));
+}
+
 interface RunResult {
   code: number;
   stdout: string;
@@ -77,8 +92,8 @@ describe('consumer repo — documented pleach.config.ts resolves (#147)', () => 
   });
 
   test('the documented config resolves after the documented install step', async () => {
-    // The documented install step, run offline against this checkout.
-    const add = await execLocal(['bun', 'add', '-d', `file:${CHECKOUT}`], repo);
+    // ledger: D29 — the documented install step, run offline against this checkout.
+    const add = await execLocal(await documentedInstall(), repo);
     expect(add.exitCode).toBe(0);
 
     // The example config, taken verbatim from docs/adapters.md.
