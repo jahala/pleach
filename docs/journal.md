@@ -59,7 +59,7 @@ tolerate unknown events and unknown fields.
 | `land-integrity-failed` | `command`, `outputTail` | culprit-free subset also failed — diagnosis untrusted, nothing lands |
 | `land-blocked` | `reason` or `unverified` (ids) | landing refused — nothing touched |
 | `land-conflict` | `ref`, `files` | merge conflict — repository left untouched |
-| `land-merge-refused` | `ref`, `output` | the merge resolved (no conflicted files) but the repository's own hook (`commit-msg` / `pre-merge-commit`) refused to record it — a refusal, not a conflict; `output` is git's own words, the hook's refusal among them. The repository is left untouched |
+| `land-merge-refused` | `ref`, `outputTail` | git refused a landing merge without a conflict, most often because a merge commit's hook (`commit-msg`, `pre-merge-commit`) said no; `outputTail` is the end of git's output, which names the cause. | The repository is left untouched |
 | `landed` | landing result fields | verified sinks merged onto the checked-out branch |
 
 ## The envelope

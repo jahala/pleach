@@ -614,10 +614,10 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
             .filter(Boolean);
           await git(exec, worktreePath, 'merge', '--abort');
           if (files.length === 0) {
-            // No unmerged files: the merge resolved but git refused to record
-            // it — the repository's own hook (commit-msg / pre-merge-commit)
-            // said no (D21). A hook is the repository's gate, so this is a
-            // refusal, not a conflict: nothing is conflicted to name.
+            // No unmerged files: git refused the merge without a conflict. Most
+            // often a merge commit's hook (commit-msg, pre-merge-commit) said
+            // no, which is the repository's own gate (D21); git's output names
+            // the cause either way (D28).
             throw new LandMergeRefusedError(ref, merge.output);
           }
           throw new LandConflictError(ref, files);

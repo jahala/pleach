@@ -129,7 +129,7 @@ describe('landPlan', () => {
 
     const refused = h.journal.find((e) => e.event === 'land-merge-refused');
     expect(refused?.ref).toBe('node/a');
-    expect(refused?.output).toContain('house rule: no merges from this tree');
+    expect(refused?.outputTail).toContain('house rule: no merges from this tree');
     expect(h.log.count('lock.release')).toBe(1);
   });
 

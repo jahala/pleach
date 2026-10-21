@@ -215,11 +215,10 @@ export class LandBlockedError extends Error {
   }
 }
 
-// Landing's merge resolved — no unmerged files — but git refused to record it:
-// the repository's own hook (commit-msg / pre-merge-commit) said no (ledger
-// D21). A hook is the repository's gate, not pleach's to skip, so this is a
-// REFUSAL, distinct from LandConflictError: there are no conflicted files to
-// name. `output` is git's own words, the hook's refusal among them.
+// ledger: D28 — landing's merge failed with no unmerged files: git refused it
+// without a conflict. Most often a merge commit's hook (commit-msg,
+// pre-merge-commit) said no, the repository's own gate (D21). Distinct from
+// LandConflictError, which names conflicted files; `output` is git's words.
 export class LandMergeRefusedError extends Error {
   readonly name = 'LandMergeRefusedError';
   readonly ref: string;

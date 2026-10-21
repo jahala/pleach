@@ -103,7 +103,7 @@ export async function landPlan(
         await deps.journal.append({
           event: 'land-merge-refused',
           ref: err.ref,
-          output: err.output.trim(),
+          outputTail: err.output.trim().slice(-OUTPUT_TAIL_MAX),
         });
       } else if (err instanceof LandBlockedError) {
         await deps.journal.append({ event: 'land-blocked', reason: err.reason });
