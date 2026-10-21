@@ -683,7 +683,7 @@ async function runUnderLock(
   };
   // The run-end names the copy before the copy is made, so the copy holds it.
   const journalCopy = deps.receipts.runJournalPath(runId);
-  await deps.journal.append({ event: 'run-end', ...summary, journalCopy });
+  await deps.journal.append({ event: 'run-end', runId, ...summary, journalCopy });
   await copyRunJournalOrJournal(deps, runId, journalCopy);
   return summary;
 }

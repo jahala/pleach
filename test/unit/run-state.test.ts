@@ -26,10 +26,12 @@ const verdict = (node: string, status: string, attempts = 1, durationMs = 10): L
 });
 const closed = (node: string): Line => ({ event: 'closed', node, sha: 'abc' });
 const notClosed = (node: string): Line => ({ event: 'not-closed', node });
-const runEnd = (runId: string): Line => ({
+const runEnd = (runId: string, alreadyVerified: string[] = []): Line => ({
   event: 'run-end',
+  runId,
   closed: [],
   failed: [],
+  alreadyVerified,
   journalCopy: `/runs/${runId}.journal.jsonl`,
 });
 
@@ -147,5 +149,30 @@ describe('foldRunState', () => {
       ['a'],
     );
     expect(state.nodes.a?.status).toBe('skipped');
+  });
+
+  // ledger: D31 — a resumed run's already-verified nodes are verified, not skipped.
+  test('a node the run-end lists as already verified is verified', () => {
+    const state = foldRunState(
+      [
+        runStart('mine', 'r1'),
+        nodeStart('b'),
+        verdict('b', 'done'),
+        closed('b'),
+        runEnd('r1', ['a']),
+      ],
+      'mine',
+      ['a', 'b'],
+    );
+    expect(state.nodes.a?.status).toBe('verified' as NodeStatus);
+    expect(state.nodes.b?.status).toBe('closed');
+  });
+
+  // ledger: D31 — a run-end is ours by the runId it carries, not by a path.
+  test('a run-end carrying another runId does not end ours, even with no journalCopy', () => {
+    const other = { event: 'run-end', runId: 'r9', closed: [], failed: [] };
+    const state = foldRunState([runStart('mine', 'r1'), nodeStart('a'), other], 'mine', ['a']);
+    expect(state.ended).toBe(false);
+    expect(state.nodes.a?.status).toBe('running');
   });
 });

@@ -164,6 +164,19 @@ describe('pleach status / wait — e2e', () => {
     }
   }, 60_000);
 
+  // ledger: D31 — a resumed run whose nodes were all verified before is all green.
+  test('wait after a resumed run with every node already verified exits 0, each node verified', async () => {
+    const first = await pleach(['run', planPath, '--repo-root', repo], repo);
+    expect(first.code).toBe(0);
+    const again = await pleach(['run', planPath, '--repo-root', repo], repo);
+    expect(again.code).toBe(0);
+
+    const w = await pleach(['wait', planPath, '--repo-root', repo], repo);
+    expect(w.code).toBe(0);
+    const state = JSON.parse(w.stdout.trim()) as StateJson;
+    for (const id of ['a', 'b', 'c']) expect(state.nodes[id]?.status).toBe('verified');
+  }, 60_000);
+
   test('status with no run of this source exits 3', async () => {
     const s = await pleach(['status', planPath, '--repo-root', repo], repo);
     expect(s.code).toBe(3);

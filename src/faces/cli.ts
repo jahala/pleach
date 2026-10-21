@@ -668,6 +668,7 @@ function renderTable(plan: Plan, state: RunState, level: RunLevel): string {
 function isTerminal(status: NodeStatus | undefined): boolean {
   return (
     status === 'closed' ||
+    status === 'verified' ||
     status === 'failed' ||
     status === 'blocked' ||
     status === 'partial' ||
@@ -675,9 +676,13 @@ function isTerminal(status: NodeStatus | undefined): boolean {
   );
 }
 
+// Closed in this run or verified before it: both are verified work.
+const settledGreen = (status: NodeStatus | undefined): boolean =>
+  status === 'closed' || status === 'verified';
+
 function waitExitCode(state: RunState, node?: string): number {
-  if (node !== undefined) return state.nodes[node]?.status === 'closed' ? 0 : 1;
-  return Object.values(state.nodes).every((n) => n.status === 'closed') ? 0 : 1;
+  if (node !== undefined) return settledGreen(state.nodes[node]?.status) ? 0 : 1;
+  return Object.values(state.nodes).every((n) => settledGreen(n.status)) ? 0 : 1;
 }
 
 async function verbStatus(planPath: string, flags: Flags): Promise<number> {

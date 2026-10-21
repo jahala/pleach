@@ -7,7 +7,9 @@
 // node-start yet), `running` (node-start, no verdict), or the verdict's own
 // status — `done` closes to `closed`, `done` declined by the ledger closes to
 // `partial`, every other terminal verdict (failed/dead/timeout/rejected) reads
-// `failed`, and a node never started by the time the run ends reads `skipped`.
+// `failed`, a node the run-end lists as already verified (a resumed run never
+// rebuilds it) reads `verified`, and a node never started by the time the run
+// ends reads `skipped`.
 //
 // Liveness is NOT decided here: whether a run whose start has no end is
 // `running` or `interrupted` depends on the lock's live holder, which is I/O
@@ -19,6 +21,7 @@ export type NodeStatus =
   | 'running'
   | 'done'
   | 'closed'
+  | 'verified'
   | 'failed'
   | 'blocked'
   | 'partial'
@@ -133,18 +136,19 @@ export function foldRunState(
         if (inPlan) narrow(nodes, node as string, 'partial');
         break;
       case 'run-end': {
-        // Whose end is it? The journalCopy path carries the run's runId, so a
-        // run-end written by another source's interleaved run is not mistaken
-        // for ours. A missing journalCopy (never in practice) is treated as
-        // ours — same-source runs are serialised.
-        const journalCopy = asString(line.journalCopy);
-        if (runId === undefined || journalCopy === undefined || journalCopy.includes(runId)) {
-          for (const id of nodeIds) {
-            if (nodes[id]?.status === 'pending') nodes[id] = { status: 'skipped' };
-          }
-          return { started: true, ended: true, runId, nodes };
+        // Whose end is it? A run-end names its runId, so one written by another
+        // source's interleaved run is not mistaken for ours.
+        if (runId === undefined || asString(line.runId) !== runId) break;
+        const verified = new Set(
+          Array.isArray(line.alreadyVerified)
+            ? line.alreadyVerified.filter((v) => typeof v === 'string')
+            : [],
+        );
+        for (const id of nodeIds) {
+          if (verified.has(id)) nodes[id] = { status: 'verified' };
+          else if (nodes[id]?.status === 'pending') nodes[id] = { status: 'skipped' };
         }
-        break;
+        return { started: true, ended: true, runId, nodes };
       }
       default:
         break;
