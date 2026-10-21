@@ -51,6 +51,15 @@ async function liveHolder(repoRoot: string, source: string): Promise<number> {
   return pid;
 }
 
+// Whether a LIVE run holds this (repoRoot, source) — the read-only half of
+// liveHolder, without its NoRunError. `pleach status` / `pleach wait` ask this
+// to tell `running` (a live holder, no run-end yet) from `interrupted` (the
+// lock is gone or its pid is dead) and `none` (no run at all) (#114).
+export async function hasLiveHolder(repoRoot: string, source: string): Promise<boolean> {
+  const pid = await readPid(lockPath(repoRoot, source));
+  return pid !== null && isAlive(pid);
+}
+
 // ledger: D16 — write the drain marker for a live run and answer whose it is.
 // The bytes are nothing; the file's presence is the whole request, which is what
 // lets the scheduler ask for it with a single stat per launch decision.

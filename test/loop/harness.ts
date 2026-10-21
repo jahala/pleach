@@ -641,6 +641,9 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       }
       throw new JournalRunMissingError(JOURNAL_PATH, runId);
     },
+    async readAll(): Promise<Record<string, unknown>[]> {
+      return [...journalEvents];
+    },
   };
 
   // ── receipts ────────────────────────────────────────────────────────────────
