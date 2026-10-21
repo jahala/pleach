@@ -26,6 +26,13 @@ bunx github:jahala/pleach validate plan.json
 bunx github:jahala/pleach run plan.json
 ```
 
+`bunx` runs pleach from bun's cache, so it does not make `pleach/*` imports resolve in your repo.
+To import the bundled adapters from a `pleach.config.ts`, install pleach as a dependency:
+
+```sh
+bun add -d github:jahala/pleach
+```
+
 The default runner also wants `tmux` and an `umbel` binary. `--runner direct-cli` needs neither,
 only the `claude` and `codex` CLIs.
 
