@@ -208,6 +208,10 @@ export interface JournalSeam {
   // the journal holds them — the run's own copy at run-end (D21). A journal
   // that no longer holds that run-start throws JournalRunMissingError.
   linesSince(runId: string): Promise<string[]>;
+  // Every parsed line the journal holds, in file order — the read surface for
+  // `pleach status` / `pleach wait` (#114). An absent journal holds none; a
+  // line the seam did not write whole is dropped, exactly like verdictNodes.
+  readAll(): Promise<Record<string, unknown>[]>;
 }
 
 // A node's latest close as the store holds it (D21). `closedAt` is when the

@@ -17,7 +17,7 @@ tolerate unknown events and unknown fields.
 
 | event | fields | meaning |
 |---|---|---|
-| `run-start` | `goal`, `nodes` (count), `runId` (when the run began, RFC 3339 UTC with `:` written `-` so it can name a file) | a run began |
+| `run-start` | `goal`, `source` (the plan's source), `nodes` (count), `runId` (when the run began, RFC 3339 UTC with `:` written `-` so it can name a file) | a run began |
 | `journal-gap` | `node`, `receiptSha256`, `closedAt` (the receipt file's modification time, RFC 3339 UTC — not a sealed fact) | written right after `run-start`, once per node whose latest receipt at `<git-dir>/pleach/receipts/<node>.json` has no `verdict` line anywhere in this journal (D21). The receipts are sealed and kept per close; the journal is one file that can be lost. A gap is the journal missing a close the receipts still hold, whatever plan wrote it. A complete journal writes none |
 | `journal-gap-check-failed` | `detail` | the gap check could not read the receipts or the journal. It reports and never decides, so the run goes on |
 | `node-start` | `node` | a node's attempt ladder began |

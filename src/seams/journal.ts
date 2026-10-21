@@ -81,6 +81,24 @@ export function createJournal(
       }
       throw new JournalRunMissingError(path, runId);
     },
+    async readAll(): Promise<Record<string, unknown>[]> {
+      let text: string;
+      try {
+        text = await readFile(path, 'utf8');
+      } catch (err) {
+        // No journal yet holds no lines — the honest answer for a run that has
+        // not begun (or has had its journal deleted). Anything else is the
+        // reader's to journal, exactly like verdictNodes.
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+        throw err;
+      }
+      const out: Record<string, unknown>[] = [];
+      for (const raw of text.split('\n')) {
+        const line = parseLine(raw);
+        if (line !== null) out.push(line);
+      }
+      return out;
+    },
   };
 }
 

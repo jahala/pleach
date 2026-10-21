@@ -114,6 +114,7 @@ async function runUnderLock(
   await deps.journal.append({
     event: 'run-start',
     goal: plan.goal,
+    source: plan.source,
     nodes: plan.nodes.length,
     runId,
   });
