@@ -411,66 +411,50 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     }
   }
 
-  // Rewind the working tree to a tree `recordTree` recorded: paths the gate
-  // changed or deleted since are restored from the tree (worktree only — the
-  // index is never touched), and paths it created since are removed with fs.
-  // `git clean -fdx` would reach files the worker itself made, so removal is
-  // scoped to exactly the files the tree never held. Paths under the
-  // never-delivered set (`.loop-scratch`, `.plotplot/friction`) are excluded:
-  // that is the gate's own writing surface, and settle collects the friction
-  // journal from it (D14). Returns the paths that were restored or removed.
+  // Rewind the working tree to a tree `recordTree` recorded (D32): record it
+  // again, and the two trees' difference is the gate's writes. Paths the gate
+  // changed or deleted are restored from the recorded tree (worktree only, the
+  // index is never touched); paths it created are removed. The never-delivered
+  // set (`.loop-scratch`, `.plotplot/friction`) is the gate's own writing
+  // surface and is kept, since settle collects the friction journal (D14).
+  // Returns the paths restored or removed.
   async function restoreTree(cwd: string, tree: string): Promise<string[]> {
-    const quotePath = ['-c', 'core.quotePath=false'];
-
-    // The paths the recorded tree holds — the set that existed before the gate.
-    const ls = await git(exec, cwd, ...quotePath, 'ls-tree', '-r', '-z', '--name-only', tree);
-    if (ls.exitCode !== 0) {
-      throw new IsolateCatastrophicError(
-        'git ls-tree',
-        `exited ${ls.exitCode} in ${cwd}:\n${ls.output}`,
-      );
-    }
-    const inTree = new Set(ls.output.split('\0').filter((p) => p !== ''));
-
-    // Paths that differ between the tree and the working tree: tracked-in-tree
-    // files the gate modified or deleted, and tracked files it wrote at a path
-    // the tree never held.
-    const diff = await git(exec, cwd, ...quotePath, 'diff', '--name-only', '-z', tree);
-    if (diff.exitCode !== 0) {
-      throw new IsolateCatastrophicError(
-        'git diff',
-        `exited ${diff.exitCode} in ${cwd}:\n${diff.output}`,
-      );
-    }
-    const differing = diff.output.split('\0').filter((p) => p !== '');
-
-    // Untracked files (not ignored, never staged) the gate may have created.
-    const others = await git(
+    // The tree as the gate left it, recorded the same way, so the difference
+    // is exactly the gate's: a worker's untracked file the gate never touched
+    // is the same blob in both and is neither restored nor named (D32).
+    const after = await recordTree(cwd);
+    if (after === tree) return [];
+    const diff = await gitMust(
       exec,
       cwd,
-      ...quotePath,
-      'ls-files',
-      '--others',
-      '--exclude-standard',
+      '-c',
+      'core.quotePath=false',
+      'diff-tree',
+      '-r',
       '-z',
+      '--no-renames',
+      '--name-status',
+      tree,
+      after,
     );
-    if (others.exitCode !== 0) {
-      throw new IsolateCatastrophicError(
-        'git ls-files',
-        `exited ${others.exitCode} in ${cwd}:\n${others.output}`,
-      );
+    const fields = diff.split('\0').filter((f) => f !== '');
+    const toRestore: string[] = [];
+    const toRemove: string[] = [];
+    for (let k = 0; k + 1 < fields.length; k += 2) {
+      const status = fields[k] as string;
+      const path = fields[k + 1] as string;
+      if (isNeverDelivery(path)) continue;
+      // A: the gate created it. M, D, T: the recorded tree holds it.
+      if (status === 'A') toRemove.push(path);
+      else toRestore.push(path);
     }
-    const untracked = others.output.split('\0').filter((p) => p !== '');
-
-    const changed = [...new Set([...differing, ...untracked])].filter((p) => !isNeverDelivery(p));
-    const toRestore = changed.filter((p) => inTree.has(p));
-    const toRemove = changed.filter((p) => !inTree.has(p));
 
     if (toRestore.length > 0) {
       await gitMust(
         exec,
         cwd,
-        ...quotePath,
+        '-c',
+        'core.quotePath=false',
         'restore',
         '--source',
         tree,

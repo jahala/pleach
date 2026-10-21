@@ -708,3 +708,36 @@ test("recordTree/restoreTree rewinds a gate's writes, keeps friction, and never 
     await repo.cleanup();
   }
 });
+
+// ledger: D32 — the restore names only what the gate changed. A worker's own
+// untracked file, and one the gate rewrote, are told apart; a worker's
+// untracked file the gate deleted comes back.
+test('restoreTree touches and names only the paths the gate changed', async () => {
+  const repo = await createRepo();
+  try {
+    const seam = createIsolateSeam(execLocal, repo.path);
+    const cwd = repo.path;
+
+    // The worker's delivery: two untracked files and one tracked change.
+    await writeFile(join(cwd, 'kept.txt'), 'worker\n');
+    await writeFile(join(cwd, 'rewritten.txt'), 'worker\n');
+    await writeFile(join(cwd, 'gone.txt'), 'worker\n');
+    await writeFile(join(cwd, 'init.txt'), 'worker edit\n');
+
+    const tree = await seam.recordTree(cwd);
+
+    // The gate rewrites one worker file, deletes another, leaves the rest.
+    await writeFile(join(cwd, 'rewritten.txt'), 'gate\n');
+    await rm(join(cwd, 'gone.txt'));
+
+    const restored = await seam.restoreTree(cwd, tree);
+
+    expect([...restored].sort()).toEqual(['gone.txt', 'rewritten.txt']);
+    expect(await readFile(join(cwd, 'rewritten.txt'), 'utf8')).toBe('worker\n');
+    expect(await readFile(join(cwd, 'gone.txt'), 'utf8')).toBe('worker\n');
+    expect(await readFile(join(cwd, 'kept.txt'), 'utf8')).toBe('worker\n');
+    expect(await readFile(join(cwd, 'init.txt'), 'utf8')).toBe('worker edit\n');
+  } finally {
+    await repo.cleanup();
+  }
+});
