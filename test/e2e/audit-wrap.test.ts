@@ -64,6 +64,18 @@ describe('pleach audit-wrap — e2e (issue #149)', () => {
     });
   });
 
+  // ledger: D33 — the wrapped command's own --help and --version are the command's.
+  test('flags after -- belong to the command, even --help and --version', async () => {
+    for (const flag of ['--help', '--version']) {
+      const r = await pleach(['audit-wrap', '--', 'echo', flag]);
+      expect(r.code).toBe(0);
+      expect(verdict(r.stdout).verdicts[0]).toMatchObject({
+        verdict: 'pass',
+        reasons: ['exit 0', flag],
+      });
+    }
+  });
+
   test('a missing command is a usage error (exit 2)', async () => {
     const r = await pleach(['audit-wrap', '--']);
     expect(r.code).toBe(2);

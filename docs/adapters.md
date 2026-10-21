@@ -369,6 +369,10 @@ verdict whose `check` is `--check` (or the command text), `verdict` is `pass` on
 exits 0 when it printed a block — the verdict is in the block, and the egress reads the
 block, not the exit code.
 
+The auditor runs the audit command in its own shell, so `pleach` must be on its PATH
+(`bun link` in a pleach checkout puts it there). Without that, write the command as
+`bunx github:jahala/pleach audit-wrap -- <your check>`.
+
 ---
 
 ## Bundled adapters

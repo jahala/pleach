@@ -618,14 +618,18 @@ export async function runCli(argv: readonly string[]): Promise<number> {
   try {
     // Help rides ahead of flag parsing — parseFlags rejects unknown flags, and
     // the one flag every user tries first must never be "unknown" (ledger D-help).
-    if (argv.includes('--help') || argv.includes('-h')) {
+    // Only pleach's own flags count: after `--`, every word is a wrapped
+    // command's (audit-wrap), its own --help and --version included.
+    const separator = argv.indexOf('--');
+    const own = separator === -1 ? argv : argv.slice(0, separator);
+    if (own.includes('--help') || own.includes('-h')) {
       process.stdout.write(HELP);
       return 0;
     }
 
     // Same rule as help (P6a): a bed's garden.lock needs a version for every
     // judge, and the flag every tool tries must never be "unknown".
-    if (argv.includes('--version')) {
+    if (own.includes('--version')) {
       process.stdout.write(`${await pleachVersion()}\n`);
       return 0;
     }
