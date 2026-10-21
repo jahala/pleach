@@ -72,7 +72,14 @@ plan wastes agent runs; a good one parallelizes cleanly and verifies honestly.
      check script/command; `provider` MUST differ from the builder's
      (claude builds → `"codex"` audits). The auditor runs the command in an
      independent session and relays its verdict block — execution isolation,
-     not model judgment.
+     not model judgment. **The command must print a fenced
+     `tend-audit-result` block** (the auditor is told to relay that block
+     verbatim, and the egress parses it): an ordinary check prints none, so
+     `pleach validate` passes and the node still fails at the audit. Wrap any
+     check with `pleach audit-wrap -- <your check>` — it runs the command,
+     captures its output, and prints one `tend-audit-result` block whose
+     verdict is `pass` on exit 0 and `fail` otherwise, with the exit code and
+     the last 20 lines of output as reasons.
    - `policy.timeoutMs`: set it (e.g. 600000). `policy.maxAttempts`: 2 —
      retries carry the failure evidence into the re-prompt.
    - **The falsification rule** — for every check you declare, state (to

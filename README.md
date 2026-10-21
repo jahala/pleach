@@ -54,6 +54,7 @@ work. Only a node that clears all of it publishes a branch.
 pleach run <plan.json>          Execute a plan (--land to land a fully-verified close)
 pleach land <plan.json>         Merge a verified plan's sinks onto the checked-out branch
 pleach audit <plan.json> <node> Re-run only the audit on a quarantined node
+pleach audit-wrap -- <command>  Wrap any check so it prints the block an audit command must print
 pleach stop <plan.json>         Drain a running plan (--now aborts in-flight nodes)
 pleach status <plan.json>       Print the latest run's state (JSON on stdout, table on stderr)
 pleach wait <plan.json>         Block until the run ends; --node / --timeout shape it

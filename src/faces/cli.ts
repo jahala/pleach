@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { cpus } from 'node:os';
 import { join, resolve } from 'node:path';
+import { OUTPUT_TAIL_LINES, renderAuditResultBlock } from '../core/audit-egress.ts';
 import {
   AuditRefusedError,
   ConfigError,
@@ -55,6 +56,13 @@ Usage:
   pleach land <plan.json> [flags]    Merge a verified plan's sinks onto the checked-out branch
   pleach audit <plan.json> <node>    Re-run ONLY the cross-provider audit on a quarantined
                                      node whose build was green (--repo-root applies)
+  pleach audit-wrap [--check ID] -- CMD [args…]
+                                     Run CMD (argv-style, no shell), capture its output, and print
+                                     one fenced \`tend-audit-result\` block: verdict pass on exit 0,
+                                     fail otherwise, reasons = the exit code plus the last 20 lines
+                                     of output. Exits 0 once the block printed (the egress reads the
+                                     block, not the exit code) — wrap an ordinary check in it for
+                                     accept.audit.command.
   pleach stop <plan.json> [flags]    Drain a running plan: no new nodes launch, in-flight nodes
                                      settle; --now aborts them (SIGINT to the run)
   pleach status <plan.json> [flags]  Print the latest run's state as one JSON object (stdout) plus
@@ -142,6 +150,9 @@ Flags (status / wait):
   --timeout SECONDS       (wait) give up after this long and exit 124, naming the nodes still
                           pending or running
 
+Flags (audit-wrap):
+  --check ID              The check id the verdict block reports (default: the command text)
+
 Landing: verified work is published as node/<id> branches; \`pleach land\` merges
 the plan's sinks onto the branch checked out in --repo-root. It refuses unless
 EVERY plan node is verified (with --sinks, unless every named one is), and a
@@ -211,6 +222,7 @@ interface Flags {
   node?: string;
   timeoutSeconds?: number;
   runnerKind?: 'umbel' | 'direct-cli';
+  check?: string;
 }
 
 // The conductor's idle policy (D16): a worker quiet this long has stopped
@@ -345,6 +357,16 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         i += 1;
         break;
       }
+      case '--check':
+        flags.check = takeValue(arg, next);
+        i += 1;
+        break;
+      case '--':
+        // audit-wrap: everything after -- is the command, argv-style. The
+        // separator stops flag parsing so a command's own flags survive.
+        positionals.push(...argv.slice(i + 1));
+        i = argv.length - 1;
+        break;
       default:
         throw new UsageError(`unknown flag '${arg}'`);
     }
@@ -757,18 +779,41 @@ async function verbClean(flags: Flags): Promise<number> {
   return 0;
 }
 
+// issue #149 — turn an ordinary check into an audit-egress block. Runs the
+// command argv-style (no shell, through the exec seam like the other gates) and
+// prints exactly one fenced tend-audit-result block holding a valid
+// AuditResult. The block is the verdict: this verb exits 0 when a block was
+// printed, never to report the check passed — the egress reads the block, not
+// the exit code.
+async function verbAuditWrap(command: string[], flags: Flags): Promise<number> {
+  if (command.length === 0) {
+    throw new UsageError(
+      "audit-wrap: a command is required after `--` (e.g. audit-wrap -- bash -lc 'npm test')",
+    );
+  }
+  const { output, exitCode } = await exec(command, { cwd: process.cwd() });
+  const tail = output.split('\n').slice(-OUTPUT_TAIL_LINES).join('\n');
+  const check = flags.check ?? command.join(' ');
+  process.stdout.write(`${renderAuditResultBlock(check, exitCode, tail)}\n`);
+  return 0;
+}
+
 export async function runCli(argv: readonly string[]): Promise<number> {
   try {
     // Help rides ahead of flag parsing — parseFlags rejects unknown flags, and
     // the one flag every user tries first must never be "unknown" (ledger D-help).
-    if (argv.includes('--help') || argv.includes('-h')) {
+    // Only pleach's own flags count: after `--`, every word is a wrapped
+    // command's (audit-wrap), its own --help and --version included.
+    const separator = argv.indexOf('--');
+    const own = separator === -1 ? argv : argv.slice(0, separator);
+    if (own.includes('--help') || own.includes('-h')) {
       process.stdout.write(HELP);
       return 0;
     }
 
     // Same rule as help (P6a): a bed's garden.lock needs a version for every
     // judge, and the flag every tool tries must never be "unknown".
-    if (argv.includes('--version')) {
+    if (own.includes('--version')) {
       process.stdout.write(`${await pleachVersion()}\n`);
       return 0;
     }
@@ -800,6 +845,8 @@ export async function runCli(argv: readonly string[]): Promise<number> {
         return await verbRun(plan(), flags);
       case 'audit':
         return await verbAudit(plan(), positionals[2], flags);
+      case 'audit-wrap':
+        return await verbAuditWrap(positionals.slice(1), flags);
       case 'land':
         return await verbLand(plan(), flags);
       case 'stop':

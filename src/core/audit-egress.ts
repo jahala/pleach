@@ -1,5 +1,6 @@
 import { toArgv } from './argv.ts';
 import { AuditParseError } from './errors.ts';
+import type { AuditResult } from './plan.ts';
 
 // Extract the audit JSON the auditor emits as a fenced ```tend-audit-result
 // block. The worker's finalMessage is read UNTRUNCATED (ledger C4) and may
@@ -38,6 +39,36 @@ export function extractAuditJson(finalMessage: string): unknown {
   } catch {
     throw new AuditParseError(finalMessage);
   }
+}
+
+// The number of output lines the audit-wrap face keeps for a verdict's reasons
+// (issue #149): the last 20 lines of a command's output, plus the exit code,
+// diagnose a failure without an unbounded block.
+export const OUTPUT_TAIL_LINES = 20;
+
+// The pure half of `pleach audit-wrap` (issue #149): render the fenced
+// `tend-audit-result` block an ordinary check must print for the egress parser
+// to read it. One verdict — `check`, `verdict` = pass on exit 0 and fail
+// otherwise, `reasons` = the exit code plus the (already-tailed) output lines.
+// Pairs with extractAuditJson: this module owns both halves of the egress
+// contract — render the block, then parse it.
+export function renderAuditResultBlock(
+  check: string,
+  exitCode: number,
+  outputTail: string,
+): string {
+  const verdict: AuditResult['verdicts'][number]['verdict'] = exitCode === 0 ? 'pass' : 'fail';
+  const body: AuditResult = {
+    verdicts: [{ check, verdict, reasons: reasonsOf(exitCode, outputTail) }],
+    drift: [],
+  };
+  return `\`\`\`${FENCE_LABEL}\n${JSON.stringify(body)}\n\`\`\``;
+}
+
+function reasonsOf(exitCode: number, outputTail: string): string[] {
+  const lines = outputTail.split('\n');
+  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+  return [`exit ${exitCode}`, ...lines];
 }
 
 // buildAuditPrompt wraps the deterministic audit `command` in instructions that

@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { buildAuditPrompt, extractAuditJson } from '../../src/core/audit-egress.ts';
+import {
+  buildAuditPrompt,
+  extractAuditJson,
+  renderAuditResultBlock,
+} from '../../src/core/audit-egress.ts';
 import { AuditParseError } from '../../src/core/errors.ts';
+import { AuditResultSchema } from '../../src/core/plan.ts';
 
 // ledger: C4 — untruncated audit egress; the LAST fenced tend-audit-result block
 // is the authoritative one; unparseable / missing → AuditParseError(raw).
@@ -101,5 +106,46 @@ describe('buildAuditPrompt — elicits a parseable egress', () => {
     expect(p).toContain(FENCE); // names the exact fence the parser reads
     expect(p).toMatch(/verbatim/i);
     expect(p).toMatch(/do not summarize/i);
+  });
+});
+
+// The ordinary-check defect (issue #149): a plan's accept.audit.command that is
+// an ordinary check prints no fenced block, so the auditor relays prose and the
+// egress fails. `pleach audit-wrap` turns any command into one that prints a
+// fenced block; renderAuditResultBlock is the pure half — the block it renders
+// must be exactly what extractAuditJson parses and AuditResultSchema accepts.
+describe('renderAuditResultBlock — the audit-wrap egress (issue #149)', () => {
+  test('a pass block round-trips through extractAuditJson and AuditResultSchema', () => {
+    const rendered = renderAuditResultBlock('my-check', 0, 'ok\n');
+    const parsed = AuditResultSchema.parse(extractAuditJson(rendered));
+    expect(parsed.verdicts).toHaveLength(1);
+    expect(parsed.verdicts[0]).toMatchObject({
+      check: 'my-check',
+      verdict: 'pass',
+      reasons: ['exit 0', 'ok'],
+    });
+  });
+
+  test('a fail block carries the exit code and the output tail', () => {
+    const rendered = renderAuditResultBlock('my-check', 3, 'bad\n');
+    const parsed = AuditResultSchema.parse(extractAuditJson(rendered));
+    expect(parsed.verdicts).toHaveLength(1);
+    expect(parsed.verdicts[0]).toMatchObject({
+      check: 'my-check',
+      verdict: 'fail',
+      reasons: ['exit 3', 'bad'],
+    });
+  });
+
+  test('an output tail containing backticks survives the round-trip', () => {
+    const tail = '```\nnot a fence\n```';
+    const rendered = renderAuditResultBlock('my-check', 0, tail);
+    const parsed = AuditResultSchema.parse(extractAuditJson(rendered));
+    expect(parsed.verdicts).toHaveLength(1);
+    expect(parsed.verdicts[0]).toMatchObject({
+      check: 'my-check',
+      verdict: 'pass',
+      reasons: ['exit 0', '```', 'not a fence', '```'],
+    });
   });
 });
