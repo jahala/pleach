@@ -8,6 +8,7 @@ import {
 } from '../core/errors.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, ExecResult, Worker, WorkerResult } from './deps.ts';
+import type { SettleOutcome } from './settle.ts';
 
 // Exec a plan-authored command string with the no-shell guard: a bare shell
 // operator would be passed as a literal argument and do silently-wrong things
@@ -92,6 +93,10 @@ export interface RunWorkOpts {
   // the journal, and restoreGateTree names the gate that went red.
   recordGateTree?: () => Promise<string>;
   restoreGateTree?: (tree: string, gate: 'red' | 'green') => Promise<void>;
+  // Wait for the tree to stop changing before a phase gate reads it (issue
+  // #127). run-node supplies it — it owns the isolate seam, the sleep and the
+  // journal. A settle cut short by the run's own signal returns 'aborted'.
+  settleTree?: () => Promise<SettleOutcome>;
 }
 
 // The base worker prompt for a node, plus an optional clearly-delimited
@@ -192,6 +197,14 @@ export async function runWork(
       last = await w.wait({ timeoutMs: opts.timeoutMs, signal: opts.signal, idleMs: opts.idleMs });
       if (last.reason !== 'stop') return last;
       if (opts.wroteBlocked !== undefined && (await opts.wroteBlocked())) return last;
+
+      // The worker stopped, but its own background command may still be writing
+      // the tree the gate is about to read (issue #127). Settle it before the
+      // red/green gate; an impl phase has no gate, so nothing reads the tree here.
+      if (opts.settleTree !== undefined && (phase.phase === 'red' || phase.phase === 'green')) {
+        const settle = await opts.settleTree();
+        if (settle.kind === 'aborted') return { ...last, reason: 'aborted' };
+      }
 
       if (phase.phase === 'red') {
         const before = opts.recordGateTree ? await opts.recordGateTree() : undefined;

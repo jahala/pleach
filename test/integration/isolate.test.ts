@@ -741,3 +741,30 @@ test('restoreTree touches and names only the paths the gate changed', async () =
     await repo.cleanup();
   }
 });
+
+// issue #127 — treeDiffPaths is the read-only half of the settle bound's
+// evidence: it names the paths that differ between two recorded trees, and
+// nothing the tree still holds. The real index and working tree are untouched.
+test('treeDiffPaths names only the paths that differ between two recorded trees', async () => {
+  const repo = await createRepo();
+  try {
+    const seam = createIsolateSeam(execLocal, repo.path);
+    const cwd = repo.path;
+
+    await writeFile(join(cwd, 'same.txt'), 'same\n');
+    await writeFile(join(cwd, 'changed.txt'), 'one\n');
+    const before = await seam.recordTree(cwd);
+
+    await writeFile(join(cwd, 'changed.txt'), 'two\n');
+    await writeFile(join(cwd, 'new.txt'), 'new\n');
+    const after = await seam.recordTree(cwd);
+
+    expect([...(await seam.treeDiffPaths(cwd, before, after))].sort()).toEqual(
+      ['changed.txt', 'new.txt'].sort(),
+    );
+    // Same tree → nothing differs.
+    expect(await seam.treeDiffPaths(cwd, before, before)).toEqual([]);
+  } finally {
+    await repo.cleanup();
+  }
+});

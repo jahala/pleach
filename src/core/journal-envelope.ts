@@ -72,6 +72,8 @@ export const KINDS: Record<string, Kind> = {
   'sha-mismatch': 'node.lifecycle',
   'dispose-failed': 'node.lifecycle',
   'seam-violation': 'node.lifecycle',
+  'tree-settled': 'node.lifecycle',
+  'tree-still-changing': 'node.lifecycle',
 
   // A gate said yes or no.
   'gate-fail': 'gate.result',

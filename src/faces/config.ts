@@ -170,5 +170,6 @@ export function buildDeps(opts: BuildDepsOpts): ConductorDeps {
     runner: opts.runner,
     ledger: opts.ledger,
     receipts: createReceiptStore(join(pleachDir, 'receipts')),
+    sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
   };
 }
