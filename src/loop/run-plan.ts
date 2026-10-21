@@ -48,6 +48,8 @@ export interface RunPlanOpts {
   // run. The face owns the default; a runner that cannot detect idleness
   // ignores it. Absent leaves the attempt clock as the only bound.
   idleMs?: number;
+  // The settle window after a worker stops (D35); 0 turns the settle off.
+  settleMs?: number;
   // The run's second cast (D17): the provider a `dead` attempt is re-cast on,
   // audit diversity re-checked against it. Absent, a dead attempt settles the
   // node rather than spending another attempt on the same outage.
@@ -85,6 +87,7 @@ export async function runPlan(
       fresh: opts.fresh === true,
       ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       ...(opts.idleMs !== undefined ? { idleMs: opts.idleMs } : {}),
+      ...(opts.settleMs !== undefined ? { settleMs: opts.settleMs } : {}),
       ...(opts.fallbackProvider !== undefined ? { fallbackProvider: opts.fallbackProvider } : {}),
     });
   } finally {
@@ -100,6 +103,7 @@ interface ResolvedOpts {
   fresh: boolean;
   signal?: AbortSignal;
   idleMs?: number;
+  settleMs?: number;
   fallbackProvider?: string;
 }
 
@@ -296,6 +300,7 @@ async function runUnderLock(
         defaultTimeoutMs: opts.defaultTimeoutMs,
         signal: opts.signal,
         idleMs: opts.idleMs,
+        ...(opts.settleMs !== undefined ? { settleMs: opts.settleMs } : {}),
         fallbackProvider: opts.fallbackProvider,
         resumedFrom: resumed,
         onSpawn: () => {

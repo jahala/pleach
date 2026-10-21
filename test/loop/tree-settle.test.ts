@@ -89,4 +89,29 @@ describe('the tree settles before a gate reads it (issue #127)', () => {
     expect(still?.node).toBe('x');
     expect(still?.paths).toContain('late.txt');
   });
+
+  // ledger: D35 — a stop during the settle wait settles the node aborted (D16).
+  test('an abort during the settle wait settles the node aborted, with no gate run', async () => {
+    const controller = new AbortController();
+    const h = makeHarness({ changedByNode: { x: ['work.out'] } });
+    h.deps.sleep = async () => {
+      controller.abort();
+      await new Promise<void>(() => {});
+    };
+
+    const summary = await runPlan(promptPlan(), h.deps, { ...OPTS, signal: controller.signal });
+
+    expect(summary.aborted).toEqual(['x']);
+    expect(h.log.events.some((e) => e.kind === 'exec' && e.detail === 'smokey')).toBe(false);
+  });
+
+  // ledger: D35 — settleMs 0 turns the settle off: no record, no sleep.
+  test('a run with settleMs 0 does not wait for the tree', async () => {
+    const h = makeHarness({ changedByNode: { x: ['work.out'] } });
+
+    const summary = await runPlan(promptPlan(), h.deps, { ...OPTS, settleMs: 0 });
+
+    expect(summary.closed).toEqual(['x']);
+    expect(h.log.of('sleep')).toEqual([]);
+  });
 });

@@ -56,6 +56,8 @@ export interface RunNodeOpts {
   // makes, the build worker's and the auditor's alike: a wedged worker of
   // either kind ends here rather than at the attempt clock.
   idleMs?: number;
+  // The settle window after a worker stops (D35); 0 turns the settle off.
+  settleMs?: number;
   // The run's second cast (D17): who takes over when an attempt comes back
   // `dead`. Conductor-level, never a plan field — which provider stands in for
   // a dead one is the operator's call for this run, not a fact about the node.
@@ -329,7 +331,8 @@ export async function runNode(
           wroteBlocked: async () => (await deps.isolate.readBlocked(cwd)) !== null,
           recordGateTree: () => deps.isolate.recordTree(cwd),
           restoreGateTree: (tree, gate) => restoreGateWrites(deps, node.id, gate, cwd, tree),
-          settleTree: () => settleWorkingTree(node.id, cwd, deps, opts.signal),
+          settleTree: () =>
+            settleWorkingTree(node.id, cwd, deps, opts.signal, settleTiming(opts.settleMs)),
         });
       } catch (err) {
         await worker?.kill();
@@ -485,7 +488,13 @@ export async function runNode(
       if (!('command' in node.work) && !('phases' in node.work)) {
         let settled: SettleOutcome;
         try {
-          settled = await settleWorkingTree(node.id, cwd, deps, opts.signal);
+          settled = await settleWorkingTree(
+            node.id,
+            cwd,
+            deps,
+            opts.signal,
+            settleTiming(opts.settleMs),
+          );
         } catch (err) {
           if (err instanceof GateFailedError) {
             const decision = handleGate(node, attempts, maxAttempts, err);
@@ -1227,4 +1236,9 @@ function dedup(items: string[]): string[] {
     }
   }
   return out;
+}
+
+// The run's settle window, when it set one (D35).
+function settleTiming(settleMs: number | undefined): { windowMs?: number } {
+  return settleMs !== undefined ? { windowMs: settleMs } : {};
 }

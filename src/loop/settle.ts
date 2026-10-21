@@ -66,6 +66,8 @@ export async function settleWorkingTree(
 ): Promise<SettleOutcome> {
   const windowMs = timing.windowMs ?? SETTLE_WINDOW_MS;
   const boundMs = timing.boundMs ?? SETTLE_BOUND_MS;
+  // A zero window turns the settle off (`--settle-ms 0`, D35).
+  if (windowMs === 0) return { kind: 'settled', waitedMs: 0, windows: 0 };
   const records: string[] = [await deps.isolate.recordTree(cwd)];
   let waitedMs = 0;
   for (;;) {

@@ -1,0 +1,6 @@
+[test]
+# The suite drives the real CLI with fake workers that write nothing in the
+# background, so the 2 s settle window after each stop is pure delay there.
+# The settle itself is covered by test/loop/tree-settle.test.ts and the
+# isolate integration test, which set their own windows.
+preload = ["./test/support/preload.ts"]
