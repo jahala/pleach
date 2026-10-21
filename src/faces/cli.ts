@@ -6,6 +6,7 @@ import {
   ConfigError,
   LandBlockedError,
   LandConflictError,
+  LandMergeRefusedError,
   LockHeldError,
   NoRunError,
   PlanInvalidError,
@@ -643,7 +644,8 @@ export async function runCli(argv: readonly string[]): Promise<number> {
       err instanceof RebuildRequiredError ||
       err instanceof TendTransportError ||
       err instanceof LandBlockedError ||
-      err instanceof LandConflictError
+      err instanceof LandConflictError ||
+      err instanceof LandMergeRefusedError
     ) {
       process.stderr.write(`pleach: ${err.message}\n`);
       return 1;

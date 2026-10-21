@@ -116,6 +116,23 @@ describe('landPlan', () => {
     expect(h.log.count('lock.release')).toBe(1);
   });
 
+  test('a seam merge refusal is journaled and the lock still releases', async () => {
+    const p = plan([{ id: 'a' }]);
+    const { LandMergeRefusedError } = await import('../../src/core/errors.ts');
+    const h = makeHarness({
+      closed: new Map([['a', 'sha-a']]),
+      refs: { 'node/a': 'sha-a' },
+      landThrows: new LandMergeRefusedError('node/a', 'house rule: no merges from this tree\n'),
+    });
+
+    await expect(landPlan(p, h.deps, OPTS)).rejects.toBeInstanceOf(LandMergeRefusedError);
+
+    const refused = h.journal.find((e) => e.event === 'land-merge-refused');
+    expect(refused?.ref).toBe('node/a');
+    expect(refused?.output).toContain('house rule: no merges from this tree');
+    expect(h.log.count('lock.release')).toBe(1);
+  });
+
   test('multiple sinks land in plan order', async () => {
     const p = plan([{ id: 'a' }, { id: 'b' }]);
     const h = makeHarness({

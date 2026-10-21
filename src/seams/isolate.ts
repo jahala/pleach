@@ -6,6 +6,7 @@ import {
   IsolateCatastrophicError,
   LandBlockedError,
   LandConflictError,
+  LandMergeRefusedError,
 } from '../core/errors.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, IsolateSeam, Isolation } from '../loop/deps.ts';
@@ -612,6 +613,13 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
             .map((l) => l.trim())
             .filter(Boolean);
           await git(exec, worktreePath, 'merge', '--abort');
+          if (files.length === 0) {
+            // No unmerged files: the merge resolved but git refused to record
+            // it — the repository's own hook (commit-msg / pre-merge-commit)
+            // said no (D21). A hook is the repository's gate, so this is a
+            // refusal, not a conflict: nothing is conflicted to name.
+            throw new LandMergeRefusedError(ref, merge.output);
+          }
           throw new LandConflictError(ref, files);
         }
       }

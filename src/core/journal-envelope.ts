@@ -46,6 +46,7 @@ export const KINDS: Record<string, Kind> = {
   'land-integrity-failed': 'run.lifecycle',
   'land-blocked': 'run.lifecycle',
   'land-conflict': 'run.lifecycle',
+  'land-merge-refused': 'run.lifecycle',
   landed: 'run.lifecycle',
 
   // One node's passage: dispatched, judged, closed or preserved, and every

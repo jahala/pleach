@@ -215,6 +215,25 @@ export class LandBlockedError extends Error {
   }
 }
 
+// Landing's merge resolved — no unmerged files — but git refused to record it:
+// the repository's own hook (commit-msg / pre-merge-commit) said no (ledger
+// D21). A hook is the repository's gate, not pleach's to skip, so this is a
+// REFUSAL, distinct from LandConflictError: there are no conflicted files to
+// name. `output` is git's own words, the hook's refusal among them.
+export class LandMergeRefusedError extends Error {
+  readonly name = 'LandMergeRefusedError';
+  readonly ref: string;
+  readonly output: string;
+
+  constructor(ref: string, output: string) {
+    super(
+      `landing ${ref} was refused by the repository (the merge was not a conflict):\n${output.trim()}`,
+    );
+    this.ref = ref;
+    this.output = output;
+  }
+}
+
 // #12 — every quarantine ref for a node is checked out in some worktree, so
 // there is nowhere to commit its evidence. Caught by the quarantine path
 // itself, which journals it as `quarantine-failed` and never masks the real
