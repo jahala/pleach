@@ -50,6 +50,8 @@ export interface RunPlanOpts {
   idleMs?: number;
   // The first provider-error wait (D34); each next wait doubles it.
   providerBackoffMs?: number;
+  // The settle window after a worker stops (D35); 0 turns the settle off.
+  settleMs?: number;
   // The run's second cast (D17): the provider a `dead` attempt is re-cast on,
   // audit diversity re-checked against it. Absent, a dead attempt settles the
   // node rather than spending another attempt on the same outage.
@@ -94,6 +96,7 @@ export async function runPlan(
       ...(opts.providerBackoffMs !== undefined
         ? { providerBackoffMs: opts.providerBackoffMs }
         : {}),
+      ...(opts.settleMs !== undefined ? { settleMs: opts.settleMs } : {}),
       ...(opts.fallbackProvider !== undefined ? { fallbackProvider: opts.fallbackProvider } : {}),
     });
   } finally {
@@ -110,6 +113,7 @@ interface ResolvedOpts {
   signal?: AbortSignal;
   idleMs?: number;
   providerBackoffMs?: number;
+  settleMs?: number;
   fallbackProvider?: string;
 }
 
@@ -309,6 +313,7 @@ async function runUnderLock(
         ...(opts.providerBackoffMs !== undefined
           ? { providerBackoffMs: opts.providerBackoffMs }
           : {}),
+        ...(opts.settleMs !== undefined ? { settleMs: opts.settleMs } : {}),
         fallbackProvider: opts.fallbackProvider,
         resumedFrom: resumed,
         onSpawn: () => {

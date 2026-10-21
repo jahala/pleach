@@ -1,4 +1,4 @@
-// ledger: #151 — a network/provider error must not burn maxAttempts inside one
+// ledger: D34 (#151) — a network/provider error must not burn maxAttempts inside one
 // outage. Two nodes once died with `wait:provider-error` twice each (the
 // machine's DNS was gone for minutes), settled failed at maxAttempts 2, and
 // the run had to be restarted by hand. The fault is the machine's network, not
@@ -15,7 +15,9 @@ import type { WorkerResult } from '../../src/loop/deps.ts';
 import { runPlan } from '../../src/loop/run-plan.ts';
 import { type Harness, makeHarness, stop } from './harness.ts';
 
-const OPTS = { repoRoot: '/r', pleachVersion: '0.0.1-test' };
+// The settle (D35) also sleeps after a stop; it is off here so the sleeps
+// these tests count are the backoff's alone.
+const OPTS = { repoRoot: '/r', pleachVersion: '0.0.1-test', settleMs: 0 };
 const MSG = "API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)";
 
 function providerError(message = MSG): WorkerResult {

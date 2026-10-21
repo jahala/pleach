@@ -91,6 +91,11 @@ export interface IsolateSeam {
   // Untracked files are included and `.gitignore` respected. Returns the tree
   // sha — an opaque handle for `restoreTree`, never a commit.
   recordTree(cwd: string): Promise<string>;
+  // The paths that differ between two trees `recordTree` recorded (issue #127),
+  // read-only — the real index and the working tree are both untouched. Used to
+  // name what is still changing when the settle bound is hit; never-delivered
+  // paths (`.loop-scratch`, `.plotplot/friction`) are excluded.
+  treeDiffPaths(cwd: string, a: string, b: string): Promise<string[]>;
   // Restore the working tree to a recorded tree (issue #131): paths changed or
   // deleted since are restored from it (`git restore --source=<tree>
   // --worktree`, never touching the index), and paths created since are removed
@@ -300,11 +305,12 @@ export interface ConductorDeps {
   lock: LockSeam;
   journal: JournalSeam;
   receipts: ReceiptStore;
-  // The conductor's own clock (issue #151): sleep for `ms` — the provider-error
-  // backoff wait, injected so tests never wait a wall-clock and a run's abort
-  // can cut the wait short around it. The real one is wired in faces/config.ts
-  // with setTimeout; the harness resolves at once and records what was asked.
-  sleep: (ms: number) => Promise<void>;
+  // The conductor's own clock: sleep for `ms`. The provider-error backoff
+  // (#151) and the settle wait (#127) use it; injected so tests never wait a
+  // wall clock, and raced against the run's abort signal by its callers. The
+  // real one is wired in faces/config.ts with setTimeout; the harness resolves
+  // at once and records what was asked.
+  sleep(ms: number): Promise<void>;
 }
 
 export interface RunSummary {

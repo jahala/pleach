@@ -22,6 +22,7 @@ import { parseSarif } from '../core/sarif.ts';
 import { DEFAULT_WORKER_PROVIDER } from '../core/validate.ts';
 import type { ConductorDeps, ExecResult, Isolation, WorkerResult } from './deps.ts';
 import { guardedExec, runWork } from './run-work.ts';
+import { type SettleOutcome, settleWorkingTree } from './settle.ts';
 
 // ── run-node: the per-node ladder ────────────────────────────────────────────
 //
@@ -58,6 +59,8 @@ export interface RunNodeOpts {
   idleMs?: number;
   // The first provider-error wait (D34); each next wait doubles it.
   providerBackoffMs?: number;
+  // The settle window after a worker stops (D35); 0 turns the settle off.
+  settleMs?: number;
   // The run's second cast (D17): who takes over when an attempt comes back
   // `dead`. Conductor-level, never a plan field — which provider stands in for
   // a dead one is the operator's call for this run, not a fact about the node.
@@ -347,6 +350,8 @@ export async function runNode(
             wroteBlocked: async () => (await deps.isolate.readBlocked(cwd)) !== null,
             recordGateTree: () => deps.isolate.recordTree(cwd),
             restoreGateTree: (tree, gate) => restoreGateWrites(deps, node.id, gate, cwd, tree),
+            settleTree: () =>
+              settleWorkingTree(node.id, cwd, deps, opts.signal, settleTiming(opts.settleMs)),
           });
         } catch (err) {
           await worker?.kill();
@@ -512,15 +517,7 @@ export async function runNode(
           // terminal reason's — live tree, so settle quarantines the work and
           // writes the receipt — and only the status differs, which is what
           // keeps a halted node out of the failed bucket.
-          const base = baseVerdict(node, attempts);
-          return handBack({
-            verdict: {
-              ...base,
-              status: 'aborted',
-              evidence: { ...base.evidence, gate: { ran: 'wait:aborted', exitCode: -1 } },
-            },
-            ...detail,
-          });
+          return handBack({ verdict: abortedVerdict(node, attempts, 'wait:aborted'), ...detail });
         }
         // timeout → retryable (reuse tree); anything else terminal.
         if (klass === 'retryable' && attempts < maxAttempts) {
@@ -544,6 +541,35 @@ export async function runNode(
       // ── BLOCKED.md (D21) — before any gate runs over the explanation ───────
       const blocked = await settleIfBlocked(cwd, result.telemetry);
       if (blocked !== null) return blocked;
+
+      // ── tree settle (issue #127) — for the {prompt} shape ───────────────────
+      // The worker stopped, but its own background command may still be writing
+      // the tree the marker scan and smoke gate are about to read. A {phases}
+      // node already settled before each red/green gate inside runWork; a
+      // {command} node has no worker and nothing to wait for.
+      if (!('command' in node.work) && !('phases' in node.work)) {
+        let settled: SettleOutcome;
+        try {
+          settled = await settleWorkingTree(
+            node.id,
+            cwd,
+            deps,
+            opts.signal,
+            settleTiming(opts.settleMs),
+          );
+        } catch (err) {
+          if (err instanceof GateFailedError) {
+            const decision = handleGate(node, attempts, maxAttempts, err);
+            if (decision.settle) return handBack(decision.settle);
+            evidence = decision.evidence;
+            continue;
+          }
+          throw err;
+        }
+        if (settled.kind === 'aborted') {
+          return handBack({ verdict: abortedVerdict(node, attempts, 'settle:aborted') });
+        }
+      }
 
       lane = 'stage';
       // ── marker gate (ledger C1) ─────────────────────────────────────────────
@@ -1307,6 +1333,18 @@ function failedVerdict(
   };
 }
 
+// The run's own signal ended a wait — a worker wait or a settle wait (issue
+// #127) — and the node did not lose: status 'aborted', gate named, tree handed
+// back for the quarantine like every terminal reason (D16).
+function abortedVerdict(node: Node, attempts: number, gateRan: string): Verdict {
+  const base = baseVerdict(node, attempts);
+  return {
+    ...base,
+    status: 'aborted',
+    evidence: { ...base.evidence, gate: { ran: gateRan, exitCode: -1 } },
+  };
+}
+
 function dedup(items: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -1317,4 +1355,9 @@ function dedup(items: string[]): string[] {
     }
   }
   return out;
+}
+
+// The run's settle window, when it set one (D35).
+function settleTiming(settleMs: number | undefined): { windowMs?: number } {
+  return settleMs !== undefined ? { windowMs: settleMs } : {};
 }

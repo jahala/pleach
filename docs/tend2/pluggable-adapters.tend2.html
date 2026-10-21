@@ -55,6 +55,9 @@ A non-tend, non-umbel user runs pleach standalone on git, or wires any runner/le
 
 - [x] (code) In a scratch repo with no pleach files, the install command `docs/adapters.md` gives (pointed at this checkout) makes the doc's own example `pleach.config.ts` load, and a one-node plan runs through it; removing the install step from the doc turns this red · test/e2e/consumer-config.test.ts @809e354 · by cli
 - [x] (code) `pleach run` with a relative `--config`, run from the repo, loads that config and closes the node · test/e2e/config-relative.test.ts @889750f · by cli
+- [ ] (code) A cast resolves the plan's provider name to its provider, model and environment, reading `{ fromEnv }` values at spawn, and a missing variable is the typed `CastEnvError` · test/unit/cast.test.ts
+- [ ] (code) `validate` refuses a provider that is neither the runner's nor a declared cast, listing the known names, and accepts anything when the runner declares none · test/unit/validate-providers.test.ts
+- [ ] (code) Through the real CLI, `validate` accepts a plan naming a declared cast and refuses a typo, and `run` refuses before anything runs when a cast's variable is unset · test/e2e/casts.test.ts
 ## For #developer #operator
 
 ## Tried
@@ -63,5 +66,6 @@ A non-tend, non-umbel user runs pleach standalone on git, or wires any runner/le
 - 2026-08-18 Adapters are runtime-injected code seams (RunnerSeam/LedgerSeam instances in a config file or --runner selection), not a plugin registry or declarative adapter names in the plan. — The plan stays a pure data contract (worker.provider is intent; the config decides how a provider is reached), portable across environments. A string-keyed plugin registry was rejected: it reintroduces interpretation at the loop boundary and makes the integration surface a lookup convention instead of two typed interfaces. Explicit contradiction (--runner + config) errors rather than silently preferring one.
 - 2026-08-18 v1: enabled #cli-run (user-journey edge — v2 `## Needs` is dependency-only; not migrated as a graph edge)
 - 2026-10-21 D29 (#147) and D30 (#148), both found dogfooding on jahala/cfanalytics. Built by DeepSeek V4 Pro workers through umbel, test first. #148 resolves the path in `resolveSeams` rather than the face, so the library entry point is fixed too. The lead's review of #147 found its test hard-coding the install command, so a doc that lost the step would still pass; the test now runs the command the doc gives.
+- 2026-10-21 D36 (#146, with #126): named casts in `pleach.config.ts`, built by a DeepSeek V4 Pro worker through umbel; worker env reaches umbel by name only. The lead's review moved the missing-variable check from a node's spawn to the start of `run`, before the lock (fail before spend, D19), and had the cast wrapper spread the whole runner. Rejected comparing resolved providers for audit diversity: two casts are two providers, even through one CLI.
 </script>
 <script src="./loop.js"></script>

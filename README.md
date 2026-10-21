@@ -75,6 +75,8 @@ tree on `quarantine/<id>` and writes a receipt.
 |---|---|
 | The auditor's relay is unreadable, or it dies | Quarantines with gates green; `pleach audit` re-adjudicates without rebuilding |
 | A provider is down | `--fallback-provider` re-casts on another vendor; an outage is never paid twice |
+| The network or the provider errors | Waits and retries inside the same attempt; a short outage costs no attempts |
+| A worker's background job is still writing | Gates wait until the tree is still; one that never settles fails the attempt, naming the paths |
 | The plan holds a bare shell operator | Refused at `validate`, before a worker costs anything |
 | A gate command cannot start | Node settles once; no attempt spent, no worker re-prompted |
 | You halt the run | `stop` drains, `--now` aborts; both keep the tree and write receipts |

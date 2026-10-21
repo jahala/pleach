@@ -105,7 +105,8 @@ recorded in `docs/contract/CHANGES.md` for the other two repos.
 | Source | kind | Action |
 |---|---|---|
 | worker `reason: 'dead'` | `dead` | `onDead:'resume'` + a fallback provider that is not the dead one → dispose + re-isolate + fresh worker **on the fallback** (audit diversity re-checked against it); no usable fallback → settle dead with the attempt unspent (D17), else fail |
-| worker `reason: 'timeout' \| 'provider-error'` / exec timeout | `retryable` | retry ≤ `maxAttempts`, **reuse tree, re-prompt with evidence** |
+| worker `reason: 'timeout'` / exec timeout | `retryable` | retry ≤ `maxAttempts`, **reuse tree, re-prompt with evidence** |
+| worker `reason: 'provider-error'` | `retryable` | the provider's or the network's fault, not the work's: re-run **inside the same attempt** after a backoff (`--provider-backoff-ms`, 15 s doubling, five waits; D34), reuse tree, re-prompt with the provider's text; only once the waits are spent does it count as a failed attempt, the verdict naming the cause |
 | worker `reason: 'input' \| 'idle'` | `blocked` | kill worker, **quarantine the tree** on `quarantine/<id>` (D11 — unfinished is not wrong); Verdict `status:'blocked'`, prompt text in `blockedReason`; no auto-retry — fix the permission mode / allowlist and re-run |
 | smoke / command non-zero, marker-gate hit | `retryable` | retry ≤ `maxAttempts`, reuse tree, evidence in re-prompt |
 | a gate that cannot run: the no-shell guard's `-1` or the exec seam's `127` (`GateCannotRunError`, `gateFault`) | `terminal` | settle on that attempt — no flaky retry, no re-prompt; `gate.ran` names the command, the verdict's `detail` names the plan or the environment (D19) |
@@ -166,7 +167,7 @@ raise a timeout to "fix" a flake — find the race.
   real tend transport. **No mocks. Ever.**
 - **Proof runs** — real claude builds and real codex audits against `examples/`, driven by
   `scripts/proof-run.sh`. Burns subscription; run by hand, never in CI.
-- **The ledger is the test plan.** `docs/ledger.md` items (A1–A3, B1–B4, C1–C5, D1–D33 with
+- **The ledger is the test plan.** `docs/ledger.md` items (A1–A3, B1–B4, C1–C5, D1–D36 with
   D20 unused, SEC4)
   each map to at least one named test (`// ledger: B2` comment at the test). The §6 cases from the bridge
   spec (fan-out, join-conflict, concurrency invariant, commit-on-verified, dead-retry-re-isolates,

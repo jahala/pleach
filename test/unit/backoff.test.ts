@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { providerBackoff } from '../../src/core/backoff.ts';
 
-// ledger: #151 — a provider error is the provider's or the network's fault,
+// ledger: D34 (#151) — a provider error is the provider's or the network's fault,
 // never the work's, so it is retried within the SAME attempt on a backoff
 // schedule instead of spending an attempt. The schedule lives in core/ as a
 // pure function so the loop owns the clock and this owns the numbers alone.

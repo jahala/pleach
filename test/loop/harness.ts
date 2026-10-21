@@ -322,9 +322,24 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   let liveWorkers = 0;
   const state = { maxConcurrent: 0 };
   // Recorded working trees, keyed by the opaque id recordTree returns (issue
-  // #131) — restoreTree rewinds from one.
+  // #131) — restoreTree rewinds from one. The id is content-addressed (issue
+  // #127): two records of the same content are the same id, so the settle loop
+  // can see the tree stop changing.
   const recordedTrees = new Map<string, Map<string, string>>();
   let treeSeq = 0;
+  const contentToTreeId = new Map<string, string>();
+  function treeIdOf(snap: Map<string, string>): string {
+    const key = [...snap.entries()]
+      .map(([path, content]) => `${path}\u0000${content}`)
+      .sort()
+      .join('\u0000');
+    let id = contentToTreeId.get(key);
+    if (id === undefined) {
+      id = `tree-${treeSeq++}`;
+      contentToTreeId.set(key, id);
+    }
+    return id;
+  }
 
   const defaultEgress = '```tend-audit-result\n{"verdicts":[{"check":"c","verdict":"pass"}]}\n```';
 
@@ -477,12 +492,32 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     },
     // Record the working tree as an opaque snapshot (issue #131): the real seam
     // writes a git tree through a temporary index; here the snapshot is the
-    // in-memory tree itself, keyed by the returned id.
+    // in-memory tree itself, keyed by the returned id. Content-addressed (issue
+    // #127): equal content is the same id, so a quiet tree settles at once.
     async recordTree(cwd): Promise<string> {
       log.push('recordTree', undefined, cwd);
-      const id = `tree-${treeSeq++}`;
-      recordedTrees.set(id, new Map(git.worktree.get(cwd) ?? []));
+      const snap = new Map(git.worktree.get(cwd) ?? []);
+      const id = treeIdOf(snap);
+      recordedTrees.set(id, snap);
       return id;
+    },
+    // The paths that differ between two recorded trees (issue #127), read-only:
+    // the working tree is left as it is. Never-delivery paths are excluded, as
+    // in the real seam.
+    async treeDiffPaths(cwd, a, b): Promise<string[]> {
+      const sa = recordedTrees.get(a);
+      const sb = recordedTrees.get(b);
+      if (sa === undefined || sb === undefined) {
+        throw new IsolateCatastrophicError(a ?? b, 'no such recorded tree (harness)');
+      }
+      const paths = new Set([...sa.keys(), ...sb.keys()]);
+      const diff: string[] = [];
+      for (const p of paths) {
+        if (isNeverDelivery(p)) continue;
+        if (sa.get(p) !== sb.get(p)) diff.push(p);
+      }
+      log.push('treeDiffPaths', undefined, `${cwd}:${diff.join(',')}`);
+      return diff;
     },
     // Rewind the working tree to a recorded snapshot, mirroring the real seam:
     // changed or deleted paths go back to the recorded content, created paths
@@ -801,11 +836,13 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   };
 
   // ── sleep ─────────────────────────────────────────────────────────────────
-  // The conductor's clock (issue #151): record what was asked, resolve at once,
-  // and let a test override the wait itself.
+  // The conductor's clock (#151 backoff, #127 settle): record what was asked,
+  // both as the sleeps list and on the log, resolve at once, and let a test
+  // override the wait itself.
   const sleeps: number[] = [];
   const sleep = (ms: number): Promise<void> => {
     sleeps.push(ms);
+    log.push('sleep', undefined, String(ms));
     return opts.sleepScript ? opts.sleepScript(ms) : Promise.resolve();
   };
 

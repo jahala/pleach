@@ -158,7 +158,7 @@ fixture pins the table in `test/unit/runner-contract.test.ts`):
 | `stop` | 0 | terminal | The worker says it is done: read `finalMessage`, stage files, run gates |
 | `file` | 0 | terminal | Settles failed with `gate.ran` `wait:file` — pleach waits on the stop hook, so this end is not its own |
 | `pattern` | 0 | terminal | Settles failed with `gate.ran` `wait:pattern`, as `file` does |
-| `provider-error` | 122 | retryable | Same-tree retry with evidence while attempts remain, then failed with `gate.ran` `wait:provider-error` |
+| `provider-error` | 122 | retryable | Re-run inside the same attempt after a backoff (`--provider-backoff-ms`, 15 s doubling, five waits), same tree, the provider's text as evidence; once the waits are spent the attempt counts, and after the last attempt the node fails with `gate.ran` `wait:provider-error` and the cause in the verdict's detail (D34) |
 | `idle` | 123 | blocked | Verdict `status:'blocked'`, the tree kept in quarantine — the operator re-runs |
 | `timeout` | 124 | retryable | Same-tree retry with evidence while attempts remain, then failed with `gate.ran` `wait:timeout` |
 | `dead` | 125 | dead | Retry on the fallback provider or fail per `onDead` policy |

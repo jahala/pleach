@@ -95,6 +95,10 @@ Flags (run):
   --provider-backoff-ms N First wait after a provider or network error (default: 15000). Five
                           waits, each double the last, run inside the same attempt; only once
                           they are spent does the error cost an attempt.
+  --settle-ms N           After a worker stops, wait until the tree is unchanged for this long
+                          before any gate reads it (default: 2000, or $PLEACH_SETTLE_MS; 0 turns
+                          it off). A tree still changing after 60 s fails the attempt, naming
+                          the paths.
                           A wedged worker (an auditor idle on a 404) settles blocked with its
                           tree quarantined instead of riding the attempt clock.
   --fallback-provider NAME
@@ -212,6 +216,7 @@ interface Flags {
   timeoutMs?: number;
   idleMs: number;
   providerBackoffMs?: number;
+  settleMs?: number;
   fallbackProvider?: string;
   journal?: string;
   umbelBin: string;
@@ -241,12 +246,22 @@ class UsageError extends Error {
   readonly name = 'UsageError';
 }
 
+// A wait in milliseconds where 0 is meaningful (the settle window: 0 turns it off).
+function nonNegativeMs(name: string, value: string): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) throw new UsageError(`${name} must be 0 or more`);
+  return n;
+}
+
 function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Flags } {
   const positionals: string[] = [];
   const flags: Flags = {
     repoRoot: process.cwd(),
     idleMs: DEFAULT_IDLE_MS,
     umbelBin: process.env.PLEACH_UMBEL_BIN ?? 'umbel',
+    ...(process.env.PLEACH_SETTLE_MS !== undefined
+      ? { settleMs: nonNegativeMs('$PLEACH_SETTLE_MS', process.env.PLEACH_SETTLE_MS) }
+      : {}),
     fresh: false,
     land: false,
     landGates: [],
@@ -290,6 +305,10 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         break;
       case '--provider-backoff-ms':
         flags.providerBackoffMs = takeNumber(arg, next);
+        i += 1;
+        break;
+      case '--settle-ms':
+        flags.settleMs = nonNegativeMs(arg, takeValue(arg, next));
         i += 1;
         break;
       case '--idle-ms':
@@ -531,6 +550,7 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     ...(flags.providerBackoffMs !== undefined
       ? { providerBackoffMs: flags.providerBackoffMs }
       : {}),
+    ...(flags.settleMs !== undefined ? { settleMs: flags.settleMs } : {}),
     ...(flags.maxConcurrency !== undefined ? { maxConcurrency: flags.maxConcurrency } : {}),
     ...(flags.timeoutMs !== undefined ? { defaultTimeoutMs: flags.timeoutMs } : {}),
     ...(flags.fallbackProvider !== undefined ? { fallbackProvider: flags.fallbackProvider } : {}),

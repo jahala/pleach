@@ -76,6 +76,7 @@ export type GateKind =
   | 'green'
   | 'command'
   | 'setup'
+  | 'settle'
   | `hygiene:${HygieneFailure['kind']}`;
 
 export class GateFailedError extends Error {
