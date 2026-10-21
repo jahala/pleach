@@ -53,8 +53,8 @@ A non-tend, non-umbel user runs pleach standalone on git, or wires any runner/le
 - [x] (code) buildDeps(opts) assembles a ConductorDeps from the four pleach seams (exec/isolate/lock/journal) plus an injected runner + ledger. · test/unit/library-export.test.ts @39edcca · by cli
 - [x] (code) The bundled directCliRunner (headless claude -p / codex exec) is selectable with `pleach run --runner direct-cli` and reaches a verified close with no umbel and no tmux; --runner with a config file is a contradiction and errors (no silent fallback). · test/e2e/direct-cli.test.ts @79b2e31
 
-- [ ] (code) In a scratch repo with no pleach files, the install command `docs/adapters.md` gives (pointed at this checkout) makes the doc's own example `pleach.config.ts` load, and a one-node plan runs through it; removing the install step from the doc turns this red · test/e2e/consumer-config.test.ts
-- [ ] (code) `pleach run` with a relative `--config`, run from the repo, loads that config and closes the node · test/e2e/config-relative.test.ts
+- [x] (code) In a scratch repo with no pleach files, the install command `docs/adapters.md` gives (pointed at this checkout) makes the doc's own example `pleach.config.ts` load, and a one-node plan runs through it; removing the install step from the doc turns this red · test/e2e/consumer-config.test.ts @809e354 · by cli
+- [x] (code) `pleach run` with a relative `--config`, run from the repo, loads that config and closes the node · test/e2e/config-relative.test.ts @889750f · by cli
 ## For #developer #operator
 
 ## Tried
