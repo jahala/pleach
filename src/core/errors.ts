@@ -215,6 +215,24 @@ export class LandBlockedError extends Error {
   }
 }
 
+// ledger: D28 — landing's merge failed with no unmerged files: git refused it
+// without a conflict. Most often a merge commit's hook (commit-msg,
+// pre-merge-commit) said no, the repository's own gate (D21). Distinct from
+// LandConflictError, which names conflicted files; `output` is git's words.
+export class LandMergeRefusedError extends Error {
+  readonly name = 'LandMergeRefusedError';
+  readonly ref: string;
+  readonly output: string;
+
+  constructor(ref: string, output: string) {
+    super(
+      `landing ${ref} was refused by the repository (the merge was not a conflict):\n${output.trim()}`,
+    );
+    this.ref = ref;
+    this.output = output;
+  }
+}
+
 // #12 — every quarantine ref for a node is checked out in some worktree, so
 // there is nowhere to commit its evidence. Caught by the quarantine path
 // itself, which journals it as `quarantine-failed` and never masks the real

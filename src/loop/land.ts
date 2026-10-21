@@ -1,6 +1,7 @@
 import {
   LandBlockedError,
   LandConflictError,
+  LandMergeRefusedError,
   PlanInvalidError,
   RebuildRequiredError,
 } from '../core/errors.ts';
@@ -98,6 +99,12 @@ export async function landPlan(
       // A refused land must be explainable from the journal alone.
       if (err instanceof LandConflictError) {
         await deps.journal.append({ event: 'land-conflict', ref: err.ref, files: err.files });
+      } else if (err instanceof LandMergeRefusedError) {
+        await deps.journal.append({
+          event: 'land-merge-refused',
+          ref: err.ref,
+          outputTail: err.output.trim().slice(-OUTPUT_TAIL_MAX),
+        });
       } else if (err instanceof LandBlockedError) {
         await deps.journal.append({ event: 'land-blocked', reason: err.reason });
       }
