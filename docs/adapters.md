@@ -242,6 +242,15 @@ export interface PleachConfig {
    (when `--tend-module` is supplied) or `gitLedger`. The `--umbel-bin` and `--permission-mode`
    flags thread into the default runner.
 
+The config imports `pleach/*`, so pleach must resolve from the repo it lives in.
+`bunx github:jahala/pleach` puts pleach in bun's cache, not in your `node_modules`, so
+those imports answer `Cannot find module`. To make `pleach/*` resolve, install pleach as
+a dependency first:
+
+```sh
+bun add -d github:jahala/pleach
+```
+
 A minimal `pleach.config.ts` using the bundled adapters:
 
 ```ts
