@@ -92,6 +92,9 @@ Flags (run):
   --max-concurrency N     Parallel node cap (default: plan.maxConcurrency, else CPU cores − 2)
   --timeout-ms N          Default per-attempt timeout when a node omits policy.timeoutMs (default: 30m)
   --idle-ms N             End a worker's wait after this long with no activity (default: 10m).
+  --provider-backoff-ms N First wait after a provider or network error (default: 15000). Five
+                          waits, each double the last, run inside the same attempt; only once
+                          they are spent does the error cost an attempt.
                           A wedged worker (an auditor idle on a 404) settles blocked with its
                           tree quarantined instead of riding the attempt clock.
   --fallback-provider NAME
@@ -208,6 +211,7 @@ interface Flags {
   maxConcurrency?: number;
   timeoutMs?: number;
   idleMs: number;
+  providerBackoffMs?: number;
   fallbackProvider?: string;
   journal?: string;
   umbelBin: string;
@@ -282,6 +286,10 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         break;
       case '--timeout-ms':
         flags.timeoutMs = takeNumber(arg, next);
+        i += 1;
+        break;
+      case '--provider-backoff-ms':
+        flags.providerBackoffMs = takeNumber(arg, next);
         i += 1;
         break;
       case '--idle-ms':
@@ -520,6 +528,9 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     // cores−2, floored at 1 (the loop stays environment-free).
     defaultConcurrency: Math.max(1, cpus().length - 2),
     idleMs: flags.idleMs,
+    ...(flags.providerBackoffMs !== undefined
+      ? { providerBackoffMs: flags.providerBackoffMs }
+      : {}),
     ...(flags.maxConcurrency !== undefined ? { maxConcurrency: flags.maxConcurrency } : {}),
     ...(flags.timeoutMs !== undefined ? { defaultTimeoutMs: flags.timeoutMs } : {}),
     ...(flags.fallbackProvider !== undefined ? { fallbackProvider: flags.fallbackProvider } : {}),
