@@ -1,5 +1,5 @@
 import { access } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { directCliRunner } from '../adapters/direct-cli.ts';
 import { gitLedger } from '../adapters/git.ts';
 import { tendLedger } from '../adapters/tend.ts';
@@ -94,7 +94,12 @@ export async function resolveSeams(
   opts: ResolveSeamsOpts,
 ): Promise<{ runner: RunnerSeam; ledger: LedgerSeam }> {
   const explicit = opts.config !== undefined;
-  const configPath = opts.config ?? join(opts.repoRoot, 'pleach.config.ts');
+  // A relative --config is resolved against the working directory once here, so
+  // the dynamic import below never sees a relative specifier. A relative
+  // specifier would resolve from THIS module (src/faces/), not from where the
+  // user typed the command (jahala/pleach#148).
+  const configPath =
+    opts.config !== undefined ? resolve(opts.config) : join(opts.repoRoot, 'pleach.config.ts');
 
   const config = await loadConfig(configPath, explicit);
 
