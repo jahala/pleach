@@ -7,6 +7,9 @@ Entries carry the defect-ledger id where one exists (`D8`, `D21`, ...); the ledg
 ## [Unreleased]
 
 ### Fixed
+- A relative `--config` path is read from the folder you run pleach in. It used to be looked up in pleach's own source folder, so the run failed before any node started (D30).
+- The docs say how a repo makes the `pleach/*` imports in `pleach.config.ts` resolve: `bun add -d github:jahala/pleach`. Running pleach through `bunx` alone does not (D29).
+- `pleach land` reports a merge that git refuses without a conflict, usually a repository hook declining the merge commit, as a refusal with git's own words. It used to report a conflict naming no files (D28).
 - Nodes that start together no longer race into their worktrees: a node could fail at `isolate` with no tree and no reason when a sibling's `git worktree add` was half-written (D27).
 - The verified commit holds exactly the tree its gates judged. A git hook that changes the commit (a formatter rewriting a file, or a hook staging its own) now fails the node under the `commit` gate, keeps the tree on `quarantine/<id>` and publishes nothing. Before, the changed commit was published as verified. Hooks still run and may still refuse (D24).
 

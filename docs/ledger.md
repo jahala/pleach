@@ -424,6 +424,26 @@ checkpoint but have different lifetimes and trust domains.**
   run before and pass after; the end-to-end stress went from 1 in 48 to 0 in 64. The queue is per seam,
   so a `pleach land` in another process can still meet a run's add; that stays rare and open. Tests:
   `test/integration/isolate-concurrent.test.ts`.
+- **D28 ⚠ [field] Land called a refused merge a conflict naming no files.** jahala/pleach#98 (2026-09-11,
+  jahala/plotplot). When the checked-out branch has moved past a node's base, land's `git merge` must make
+  a merge commit, so the repository's `commit-msg` hook runs; plotplot's refused the message, `git merge`
+  exited non-zero with no unmerged files, and the seam threw `LandConflictError` with an empty list. A
+  fast-forward makes no commit, which is why the same landing worked while the branch sat on the base.
+  **Fix:** a conflict is a failed merge WITH unmerged files; one without is `LandMergeRefusedError`,
+  carrying git's output, journaled `land-merge-refused` with a capped tail and narrated. Hooks keep running
+  (D21). Tests: `test/integration/land-merge-refused.test.ts`, `test/e2e/land-merge-refused.test.ts`,
+  `test/loop/land.test.ts`, `test/unit/narrate.test.ts`.
+- **D29 ⚠ [field] The documented config did not resolve in a consumer repo.** jahala/pleach#147 (2026-10-21,
+  jahala/cfanalytics). `docs/adapters.md` showed a `pleach.config.ts` importing `pleach/adapters/*`, while
+  the README ran pleach with `bunx`, which puts it in bun's cache, so the imports answered `Cannot find
+  module`. **Fix:** the docs give the install step, `bun add -d github:jahala/pleach`; a test installs pleach
+  into a scratch repo with the command the doc gives (pointed at this checkout) and runs the doc's own
+  example config. Tests: `test/e2e/consumer-config.test.ts`.
+- **D30 ⚠ [field] A relative `--config` was read from pleach's own source folder.** jahala/pleach#148
+  (2026-10-21, jahala/cfanalytics). `resolveSeams` passed the flag's value to `import()`, which resolves a
+  relative specifier from the importing module, `src/faces/`. **Fix:** `resolveSeams` resolves the path
+  against the working directory before the import, so the library path is fixed too; the default
+  `<repo-root>/pleach.config.ts` was already absolute (D22). Tests: `test/e2e/config-relative.test.ts`.
 
 ### Verified-sound (attacks refuted — do not relitigate)
 

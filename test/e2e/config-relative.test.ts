@@ -28,6 +28,7 @@ export default {
 };
 `;
 
+// ledger: D30 — a relative --config is read from the working directory.
 test('pleach run with a relative --config path, run from the repo, closes the node', async () => {
   const { path: repo, cleanup } = await createRepo();
   try {

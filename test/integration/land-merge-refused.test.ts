@@ -41,6 +41,7 @@ describe('isolate seam — land, a hook-refused merge', () => {
     await cleanup();
   });
 
+  // ledger: D28 — a merge git refuses without a conflict is a refusal, never a conflict.
   test('a commit-msg hook that refuses is a refusal, not a conflict naming no files', async () => {
     const branch = await gitIn(repo, 'symbolic-ref', '--short', 'HEAD');
     const base = await gitIn(repo, 'rev-parse', 'HEAD');

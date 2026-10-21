@@ -116,6 +116,7 @@ describe('landPlan', () => {
     expect(h.log.count('lock.release')).toBe(1);
   });
 
+  // ledger: D28 — the refusal is journaled with its tail, and the lock releases.
   test('a seam merge refusal is journaled and the lock still releases', async () => {
     const p = plan([{ id: 'a' }]);
     const { LandMergeRefusedError } = await import('../../src/core/errors.ts');

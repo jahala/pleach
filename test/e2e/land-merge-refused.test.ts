@@ -50,6 +50,7 @@ describe('pleach land — a hook-refused merge, through the real CLI', () => {
     await cleanup();
   });
 
+  // ledger: D28 — through the real CLI, the hook's words reach the operator.
   test('land exits non-zero and stderr carries the hook words', async () => {
     const planPath = join(repo, 'plan.json');
     await writeFile(
