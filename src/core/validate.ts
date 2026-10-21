@@ -4,7 +4,10 @@ import type { Node, Plan } from './plan.ts';
 
 export const DEFAULT_WORKER_PROVIDER = 'claude';
 
-export function validatePlan(plan: Plan): { order: string[]; waves: string[][] } {
+export function validatePlan(
+  plan: Plan,
+  allowedProviders?: readonly string[],
+): { order: string[]; waves: string[][] } {
   const reasons: string[] = [];
 
   if (plan.nodes.length === 0) {
@@ -42,6 +45,30 @@ export function validatePlan(plan: Plan): { order: string[]; waves: string[][] }
       if (node.accept.audit.provider === workerProvider) {
         reasons.push(
           `node '${node.id}': audit provider '${node.accept.audit.provider}' must differ from worker provider (model diversity rule)`,
+        );
+      }
+    }
+  }
+
+  // Provider gate (issue #146): the face passes the runner's providers plus the
+  // config's cast names; a node or audit naming neither is refused with the
+  // known names listed, so a typo fails at validate, not at spawn. Without a
+  // list (the scripted runner names none) nothing is refused.
+  if (allowedProviders !== undefined) {
+    const known = allowedProviders.join(', ');
+    for (const node of plan.nodes) {
+      const workerProvider = node.worker.provider ?? DEFAULT_WORKER_PROVIDER;
+      if (!allowedProviders.includes(workerProvider)) {
+        reasons.push(
+          `node '${node.id}': unknown worker provider '${workerProvider}' (known: ${known})`,
+        );
+      }
+      if (
+        node.accept.audit !== undefined &&
+        !allowedProviders.includes(node.accept.audit.provider)
+      ) {
+        reasons.push(
+          `node '${node.id}': unknown audit provider '${node.accept.audit.provider}' (known: ${known})`,
         );
       }
     }

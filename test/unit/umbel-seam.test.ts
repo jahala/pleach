@@ -210,3 +210,86 @@ describe('createUmbelSeam.wait — --idle-timeout passthrough', () => {
     expect(waitArgv(calls)).not.toContain('--idle-timeout');
   });
 });
+
+// ── env passes by name only (issue #126, #146) ──────────────────────────────
+// A worker env var's value must never appear on the umbel command line, where
+// `ps` shows it. The adapter passes `--env KEY` (the bare name umbel already
+// supports) and puts the value in the spawn process's own env. Seam-level
+// workerEnv and a cast's spec.env ride the same path.
+describe('createUmbelSeam.spawnWorker — env passes by name only', () => {
+  interface RecordedCall {
+    argv: string[];
+    env?: Record<string, string>;
+  }
+
+  function makeEnvRecordingExec(): { exec: ExecFn; calls: RecordedCall[] } {
+    const calls: RecordedCall[] = [];
+    const exec: ExecFn = async (argv, opts) => {
+      const a = [...argv];
+      calls.push({ argv: a, env: opts.env });
+      const nameIdx = a.indexOf('--name');
+      const name = nameIdx >= 0 ? (a[nameIdx + 1] ?? '') : '';
+      const output = `spawned: ${name}\n`;
+      return { exitCode: 0, output, stdout: output };
+    };
+    return { exec, calls };
+  }
+
+  function spawnCall(calls: RecordedCall[]): RecordedCall {
+    const call = calls.find((c) => c.argv.includes('spawn'));
+    if (call === undefined) throw new Error('no spawn invocation recorded');
+    return call;
+  }
+
+  test('a cast env value rides --env KEY (bare name), the value in the spawn env only', async () => {
+    const { exec, calls } = makeEnvRecordingExec();
+    const seam = createUmbelSeam(exec, { bin: 'umbel' });
+    await seam.spawnWorker({
+      provider: 'claude',
+      cwd: '/tmp',
+      env: { ANTHROPIC_AUTH_TOKEN: 'sk-secret-123' },
+    });
+
+    const argv = spawnCall(calls).argv;
+    expect(argv).toContain('--env');
+    expect(argv).toContain('ANTHROPIC_AUTH_TOKEN');
+    // The value must never ride the command line.
+    expect(argv).not.toContain('sk-secret-123');
+    expect(argv.join(' ')).not.toContain('sk-secret-123');
+    // It is in the spawn process env instead.
+    expect(spawnCall(calls).env?.ANTHROPIC_AUTH_TOKEN).toBe('sk-secret-123');
+  });
+
+  test('seam-level workerEnv rides --env KEY too, never KEY=VALUE (issue #126)', async () => {
+    const { exec, calls } = makeEnvRecordingExec();
+    const seam = createUmbelSeam(exec, {
+      bin: 'umbel',
+      workerEnv: { FAKE_CLAUDE_JSONL_DIR: '/tmp/secret-dir-456' },
+    });
+    await seam.spawnWorker({ cwd: '/tmp' });
+
+    const argv = spawnCall(calls).argv;
+    expect(argv).toContain('--env');
+    expect(argv).toContain('FAKE_CLAUDE_JSONL_DIR');
+    expect(argv).not.toContain('/tmp/secret-dir-456');
+    expect(argv.join(' ')).not.toContain('/tmp/secret-dir-456');
+    expect(spawnCall(calls).env?.FAKE_CLAUDE_JSONL_DIR).toBe('/tmp/secret-dir-456');
+  });
+
+  test('a cast env key overrides the same seam workerEnv key in the spawn env', async () => {
+    const { exec, calls } = makeEnvRecordingExec();
+    const seam = createUmbelSeam(exec, {
+      bin: 'umbel',
+      workerEnv: { ANTHROPIC_AUTH_TOKEN: 'seam-value' },
+    });
+    await seam.spawnWorker({
+      provider: 'claude',
+      cwd: '/tmp',
+      env: { ANTHROPIC_AUTH_TOKEN: 'cast-value' },
+    });
+
+    const call = spawnCall(calls);
+    expect(call.argv.filter((a) => a === 'ANTHROPIC_AUTH_TOKEN')).toHaveLength(1);
+    expect(call.env?.ANTHROPIC_AUTH_TOKEN).toBe('cast-value');
+  });
+});

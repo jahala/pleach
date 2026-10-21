@@ -467,6 +467,34 @@ checkpoint but have different lifetimes and trust domains.**
   the exit code and last 20 lines as reasons); the docs and the pleach-plan skill say the command must
   print the block. Tests: `test/unit/audit-egress.test.ts`, `test/e2e/audit-wrap.test.ts`,
   `test/loop/audit-wrap.test.ts`.
+- **D34 ⚠ [field] A network provider error burned maxAttempts inside one outage.** jahala/pleach#151
+  (jahala/cfanalytics, 2026-10-21): the machine lost DNS for a few minutes, both attempts of two nodes
+  ended `wait:provider-error`, they settled failed, and the run had to be restarted by hand. A provider
+  error counted as an attempt and was retried at once. **Fix:** a provider error re-runs inside the same
+  attempt after a backoff (`core/backoff.ts`: `--provider-backoff-ms`, default 15 s, doubling, five waits),
+  same tree, the provider's text in the re-prompt, journaled `provider-error-backoff`; a run's stop cuts
+  the wait short. Once the waits are spent the attempt counts, and the verdict names the cause
+  (`provider error ×6: …`). Time comes in through a `sleep` port on the deps. Tests:
+  `test/unit/backoff.test.ts`, `test/loop/provider-error-backoff.test.ts`,
+  `test/e2e/seam-keeps-tree.test.ts`.
+- **D35 ⚠ [field] A worker's own background command was still writing when its gate ran.** jahala/pleach#127
+  (jahala/quadrat, 2026-09-18): umbel reported `stop`, the gate ran at once, and it judged a half-written
+  tree. **Fix:** after a worker's stop, before any gate, the loop records the tree (D32's `recordTree`),
+  waits a settle window (`--settle-ms`, default 2 s, or `$PLEACH_SETTLE_MS`; 0 turns it off), and records
+  again until two records match (`core/settle.ts` decides); a tree still changing after 60 s fails the
+  attempt under the `settle` gate, naming the paths. A stop during the wait settles aborted. The test
+  suite preloads `PLEACH_SETTLE_MS=0` (bunfig.toml), since its fake workers write nothing in the
+  background. Tests: `test/unit/settle.test.ts`, `test/loop/tree-settle.test.ts`,
+  `test/integration/isolate.test.ts`.
+- **D36 ◦ [field] One plan could not reach two endpoints of one CLI, and a provider typo failed at spawn.**
+  jahala/pleach#146 and #126 (jahala/cfanalytics, 2026-10-21). **Fix:** `pleach.config.ts` declares named
+  casts (`{ provider, model?, env? }`, env values as literals or `{ fromEnv }`); a node or auditor names a
+  cast as its provider, and the face wraps the runner to resolve it (`core/cast.ts`), so the loop is
+  unchanged. Worker env reaches umbel by name only (`--env KEY`, the value in the spawn's own
+  environment, never on the command line). `validate` and `run` refuse a provider that is neither one the
+  runner declares nor a cast, and `run` refuses a cast whose variable is unset before it takes the lock.
+  Tests: `test/unit/cast.test.ts`, `test/unit/validate-providers.test.ts`, `test/unit/umbel-seam.test.ts`,
+  `test/e2e/casts.test.ts`.
 
 ### Verified-sound (attacks refuted — do not relitigate)
 

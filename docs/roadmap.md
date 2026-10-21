@@ -1,7 +1,7 @@
 # pleach roadmap: the open issues as work packages
 
 **You are here (2026-10-21).** v1.0.0 is released. The audit fixes (D24–D27) and the first P1 batch
-(D28 #98, D29 #147, D30 #148) and the second batch (D31 #114, D32 #131, D33 #149) are merged, and CI runs the umbel suites. Every open issue carries a
+(D28 #98, D29 #147, D30 #148) the second batch (D31 #114, D32 #131, D33 #149) and the third (D34 #151, D35 #127, D36 #146 with #126) are merged, and CI runs the umbel suites. Every open issue carries a
 priority label: P1 loses work or blocks a run, P2 costs time or misleads, P3 is polish. This page groups
 the open issues into work packages that share code and need one design, in the order to build them.
 Each package becomes a tend2 loop when work starts, with a ledger item for each defect.
@@ -10,9 +10,9 @@ Each package becomes a tend2 loop when work starts, with a ledger item for each 
 
 | # | Package | Issues | Why this position |
 |---|---|---|---|
-| 1 | Nothing unjudged, nothing unrecorded | #127 #125 #109 (then #129); #131 done (D32) | Work that no gate judged, or that the record lost, can reach a verified branch. This is the prime invariant. |
+| 1 | Nothing unjudged, nothing unrecorded | #125 #109 (then #129); #131, #127 done (D32, D35) | Work that no gate judged, or that the record lost, can reach a verified branch. This is the prime invariant. |
 | 2 | The operator's seat | #63 #86 #71 #115 #87; #114 done (D31) | The largest field pain: 806 `tail` polls across 25 sessions, and sessions killed by hand. |
-| 3 | Casting and the config | #146 #126 #128; #149 done (D33) | Found dogfooding on cfanalytics: one plan cannot reach two endpoints of one CLI, and an ordinary audit command costs a whole build before it fails. |
+| 3 | Casting and the config | #128; #149, #146, #126 done (D33, D36) | Found dogfooding on cfanalytics: one plan cannot reach two endpoints of one CLI, and an ordinary audit command costs a whole build before it fails. |
 | 4 | Landing that finishes the job | #124 #116 #85 #130 | One small honesty fix first. Then land stops handing conflicts to a person. |
 | 5 | Contract v1.2, one round with tend2 | #123 #106 #113 #104 #90 | Schema changes batched into one conversation once tend2 is public. The receipt version fence needs a decision first. |
 | 6 | Umbrella fit | #108 #112 | Small, and they need plotplot's contracts. |
@@ -26,7 +26,7 @@ Each package becomes a tend2 loop when work starts, with a ledger item for each 
 - **#131:** a failed gate's writes stay in the tree, the retry inherits them, and they get published. A
   passing gate's writes are never collected. Done in D32: the tree is restored after a failed gate.
 - **#127:** umbel reports `stop` while the worker's own background command is still writing, and the gate
-  judges a half-written tree.
+  judges a half-written tree. Done in D35: the tree settles before a gate.
 - **#125:** a phased node keeps only the last phase's closing message.
 - **#109:** a failed `umbel read` silently becomes an empty handback.
 - **#129** (later): gates re-run on a tree that has not changed since the last run.
@@ -62,8 +62,8 @@ store.
 
 - **#146:** a named cast in the config (`casts: { deepseek: { provider, model, env } }`) that a node names
   in `worker.provider`, so one plan reaches two endpoints of one CLI. `validate` then refuses a provider that
-  is neither known nor declared, which catches typos such as `cluade`.
-- **#126 (S):** pass env values by name only (`--env KEY`). Casts put secrets in env, so this lands first.
+  is neither known nor declared, which catches typos such as `cluade`. Done in D36.
+- **#126 (S):** pass env values by name only (`--env KEY`). Casts put secrets in env, so this lands first. Done in D36.
 - **#149:** an `accept.audit.command` must print a `tend-audit-result` block, but nothing a planner reads
   says so. Ship a wrapper that turns any check into that block, and say so in the schema and the skill. Done in D33: `pleach audit-wrap`.
 - **#128 (S–M):** a spawn that exits 126 means a person must sign in. Settle it `blocked` with that next

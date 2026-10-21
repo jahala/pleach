@@ -83,23 +83,35 @@ function plan(smoke: string) {
   };
 }
 
-// A plan written for one runner, run with another. `--runner direct-cli` is
-// the lean profile — two providers, no umbel — so a node cast to a third is
-// refused by the adapter mid-turn. That refusal is a surprise out of the node,
-// not a gate verdict: the other way a real run reaches a `verdict` line.
+// A plan whose node ends on a surprise out of the node, not on a gate: the
+// direct-cli runner is single-turn, so a {phases} node's SECOND send throws
+// WorkerSeamError ("second send needs session resumption") from inside the
+// ladder. That exception is a surprise — the ladder did not name it — and the
+// node still writes a verdict line that says who was cast. (Before #146 this
+// surprise was reached by casting a node to a provider the runner cannot spawn;
+// now that typo is refused at validate, so the surprise rides the single-turn
+// contract instead.)
 const REFUSED = [
-  { id: 'refused-with-model', provider: 'gemini', model: 'gemini-2.5-pro' },
-  { id: 'refused-plain', provider: 'ollama' },
+  { id: 'refused-with-model', provider: 'claude', model: MODEL },
+  { id: 'refused-plain', provider: 'claude' },
 ] as const;
 
 function refusedPlan() {
   return {
-    goal: 'a run whose runner refuses the cast still says who was cast',
+    goal: 'a run whose node ends on a surprise still says who was cast',
     source: 'e2e-journal-envelope',
     nodes: REFUSED.map((n) => ({
       id: n.id,
       worker: 'model' in n ? { provider: n.provider, model: n.model } : { provider: n.provider },
-      work: { prompt: 'build the feature' },
+      // Two impl phases: the first send/wait succeeds, the second send throws
+      // (single-turn), so the surprise fires before any gate runs.
+      work: {
+        test: 'true',
+        phases: [
+          { phase: 'impl', prompt: 'first turn' },
+          { phase: 'impl', prompt: 'second turn (never reached)' },
+        ],
+      },
       accept: { smoke: 'true' },
       policy: { maxAttempts: 1 },
     })),

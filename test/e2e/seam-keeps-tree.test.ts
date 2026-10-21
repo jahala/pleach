@@ -13,8 +13,9 @@
  *  (a) The builder's wait exits 124 with {"reason":"timeout"} on both of two
  *      attempts: retried on the same tree, then settled failed with the tree on
  *      quarantine/<id> and a receipt counting both attempts.
- *  (b) The first wait exits 122 provider-error, the second stops: retried, and
- *      the node closes on its second attempt.
+ *  (b) The first wait exits 122 provider-error, the second stops: retried in
+ *      the same attempt (the provider's fault, not the work's — issue #151),
+ *      and the node closes on that one attempt.
  *  (c) The builder stops green and the smoke passes, but the AUDITOR's wait
  *      exits 124: the tree is quarantined with a never-adjudicated audit
  *      record, and `pleach audit` re-runs that lane alone and closes it.
@@ -161,7 +162,7 @@ describe('a seam’s surprise never costs the tree — e2e (D23)', () => {
   }
 
   async function run(): Promise<{ code: number; summary: Summary }> {
-    const r = await pleach(['run', planPath]);
+    const r = await pleach(['run', planPath, '--provider-backoff-ms', '10']);
     return { code: r.code, summary: JSON.parse(r.stdout.trim()) as Summary };
   }
 
@@ -239,10 +240,10 @@ describe('a seam’s surprise never costs the tree — e2e (D23)', () => {
     expect(summary.closed).toEqual(['flaky']);
     expect(await served('claude')).toBe(2);
 
-    // The retry is on the record: the close took the second attempt, whose
-    // work stands on the first's in the same tree.
-    expect(await verdictOf('flaky')).toMatchObject({ status: 'done', attempts: 2 });
-    expect((await receiptOf('flaky')).facts.attempts).toBe(2);
+    // The retry is on the record: the provider error was re-run inside the one
+    // attempt, whose two worker sends stand in the same tree.
+    expect(await verdictOf('flaky')).toMatchObject({ status: 'done', attempts: 1 });
+    expect((await receiptOf('flaky')).facts.attempts).toBe(1);
     expect(await gitIn(repo, 'show', 'node/flaky:work.txt')).toBe('worked\nworked');
     expect(await worktrees()).toBe(1);
   }, 60_000);

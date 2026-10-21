@@ -469,6 +469,37 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     return [...toRestore, ...toRemove];
   }
 
+  // ── treeDiffPaths (issue #127) ────────────────────────────────────────────
+
+  // The paths that differ between two trees `recordTree` recorded, read-only —
+  // the real index and the working tree are both untouched. The settle loop
+  // names what is still changing when its bound is hit; never-delivered paths
+  // (`.loop-scratch`, `.plotplot/friction`) are excluded, like restoreTree.
+  async function treeDiffPaths(cwd: string, a: string, b: string): Promise<string[]> {
+    if (a === b) return [];
+    const diff = await gitMust(
+      exec,
+      cwd,
+      '-c',
+      'core.quotePath=false',
+      'diff-tree',
+      '-r',
+      '-z',
+      '--no-renames',
+      '--name-status',
+      a,
+      b,
+    );
+    const fields = diff.split('\0').filter((f) => f !== '');
+    const paths: string[] = [];
+    for (let k = 0; k + 1 < fields.length; k += 2) {
+      const path = fields[k + 1] as string;
+      if (isNeverDelivery(path)) continue;
+      paths.push(path);
+    }
+    return paths;
+  }
+
   // ── stagedDiff / stagedNumstat (the hygiene gate's raw material, §E) ────
 
   async function stagedDiff(cwd: string): Promise<string> {
@@ -764,6 +795,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     changedFiles,
     recordTree,
     restoreTree,
+    treeDiffPaths,
     commit,
     commitBranch,
     snapshot,

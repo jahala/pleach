@@ -4,6 +4,8 @@ import { directCliRunner } from '../adapters/direct-cli.ts';
 import { gitLedger } from '../adapters/git.ts';
 import { tendLedger } from '../adapters/tend.ts';
 import { umbelRunner } from '../adapters/umbel.ts';
+import type { Cast, CastEnvValue } from '../core/cast.ts';
+import { resolveCastSpawn } from '../core/cast.ts';
 import { ConfigError } from '../core/errors.ts';
 import type { ConductorDeps, LedgerSeam, RunnerSeam } from '../loop/deps.ts';
 import { exec } from '../seams/exec.ts';
@@ -13,11 +15,18 @@ import { createJournal } from '../seams/journal.ts';
 import { createLockSeam } from '../seams/lock.ts';
 import { createReceiptStore } from '../seams/receipts.ts';
 
+export type { Cast, CastEnvValue };
+
 // ── Public types ──────────────────────────────────────────────────────────────
 
 export interface PleachConfig {
   runner: RunnerSeam;
   ledger: LedgerSeam | Promise<LedgerSeam>;
+  // Named casts (issue #146): a plan names one in `worker.provider` (or an
+  // auditor in `accept.audit.provider`); the cast resolves it to the provider,
+  // model and env this environment reaches it by — two casts can reach two
+  // endpoints of one provider.
+  casts?: Record<string, Cast>;
 }
 
 export interface ResolveSeamsOpts {
@@ -90,9 +99,37 @@ async function loadConfig(path: string, required: boolean): Promise<PleachConfig
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export async function resolveSeams(
-  opts: ResolveSeamsOpts,
-): Promise<{ runner: RunnerSeam; ledger: LedgerSeam }> {
+export interface ResolveSeamsResult {
+  runner: RunnerSeam;
+  ledger: LedgerSeam;
+  // The provider names the validate/run faces accept: the runner's own plus the
+  // config's cast names. Absent → the runner accepts any provider name.
+  providers?: readonly string[];
+  // The config's casts, so the run face can check their variables up front.
+  casts?: Record<string, Cast>;
+}
+
+// Wrap a runner with the config's casts (issue #146): a spawn whose provider
+// names a cast is rewritten to the cast's provider/model/env. Each `{ fromEnv }`
+// value is read from the process env at spawn.
+function wrapCasts(runner: RunnerSeam, casts: Record<string, Cast>): RunnerSeam {
+  if (Object.keys(casts).length === 0) return runner;
+  const readEnv = (name: string): string | undefined => process.env[name];
+  return {
+    ...runner,
+    spawnWorker: (spec) => runner.spawnWorker(resolveCastSpawn(spec, casts, readEnv)),
+  };
+}
+
+function combinedProviders(
+  runnerProviders: readonly string[] | undefined,
+  castNames: readonly string[],
+): readonly string[] | undefined {
+  const set = new Set([...(runnerProviders ?? []), ...castNames]);
+  return set.size === 0 ? undefined : [...set];
+}
+
+export async function resolveSeams(opts: ResolveSeamsOpts): Promise<ResolveSeamsResult> {
   const explicit = opts.config !== undefined;
   // A relative --config is resolved against the working directory once here, so
   // the dynamic import below never sees a relative specifier. A relative
@@ -110,7 +147,13 @@ export async function resolveSeams(
         '--runner conflicts with a config file (the config brings its own runner) — drop one',
       );
     }
-    return { runner: config.runner, ledger: await config.ledger };
+    const casts = config.casts ?? {};
+    return {
+      runner: wrapCasts(config.runner, casts),
+      ledger: await config.ledger,
+      providers: combinedProviders(config.runner.providers, Object.keys(casts)),
+      casts,
+    };
   }
 
   // Default wiring: the selected bundled runner + git or tend ledger.
@@ -128,7 +171,7 @@ export async function resolveSeams(
       ? await tendLedger({ module: opts.tendModule })
       : gitLedger({ repo: opts.repoRoot });
 
-  return { runner, ledger };
+  return { runner, ledger, providers: runner.providers };
 }
 
 // ── buildDeps ───────────────────────────────────────────────────────────────
@@ -170,5 +213,8 @@ export function buildDeps(opts: BuildDepsOpts): ConductorDeps {
     runner: opts.runner,
     ledger: opts.ledger,
     receipts: createReceiptStore(join(pleachDir, 'receipts')),
+    // The conductor's clock: setTimeout is the whole sleep. The loop races this
+    // against the run's abort signal, so a backoff is cut short on teardown.
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   };
 }

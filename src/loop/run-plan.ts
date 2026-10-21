@@ -48,6 +48,10 @@ export interface RunPlanOpts {
   // run. The face owns the default; a runner that cannot detect idleness
   // ignores it. Absent leaves the attempt clock as the only bound.
   idleMs?: number;
+  // The first provider-error wait (D34); each next wait doubles it.
+  providerBackoffMs?: number;
+  // The settle window after a worker stops (D35); 0 turns the settle off.
+  settleMs?: number;
   // The run's second cast (D17): the provider a `dead` attempt is re-cast on,
   // audit diversity re-checked against it. Absent, a dead attempt settles the
   // node rather than spending another attempt on the same outage.
@@ -56,6 +60,10 @@ export interface RunPlanOpts {
   // from its dependencies alone. The default is to resume — a tree an earlier
   // attempt left behind is work, and rebuilding from nothing throws it away.
   fresh?: boolean;
+  // The provider names the runner can spawn plus the config's cast names
+  // (issue #146) — handed to validatePlan so a typo refuses the run before any
+  // spawn. Absent (e.g. a scripted runner) → no provider name is refused.
+  providers?: readonly string[];
 }
 
 export const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes (binding prose).
@@ -67,7 +75,7 @@ export async function runPlan(
   deps: ConductorDeps,
   opts: RunPlanOpts,
 ): Promise<RunSummary> {
-  validatePlan(plan); // throws PlanInvalidError — the face maps exit 2.
+  validatePlan(plan, opts.providers); // throws PlanInvalidError — the face maps exit 2.
 
   const defaultTimeoutMs = opts.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxConcurrency = Math.max(
@@ -85,6 +93,10 @@ export async function runPlan(
       fresh: opts.fresh === true,
       ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       ...(opts.idleMs !== undefined ? { idleMs: opts.idleMs } : {}),
+      ...(opts.providerBackoffMs !== undefined
+        ? { providerBackoffMs: opts.providerBackoffMs }
+        : {}),
+      ...(opts.settleMs !== undefined ? { settleMs: opts.settleMs } : {}),
       ...(opts.fallbackProvider !== undefined ? { fallbackProvider: opts.fallbackProvider } : {}),
     });
   } finally {
@@ -100,6 +112,8 @@ interface ResolvedOpts {
   fresh: boolean;
   signal?: AbortSignal;
   idleMs?: number;
+  providerBackoffMs?: number;
+  settleMs?: number;
   fallbackProvider?: string;
 }
 
@@ -296,6 +310,10 @@ async function runUnderLock(
         defaultTimeoutMs: opts.defaultTimeoutMs,
         signal: opts.signal,
         idleMs: opts.idleMs,
+        ...(opts.providerBackoffMs !== undefined
+          ? { providerBackoffMs: opts.providerBackoffMs }
+          : {}),
+        ...(opts.settleMs !== undefined ? { settleMs: opts.settleMs } : {}),
         fallbackProvider: opts.fallbackProvider,
         resumedFrom: resumed,
         onSpawn: () => {

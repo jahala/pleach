@@ -57,6 +57,20 @@ audit's diversity rule re-checked against it. Without a usable fallback the node
 after the one attempt with its remaining attempts unspent, and the verdict's `detail`
 names why.
 
+A provider error is different: the session worked, then the provider or the network failed
+(a 5xx, a rate limit, a lost DNS lookup). The node waits and runs again inside the same
+attempt, on the same tree, with the provider's words in the prompt: 15 s, then doubling, five
+waits in all (`--provider-backoff-ms` sets the first). Only when the waits are spent does the
+error cost an attempt, and the verdict's `detail` names the cause.
+
+## A worker's background work is waited for
+
+A worker can end its turn while a command it started is still writing. Before any gate reads
+the tree, pleach waits until the tree has not changed for one settle window (2 s;
+`--settle-ms`, or `$PLEACH_SETTLE_MS`, where 0 turns it off). A tree still changing after
+60 s fails the attempt under the `settle` gate, naming the paths, and the worker is asked to
+finish or stop its background work.
+
 ## A fault in the plan is refused before a worker costs anything
 
 pleach execs every command string argv-style with no shell. `pleach validate` refuses

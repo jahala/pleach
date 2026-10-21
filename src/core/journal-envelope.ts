@@ -54,6 +54,7 @@ export const KINDS: Record<string, Kind> = {
   'node-start': 'node.lifecycle',
   blocked: 'node.lifecycle',
   'phase-commit': 'node.lifecycle',
+  'provider-error-backoff': 'node.lifecycle',
   'set-aside': 'node.lifecycle',
   'resumed-from-quarantine': 'node.lifecycle',
   'resume-refused': 'node.lifecycle',
@@ -72,6 +73,8 @@ export const KINDS: Record<string, Kind> = {
   'sha-mismatch': 'node.lifecycle',
   'dispose-failed': 'node.lifecycle',
   'seam-violation': 'node.lifecycle',
+  'tree-settled': 'node.lifecycle',
+  'tree-still-changing': 'node.lifecycle',
 
   // A gate said yes or no.
   'gate-fail': 'gate.result',

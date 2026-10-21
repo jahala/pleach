@@ -76,6 +76,7 @@ export type GateKind =
   | 'green'
   | 'command'
   | 'setup'
+  | 'settle'
   | `hygiene:${HygieneFailure['kind']}`;
 
 export class GateFailedError extends Error {
@@ -273,6 +274,22 @@ export class ConfigError extends Error {
     super(`config error at '${path}': ${detail}`);
     this.path = path;
     this.detail = detail;
+  }
+}
+
+// A cast's `{ fromEnv }` value names an environment variable that is not set
+// at spawn (issue #146). Named so the caller can read which cast and which
+// variable — never resolved to an empty value, which would send the worker to
+// the wrong endpoint silently.
+export class CastEnvError extends Error {
+  readonly name = 'CastEnvError';
+  readonly cast: string;
+  readonly variable: string;
+
+  constructor(cast: string, variable: string) {
+    super(`cast '${cast}' requires env variable '${variable}', which is not set`);
+    this.cast = cast;
+    this.variable = variable;
   }
 }
 
