@@ -76,6 +76,7 @@ export const KINDS: Record<string, Kind> = {
   // A gate said yes or no.
   'gate-fail': 'gate.result',
   'gate-flaky': 'gate.result',
+  'gate-writes-restored': 'gate.result',
   'land-gate': 'gate.result',
   'land-gate-retry': 'gate.result',
   'land-gate-refused': 'gate.result',

@@ -1,6 +1,8 @@
 import type { Dirent } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { isNeverDelivery } from '../core/delivery.ts';
 import {
   CommitAlteredError,
   IsolateCatastrophicError,
@@ -27,6 +29,17 @@ async function git(
   ...args: string[]
 ): Promise<{ output: string; exitCode: number }> {
   return exec(['git', '-C', cwd, ...args], { cwd });
+}
+
+// `git` with an env override — recordTree points GIT_INDEX_FILE at a throwaway
+// index so the real one is never touched (issue #131).
+async function gitEnv(
+  exec: ExecFn,
+  cwd: string,
+  env: Record<string, string>,
+  ...args: string[]
+): Promise<{ output: string; exitCode: number }> {
+  return exec(['git', '-C', cwd, ...args], { cwd, env });
 }
 
 async function gitMust(exec: ExecFn, cwd: string, ...args: string[]): Promise<string> {
@@ -365,6 +378,113 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     return files;
   }
 
+  // ── recordTree / restoreTree (issue #131) ────────────────────────────────
+
+  // The whole working tree as a git tree object, written through a THROWAWAY
+  // index: `git add -A` into an empty index is exactly the tree the working
+  // directory holds right now — tracked and untracked alike, `.gitignore`
+  // respected. The real index and staging are never touched; the temp index
+  // file is removed. A gate that fails leaves its writes here, and the loop
+  // hands the sha to `restoreTree` before the next attempt starts.
+  async function recordTree(cwd: string): Promise<string> {
+    const tmp = await mkdtemp(join(tmpdir(), 'pleach-index-'));
+    const index = join(tmp, 'index');
+    try {
+      const env = { GIT_INDEX_FILE: index };
+      const add = await gitEnv(exec, cwd, env, 'add', '-A');
+      if (add.exitCode !== 0) {
+        throw new IsolateCatastrophicError(
+          'git add -A',
+          `exited ${add.exitCode} in ${cwd}:\n${add.output}`,
+        );
+      }
+      const tree = await gitEnv(exec, cwd, env, 'write-tree');
+      if (tree.exitCode !== 0) {
+        throw new IsolateCatastrophicError(
+          'git write-tree',
+          `exited ${tree.exitCode} in ${cwd}:\n${tree.output}`,
+        );
+      }
+      return tree.output.trim();
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  }
+
+  // Rewind the working tree to a tree `recordTree` recorded: paths the gate
+  // changed or deleted since are restored from the tree (worktree only — the
+  // index is never touched), and paths it created since are removed with fs.
+  // `git clean -fdx` would reach files the worker itself made, so removal is
+  // scoped to exactly the files the tree never held. Paths under the
+  // never-delivered set (`.loop-scratch`, `.plotplot/friction`) are excluded:
+  // that is the gate's own writing surface, and settle collects the friction
+  // journal from it (D14). Returns the paths that were restored or removed.
+  async function restoreTree(cwd: string, tree: string): Promise<string[]> {
+    const quotePath = ['-c', 'core.quotePath=false'];
+
+    // The paths the recorded tree holds — the set that existed before the gate.
+    const ls = await git(exec, cwd, ...quotePath, 'ls-tree', '-r', '-z', '--name-only', tree);
+    if (ls.exitCode !== 0) {
+      throw new IsolateCatastrophicError(
+        'git ls-tree',
+        `exited ${ls.exitCode} in ${cwd}:\n${ls.output}`,
+      );
+    }
+    const inTree = new Set(ls.output.split('\0').filter((p) => p !== ''));
+
+    // Paths that differ between the tree and the working tree: tracked-in-tree
+    // files the gate modified or deleted, and tracked files it wrote at a path
+    // the tree never held.
+    const diff = await git(exec, cwd, ...quotePath, 'diff', '--name-only', '-z', tree);
+    if (diff.exitCode !== 0) {
+      throw new IsolateCatastrophicError(
+        'git diff',
+        `exited ${diff.exitCode} in ${cwd}:\n${diff.output}`,
+      );
+    }
+    const differing = diff.output.split('\0').filter((p) => p !== '');
+
+    // Untracked files (not ignored, never staged) the gate may have created.
+    const others = await git(
+      exec,
+      cwd,
+      ...quotePath,
+      'ls-files',
+      '--others',
+      '--exclude-standard',
+      '-z',
+    );
+    if (others.exitCode !== 0) {
+      throw new IsolateCatastrophicError(
+        'git ls-files',
+        `exited ${others.exitCode} in ${cwd}:\n${others.output}`,
+      );
+    }
+    const untracked = others.output.split('\0').filter((p) => p !== '');
+
+    const changed = [...new Set([...differing, ...untracked])].filter((p) => !isNeverDelivery(p));
+    const toRestore = changed.filter((p) => inTree.has(p));
+    const toRemove = changed.filter((p) => !inTree.has(p));
+
+    if (toRestore.length > 0) {
+      await gitMust(
+        exec,
+        cwd,
+        ...quotePath,
+        'restore',
+        '--source',
+        tree,
+        '--worktree',
+        '--',
+        ...toRestore,
+      );
+    }
+    for (const p of toRemove) {
+      await rm(join(cwd, p), { force: true });
+    }
+    return [...toRestore, ...toRemove];
+  }
+
   // ── stagedDiff / stagedNumstat (the hygiene gate's raw material, §E) ────
 
   async function stagedDiff(cwd: string): Promise<string> {
@@ -658,6 +778,8 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     stagedNumstat,
     stagedPaths,
     changedFiles,
+    recordTree,
+    restoreTree,
     commit,
     commitBranch,
     snapshot,
