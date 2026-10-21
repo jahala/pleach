@@ -57,6 +57,9 @@ function within(root: string, path: string): string | null {
 }
 
 // Prefix match on whole segments: `.loop-scratchy/keep.ts` is delivery.
-function isNeverDelivery(rel: string): boolean {
+// Exported for the isolate seam's restore (issue #131): the same set decides
+// what a failed gate's writes are restored over — `.plotplot/friction` and
+// `.loop-scratch` are the gate's own writing surface and are never rewound.
+export function isNeverDelivery(rel: string): boolean {
   return NEVER_DELIVERY.some((dir) => rel === dir || rel.startsWith(`${dir}/`));
 }

@@ -1,6 +1,8 @@
 import type { Dirent } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { isNeverDelivery } from '../core/delivery.ts';
 import {
   CommitAlteredError,
   IsolateCatastrophicError,
@@ -27,6 +29,17 @@ async function git(
   ...args: string[]
 ): Promise<{ output: string; exitCode: number }> {
   return exec(['git', '-C', cwd, ...args], { cwd });
+}
+
+// `git` with an env override — recordTree points GIT_INDEX_FILE at a throwaway
+// index so the real one is never touched (issue #131).
+async function gitEnv(
+  exec: ExecFn,
+  cwd: string,
+  env: Record<string, string>,
+  ...args: string[]
+): Promise<{ output: string; exitCode: number }> {
+  return exec(['git', '-C', cwd, ...args], { cwd, env });
 }
 
 async function gitMust(exec: ExecFn, cwd: string, ...args: string[]): Promise<string> {
@@ -365,6 +378,97 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     return files;
   }
 
+  // ── recordTree / restoreTree (issue #131) ────────────────────────────────
+
+  // The whole working tree as a git tree object, written through a THROWAWAY
+  // index: `git add -A` into an empty index is exactly the tree the working
+  // directory holds right now — tracked and untracked alike, `.gitignore`
+  // respected. The real index and staging are never touched; the temp index
+  // file is removed. A gate that fails leaves its writes here, and the loop
+  // hands the sha to `restoreTree` before the next attempt starts.
+  async function recordTree(cwd: string): Promise<string> {
+    const tmp = await mkdtemp(join(tmpdir(), 'pleach-index-'));
+    const index = join(tmp, 'index');
+    try {
+      const env = { GIT_INDEX_FILE: index };
+      const add = await gitEnv(exec, cwd, env, 'add', '-A');
+      if (add.exitCode !== 0) {
+        throw new IsolateCatastrophicError(
+          'git add -A',
+          `exited ${add.exitCode} in ${cwd}:\n${add.output}`,
+        );
+      }
+      const tree = await gitEnv(exec, cwd, env, 'write-tree');
+      if (tree.exitCode !== 0) {
+        throw new IsolateCatastrophicError(
+          'git write-tree',
+          `exited ${tree.exitCode} in ${cwd}:\n${tree.output}`,
+        );
+      }
+      return tree.output.trim();
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  }
+
+  // Rewind the working tree to a tree `recordTree` recorded (D32): record it
+  // again, and the two trees' difference is the gate's writes. Paths the gate
+  // changed or deleted are restored from the recorded tree (worktree only, the
+  // index is never touched); paths it created are removed. The never-delivered
+  // set (`.loop-scratch`, `.plotplot/friction`) is the gate's own writing
+  // surface and is kept, since settle collects the friction journal (D14).
+  // Returns the paths restored or removed.
+  async function restoreTree(cwd: string, tree: string): Promise<string[]> {
+    // The tree as the gate left it, recorded the same way, so the difference
+    // is exactly the gate's: a worker's untracked file the gate never touched
+    // is the same blob in both and is neither restored nor named (D32).
+    const after = await recordTree(cwd);
+    if (after === tree) return [];
+    const diff = await gitMust(
+      exec,
+      cwd,
+      '-c',
+      'core.quotePath=false',
+      'diff-tree',
+      '-r',
+      '-z',
+      '--no-renames',
+      '--name-status',
+      tree,
+      after,
+    );
+    const fields = diff.split('\0').filter((f) => f !== '');
+    const toRestore: string[] = [];
+    const toRemove: string[] = [];
+    for (let k = 0; k + 1 < fields.length; k += 2) {
+      const status = fields[k] as string;
+      const path = fields[k + 1] as string;
+      if (isNeverDelivery(path)) continue;
+      // A: the gate created it. M, D, T: the recorded tree holds it.
+      if (status === 'A') toRemove.push(path);
+      else toRestore.push(path);
+    }
+
+    if (toRestore.length > 0) {
+      await gitMust(
+        exec,
+        cwd,
+        '-c',
+        'core.quotePath=false',
+        'restore',
+        '--source',
+        tree,
+        '--worktree',
+        '--',
+        ...toRestore,
+      );
+    }
+    for (const p of toRemove) {
+      await rm(join(cwd, p), { force: true });
+    }
+    return [...toRestore, ...toRemove];
+  }
+
   // ── stagedDiff / stagedNumstat (the hygiene gate's raw material, §E) ────
 
   async function stagedDiff(cwd: string): Promise<string> {
@@ -658,6 +762,8 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     stagedNumstat,
     stagedPaths,
     changedFiles,
+    recordTree,
+    restoreTree,
     commit,
     commitBranch,
     snapshot,

@@ -7,7 +7,7 @@
  * the exec seam PR has not merged yet.
  */
 import { expect, test } from 'bun:test';
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IsolateCatastrophicError } from '../../src/core/errors.ts';
@@ -652,6 +652,91 @@ test('commitStat shows what a commit introduced, and nothing else', async () => 
     expect(await seam.commitStat(repo.path, 'refs/heads/no-such-branch')).toBeNull();
 
     await iso.dispose();
+  } finally {
+    await repo.cleanup();
+  }
+});
+
+// ledger: #131 — a failed gate's writes are inherited by the retry. The seam's
+// recordTree/restoreTree pair is the fix's foundation: record the whole tree
+// through a TEMPORARY index (real index untouched), then rewind the gate's
+// changes — a tracked modification, a tracked deletion, an untracked file —
+// while leaving the friction journal (never-delivery) in place.
+test("recordTree/restoreTree rewinds a gate's writes, keeps friction, and never touches the index", async () => {
+  const repo = await createRepo();
+  try {
+    const seam = createIsolateSeam(execLocal, repo.path);
+    const cwd = repo.path;
+
+    // Tracked files to modify and delete.
+    await writeFile(join(cwd, 'tracked.txt'), 'original\n');
+    await writeFile(join(cwd, 'doomed.txt'), 'doomed\n');
+    await gitIn(cwd, 'add', 'tracked.txt', 'doomed.txt');
+    await gitIn(cwd, 'commit', '-m', 'seed');
+
+    // Stage a change so `git diff --cached` has something that must stay put.
+    await writeFile(join(cwd, 'tracked.txt'), 'staged\n');
+    await gitIn(cwd, 'add', 'tracked.txt');
+    const cachedBefore = await gitIn(cwd, 'diff', '--cached');
+
+    const tree = await seam.recordTree(cwd);
+    expect(tree).toMatch(/^[0-9a-f]{40}$/);
+
+    // The gate's writes: modify a tracked file, create an untracked file,
+    // delete a tracked file, and write into the friction journal.
+    await writeFile(join(cwd, 'tracked.txt'), 'gate-modified\n');
+    await writeFile(join(cwd, 'untracked.txt'), 'gate-created\n');
+    await rm(join(cwd, 'doomed.txt'));
+    const frictionDir = join(cwd, '.plotplot', 'friction');
+    await mkdir(frictionDir, { recursive: true });
+    await writeFile(join(frictionDir, '2026-09.jsonl'), '{"gate":"wrote"}\n');
+
+    const restored = await seam.restoreTree(cwd, tree);
+
+    // The three changes are undone…
+    expect(await readFile(join(cwd, 'tracked.txt'), 'utf8')).toBe('staged\n');
+    expect(await readFile(join(cwd, 'doomed.txt'), 'utf8')).toBe('doomed\n');
+    await expect(readFile(join(cwd, 'untracked.txt'), 'utf8')).rejects.toThrow();
+    // …the friction journal is kept…
+    expect(await readFile(join(frictionDir, '2026-09.jsonl'), 'utf8')).toBe('{"gate":"wrote"}\n');
+    // …and the restored paths are named.
+    expect([...restored].sort()).toEqual(['doomed.txt', 'tracked.txt', 'untracked.txt'].sort());
+
+    // The index is unchanged — restore touches the worktree alone.
+    expect(await gitIn(cwd, 'diff', '--cached')).toBe(cachedBefore);
+  } finally {
+    await repo.cleanup();
+  }
+});
+
+// ledger: D32 — the restore names only what the gate changed. A worker's own
+// untracked file, and one the gate rewrote, are told apart; a worker's
+// untracked file the gate deleted comes back.
+test('restoreTree touches and names only the paths the gate changed', async () => {
+  const repo = await createRepo();
+  try {
+    const seam = createIsolateSeam(execLocal, repo.path);
+    const cwd = repo.path;
+
+    // The worker's delivery: two untracked files and one tracked change.
+    await writeFile(join(cwd, 'kept.txt'), 'worker\n');
+    await writeFile(join(cwd, 'rewritten.txt'), 'worker\n');
+    await writeFile(join(cwd, 'gone.txt'), 'worker\n');
+    await writeFile(join(cwd, 'init.txt'), 'worker edit\n');
+
+    const tree = await seam.recordTree(cwd);
+
+    // The gate rewrites one worker file, deletes another, leaves the rest.
+    await writeFile(join(cwd, 'rewritten.txt'), 'gate\n');
+    await rm(join(cwd, 'gone.txt'));
+
+    const restored = await seam.restoreTree(cwd, tree);
+
+    expect([...restored].sort()).toEqual(['gone.txt', 'rewritten.txt']);
+    expect(await readFile(join(cwd, 'rewritten.txt'), 'utf8')).toBe('worker\n');
+    expect(await readFile(join(cwd, 'gone.txt'), 'utf8')).toBe('worker\n');
+    expect(await readFile(join(cwd, 'kept.txt'), 'utf8')).toBe('worker\n');
+    expect(await readFile(join(cwd, 'init.txt'), 'utf8')).toBe('worker edit\n');
   } finally {
     await repo.cleanup();
   }
