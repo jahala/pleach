@@ -657,7 +657,7 @@ test('commitStat shows what a commit introduced, and nothing else', async () => 
   }
 });
 
-// ledger: #131 — a failed gate's writes are inherited by the retry. The seam's
+// ledger: D32 (#131) — a failed gate's writes are inherited by the retry. The seam's
 // recordTree/restoreTree pair is the fix's foundation: record the whole tree
 // through a TEMPORARY index (real index untouched), then rewind the gate's
 // changes — a tracked modification, a tracked deletion, an untracked file —

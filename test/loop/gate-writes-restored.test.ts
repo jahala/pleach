@@ -1,4 +1,4 @@
-// ledger: #131 — a failed gate's writes are inherited by the retry. A smoke
+// ledger: D32 (#131) — a failed gate's writes are inherited by the retry. A smoke
 // gate that rewrites a page with `[!]` marks and goes red must not hand those
 // marks to the worker retry: the loop records the tree before the gate, rewinds
 // it on a red (the D10 gate-only retry included), journals `gate-writes-restored`
