@@ -6,6 +6,7 @@ import {
   IsolateCatastrophicError,
   LandBlockedError,
   LandConflictError,
+  LandMergeRefusedError,
 } from '../core/errors.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, IsolateSeam, Isolation } from '../loop/deps.ts';
@@ -612,6 +613,13 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
             .map((l) => l.trim())
             .filter(Boolean);
           await git(exec, worktreePath, 'merge', '--abort');
+          if (files.length === 0) {
+            // No unmerged files: git refused the merge without a conflict. Most
+            // often a merge commit's hook (commit-msg, pre-merge-commit) said
+            // no, which is the repository's own gate (D21); git's output names
+            // the cause either way (D28).
+            throw new LandMergeRefusedError(ref, merge.output);
+          }
           throw new LandConflictError(ref, files);
         }
       }

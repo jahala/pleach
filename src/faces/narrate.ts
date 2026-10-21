@@ -104,6 +104,8 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       return `✗ land refused: ${s(e.reason ?? e.unverified)}`;
     case 'land-conflict':
       return `✗ land conflict on ${s(e.ref)} — repository left untouched`;
+    case 'land-merge-refused':
+      return `✗ land refused on ${s(e.ref)}: git would not merge it — repository left untouched`;
     case 'landed':
       return `✓ landed ${s(e.ref ?? e.sha ?? '')}`.trim();
     default:

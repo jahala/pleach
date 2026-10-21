@@ -110,3 +110,13 @@ describe('narrate clamps the goal to its first sentence', () => {
     expect(line).toContain('ship it');
   });
 });
+
+describe('narration — a refused landing merge (D28)', () => {
+  // ledger: D28 — a refusal is narrated as a refusal, never as a conflict.
+  test('land-merge-refused names the ref and says it was refused', () => {
+    const line = narrateEvent({ event: 'land-merge-refused', ref: 'node/one', outputTail: 'no' });
+    expect(line).toContain('node/one');
+    expect(line).toContain('refused');
+    expect(line).not.toContain('conflict');
+  });
+});
