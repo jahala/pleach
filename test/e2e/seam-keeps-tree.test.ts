@@ -162,7 +162,7 @@ describe('a seam’s surprise never costs the tree — e2e (D23)', () => {
   }
 
   async function run(): Promise<{ code: number; summary: Summary }> {
-    const r = await pleach(['run', planPath]);
+    const r = await pleach(['run', planPath, '--provider-backoff-ms', '10']);
     return { code: r.code, summary: JSON.parse(r.stdout.trim()) as Summary };
   }
 

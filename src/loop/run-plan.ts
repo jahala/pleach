@@ -48,6 +48,8 @@ export interface RunPlanOpts {
   // run. The face owns the default; a runner that cannot detect idleness
   // ignores it. Absent leaves the attempt clock as the only bound.
   idleMs?: number;
+  // The first provider-error wait (D34); each next wait doubles it.
+  providerBackoffMs?: number;
   // The run's second cast (D17): the provider a `dead` attempt is re-cast on,
   // audit diversity re-checked against it. Absent, a dead attempt settles the
   // node rather than spending another attempt on the same outage.
@@ -85,6 +87,9 @@ export async function runPlan(
       fresh: opts.fresh === true,
       ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       ...(opts.idleMs !== undefined ? { idleMs: opts.idleMs } : {}),
+      ...(opts.providerBackoffMs !== undefined
+        ? { providerBackoffMs: opts.providerBackoffMs }
+        : {}),
       ...(opts.fallbackProvider !== undefined ? { fallbackProvider: opts.fallbackProvider } : {}),
     });
   } finally {
@@ -100,6 +105,7 @@ interface ResolvedOpts {
   fresh: boolean;
   signal?: AbortSignal;
   idleMs?: number;
+  providerBackoffMs?: number;
   fallbackProvider?: string;
 }
 
@@ -296,6 +302,9 @@ async function runUnderLock(
         defaultTimeoutMs: opts.defaultTimeoutMs,
         signal: opts.signal,
         idleMs: opts.idleMs,
+        ...(opts.providerBackoffMs !== undefined
+          ? { providerBackoffMs: opts.providerBackoffMs }
+          : {}),
         fallbackProvider: opts.fallbackProvider,
         resumedFrom: resumed,
         onSpawn: () => {

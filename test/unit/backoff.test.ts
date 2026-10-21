@@ -22,4 +22,16 @@ describe('providerBackoff — the schedule for a provider error (issue #151)', (
     expect(providerBackoff(6)).toBeNull();
     expect(providerBackoff(100)).toBeNull();
   });
+
+  // ledger: D34 — the first wait is the operator's to set; the schedule doubles from it.
+  test('a base wait doubles five times from that base', () => {
+    expect([0, 1, 2, 3, 4, 5].map((i) => providerBackoff(i, 10))).toEqual([
+      10,
+      20,
+      40,
+      80,
+      160,
+      null,
+    ]);
+  });
 });

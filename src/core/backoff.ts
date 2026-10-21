@@ -8,8 +8,14 @@
 // spent; the answer is the next wait in milliseconds, or null once the budget
 // is gone. The loop owns the clock — this only names the schedule.
 
-const PROVIDER_BACKOFF_MS = [15_000, 30_000, 60_000, 120_000, 240_000];
+// The first wait when the run sets none (`--provider-backoff-ms`); each next
+// wait doubles it, five waits in all (D34).
+export const DEFAULT_PROVIDER_BACKOFF_MS = 15_000;
+const PROVIDER_WAITS = 5;
 
-export function providerBackoff(retryIndex: number): number | null {
-  return PROVIDER_BACKOFF_MS[retryIndex] ?? null;
+export function providerBackoff(
+  retryIndex: number,
+  baseMs: number = DEFAULT_PROVIDER_BACKOFF_MS,
+): number | null {
+  return retryIndex >= 0 && retryIndex < PROVIDER_WAITS ? baseMs * 2 ** retryIndex : null;
 }

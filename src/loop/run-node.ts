@@ -56,6 +56,8 @@ export interface RunNodeOpts {
   // makes, the build worker's and the auditor's alike: a wedged worker of
   // either kind ends here rather than at the attempt clock.
   idleMs?: number;
+  // The first provider-error wait (D34); each next wait doubles it.
+  providerBackoffMs?: number;
   // The run's second cast (D17): who takes over when an attempt comes back
   // `dead`. Conductor-level, never a plan field — which provider stands in for
   // a dead one is the operator's call for this run, not a fact about the node.
@@ -378,7 +380,7 @@ export async function runNode(
         // this inner loop.
         if (result.reason !== 'provider-error') break;
 
-        const waitMs = providerBackoff(providerErrorWaits);
+        const waitMs = providerBackoff(providerErrorWaits, opts.providerBackoffMs);
         if (waitMs === null) {
           // Budget spent: the attempt counts as a failed attempt, and the
           // verdict's detail names how many provider errors and what the last
