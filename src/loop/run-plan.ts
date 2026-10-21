@@ -56,6 +56,10 @@ export interface RunPlanOpts {
   // from its dependencies alone. The default is to resume — a tree an earlier
   // attempt left behind is work, and rebuilding from nothing throws it away.
   fresh?: boolean;
+  // The provider names the runner can spawn plus the config's cast names
+  // (issue #146) — handed to validatePlan so a typo refuses the run before any
+  // spawn. Absent (e.g. a scripted runner) → no provider name is refused.
+  providers?: readonly string[];
 }
 
 export const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes (binding prose).
@@ -67,7 +71,7 @@ export async function runPlan(
   deps: ConductorDeps,
   opts: RunPlanOpts,
 ): Promise<RunSummary> {
-  validatePlan(plan); // throws PlanInvalidError — the face maps exit 2.
+  validatePlan(plan, opts.providers); // throws PlanInvalidError — the face maps exit 2.
 
   const defaultTimeoutMs = opts.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxConcurrency = Math.max(

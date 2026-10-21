@@ -54,6 +54,7 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
     provider?: string;
     model?: string;
     cwd: string;
+    env?: Record<string, string>;
   }): Promise<Worker & { __name: string }> {
     const name = `pl-${randomHex(8)}`;
 
@@ -77,12 +78,17 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
     if (permissionMode !== undefined && (provider === 'claude' || provider === 'codex')) {
       argv.push('--permission-mode', permissionMode);
     }
-    // Pass per-worker env vars as --env KEY=VAL flags (reaches the worker process).
-    for (const [k, v] of Object.entries(seamWorkerEnv)) {
-      argv.push('--env', `${k}=${v}`);
+    // Pass per-worker env vars as --env KEY (bare name) with the value in the
+    // spawn process's own env (issue #126): never KEY=VALUE on the command line,
+    // where `ps` shows it. umbel reads the bare-name form and forwards KEY from
+    // its own environment to the worker. A cast's spec.env joins seamWorkerEnv
+    // the same way, the cast's value winning on a key collision.
+    const workerEnv: Record<string, string> = { ...seamWorkerEnv, ...(spec.env ?? {}) };
+    for (const key of Object.keys(workerEnv)) {
+      argv.push('--env', key);
     }
 
-    const result = await exec(argv, { cwd: spec.cwd, env: mergeEnv() });
+    const result = await exec(argv, { cwd: spec.cwd, env: mergeEnv(workerEnv) });
 
     if (result.exitCode !== 0) {
       throw new WorkerSpawnError(`umbel spawn exited ${result.exitCode}: ${result.output.trim()}`);
@@ -311,10 +317,14 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
     return { reason, finalMessage, actions, diff, filesTouched, telemetry: {} };
   }
 
-  return { spawnWorker };
+  return { spawnWorker, providers: UMBEL_PROVIDERS };
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+
+// The provider names umbel can spawn (issue #146) — what validatePlan refuses a
+// plan's typos against.
+const UMBEL_PROVIDERS = ['claude', 'codex', 'gemini', 'opencode', 'agy'] as const;
 
 function randomHex(nibbles: number): string {
   // nibbles = number of hex chars (each byte = 2 hex chars)

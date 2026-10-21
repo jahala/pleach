@@ -41,7 +41,7 @@ export interface SpawnHandle {
 
 export interface DirectCliOpts {
   /** Spawn a subprocess. Defaults to a thin Bun.spawn wrapper. */
-  spawn?: (argv: string[], cwd: string) => SpawnHandle;
+  spawn?: (argv: string[], cwd: string, env?: Record<string, string>) => SpawnHandle;
   /**
    * List files changed in `cwd` since the last commit (the filesTouched hint).
    * Defaults to `git diff --name-only HEAD` plus untracked-unignored files.
@@ -79,9 +79,10 @@ function buildArgv(provider: string | undefined, prompt: string, model: string |
   );
 }
 
-function defaultSpawn(argv: string[], cwd: string): SpawnHandle {
+function defaultSpawn(argv: string[], cwd: string, env?: Record<string, string>): SpawnHandle {
   const proc = Bun.spawn(argv, {
     cwd,
+    ...(env !== undefined ? { env: { ...process.env, ...env } } : {}),
     stdout: 'pipe',
     stderr: 'inherit',
   });
@@ -144,7 +145,7 @@ export function directCliRunner(opts: DirectCliOpts = {}): RunnerSeam {
           turnUsed = true;
           const argv = buildArgv(spec.provider, prompt, spec.model);
 
-          const handle = spawn(argv, spec.cwd);
+          const handle = spawn(argv, spec.cwd, spec.env);
           inFlight = handle;
 
           // ledger D1: a hung CLI must not consume a slot forever — kill on
@@ -193,5 +194,10 @@ export function directCliRunner(opts: DirectCliOpts = {}): RunnerSeam {
 
       return worker;
     },
+    providers: DIRECT_CLI_PROVIDERS,
   };
 }
+
+// The provider names the headless CLIs this runner can spawn (issue #146) —
+// what validatePlan refuses a plan's typos against.
+const DIRECT_CLI_PROVIDERS = ['claude', 'codex'] as const;

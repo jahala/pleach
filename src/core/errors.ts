@@ -276,6 +276,22 @@ export class ConfigError extends Error {
   }
 }
 
+// A cast's `{ fromEnv }` value names an environment variable that is not set
+// at spawn (issue #146). Named so the caller can read which cast and which
+// variable — never resolved to an empty value, which would send the worker to
+// the wrong endpoint silently.
+export class CastEnvError extends Error {
+  readonly name = 'CastEnvError';
+  readonly cast: string;
+  readonly variable: string;
+
+  constructor(cast: string, variable: string) {
+    super(`cast '${cast}' requires env variable '${variable}', which is not set`);
+    this.cast = cast;
+    this.variable = variable;
+  }
+}
+
 // A journal event with no pinned `plotplot.kind` (ledger D15). Unreachable
 // while `KINDS` covers every event docs/journal.md documents; a throw rather
 // than a default kind precisely because a silent fallback is how a stream
