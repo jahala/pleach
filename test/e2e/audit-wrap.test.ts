@@ -67,7 +67,9 @@ describe('pleach audit-wrap — e2e (issue #149)', () => {
   // ledger: D33 — the wrapped command's own --help and --version are the command's.
   test('flags after -- belong to the command, even --help and --version', async () => {
     for (const flag of ['--help', '--version']) {
-      const r = await pleach(['audit-wrap', '--', 'echo', flag]);
+      // bash prints its first argument as data on every platform; GNU echo
+      // would answer --help with its own help text.
+      const r = await pleach(['audit-wrap', '--', 'bash', '-c', 'printf "%s\\n" "$1"', '_', flag]);
       expect(r.code).toBe(0);
       expect(verdict(r.stdout).verdicts[0]).toMatchObject({
         verdict: 'pass',
