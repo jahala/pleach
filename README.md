@@ -54,6 +54,7 @@ work. Only a node that clears all of it publishes a branch.
 pleach run <plan.json>          Execute a plan (--land to land a fully-verified close)
 pleach land <plan.json>         Merge a verified plan's sinks onto the checked-out branch
 pleach audit <plan.json> <node> Re-run only the audit on a quarantined node
+pleach audit-wrap [--check ID] -- CMD  Wrap a command in a `tend-audit-result` block (parseable audit egress)
 pleach stop <plan.json>         Drain a running plan (--now aborts in-flight nodes)
 pleach validate <plan.json>     Parse and validate; print the topo order
 pleach schema                   Emit the plan contract as JSON Schema

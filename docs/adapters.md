@@ -352,6 +352,23 @@ nothing), and on failure, put that discriminating case in the reason. Verdicts a
 verbatim in the node's close receipt, so a reason is permanent evidence, not transient
 chat.
 
+**The command must print a `tend-audit-result` block.** `buildAuditPrompt` tells the
+auditor the command prints a fenced `tend-audit-result` block and asks it to relay that
+block verbatim. If the command prints none, the auditor relays prose and the egress fails
+(`audit-egress-unparseable`) even though the command exited 0 — a full build plus an audit
+lost. An ordinary check (`npx pnpm check`) prints no such block, so wrap it:
+
+```
+pleach audit-wrap [--check <id>] -- <your check>
+```
+
+`pleach audit-wrap` runs the command argv-style (no shell), captures its output, and
+prints exactly one fenced `tend-audit-result` block holding a valid `AuditResult`: one
+verdict whose `check` is `--check` (or the command text), `verdict` is `pass` on exit 0 and
+`fail` otherwise, and `reasons` are the exit code plus the last 20 lines of output. It
+exits 0 when it printed a block — the verdict is in the block, and the egress reads the
+block, not the exit code.
+
 ---
 
 ## Bundled adapters
