@@ -86,3 +86,29 @@ test('pleach validate accepts a plan naming a declared cast and refuses a typo',
     await cleanup();
   }
 }, 60_000);
+
+// ledger: D36 — a cast's missing variable is refused before the run, not at a
+// node's spawn after its setup has already run (fail before spend, D19).
+test('pleach run refuses, before anything runs, a plan whose cast needs an unset variable', async () => {
+  const { path: repo, cleanup } = await createRepo();
+  try {
+    await writeFile(join(repo, 'pleach.config.ts'), CONFIG_BODY);
+    await writeFile(join(repo, 'plan.json'), planBody('deepseek'));
+    const env = { ...process.env };
+    delete env.DEEPSEEK_API_KEY;
+    const proc = Bun.spawn(['bun', MAIN, 'run', 'plan.json', '--config', 'pleach.config.ts'], {
+      cwd: repo,
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env,
+    });
+    const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+    expect(code).toBe(2);
+    expect(stderr).toContain('deepseek');
+    expect(stderr).toContain('DEEPSEEK_API_KEY');
+    expect(await Bun.file(join(repo, '.git', 'pleach', 'journal.jsonl')).exists()).toBe(false);
+  } finally {
+    await cleanup();
+  }
+}, 60_000);

@@ -62,3 +62,22 @@ export function resolveCastSpawn(
     ...(Object.keys(env).length > 0 ? { env } : {}),
   };
 }
+
+// The first variable a cast the plan names needs but the environment lacks, or
+// null. The run face asks before it takes the lock, so a missing key refuses
+// the run instead of failing a node at spawn after its setup (D36, fail before
+// spend as in D19).
+export function missingCastVariable(
+  providerNames: readonly string[],
+  casts: Record<string, Cast>,
+  readEnv: ReadEnv,
+): { cast: string; variable: string } | null {
+  for (const name of providerNames) {
+    for (const value of Object.values(casts[name]?.env ?? {})) {
+      if (typeof value !== 'string' && readEnv(value.fromEnv) === undefined) {
+        return { cast: name, variable: value.fromEnv };
+      }
+    }
+  }
+  return null;
+}

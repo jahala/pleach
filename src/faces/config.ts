@@ -105,6 +105,8 @@ export interface ResolveSeamsResult {
   // The provider names the validate/run faces accept: the runner's own plus the
   // config's cast names. Absent → the runner accepts any provider name.
   providers?: readonly string[];
+  // The config's casts, so the run face can check their variables up front.
+  casts?: Record<string, Cast>;
 }
 
 // Wrap a runner with the config's casts (issue #146): a spawn whose provider
@@ -114,7 +116,7 @@ function wrapCasts(runner: RunnerSeam, casts: Record<string, Cast>): RunnerSeam 
   if (Object.keys(casts).length === 0) return runner;
   const readEnv = (name: string): string | undefined => process.env[name];
   return {
-    ...(runner.providers !== undefined ? { providers: runner.providers } : {}),
+    ...runner,
     spawnWorker: (spec) => runner.spawnWorker(resolveCastSpawn(spec, casts, readEnv)),
   };
 }
@@ -150,6 +152,7 @@ export async function resolveSeams(opts: ResolveSeamsOpts): Promise<ResolveSeams
       runner: wrapCasts(config.runner, casts),
       ledger: await config.ledger,
       providers: combinedProviders(config.runner.providers, Object.keys(casts)),
+      casts,
     };
   }
 

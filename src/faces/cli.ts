@@ -2,8 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { cpus } from 'node:os';
 import { join, resolve } from 'node:path';
 import { OUTPUT_TAIL_LINES, renderAuditResultBlock } from '../core/audit-egress.ts';
+import { type Cast, missingCastVariable } from '../core/cast.ts';
 import {
   AuditRefusedError,
+  CastEnvError,
   ConfigError,
   LandBlockedError,
   LandConflictError,
@@ -459,8 +461,9 @@ function seamsOpts(flags: Flags): ResolveSeamsOpts {
 async function depsFromFlags(flags: Flags): Promise<{
   deps: ConductorDeps;
   providers?: readonly string[];
+  casts?: Record<string, Cast>;
 }> {
-  const { runner, ledger, providers } = await resolveSeams(seamsOpts(flags));
+  const { runner, ledger, providers, casts } = await resolveSeams(seamsOpts(flags));
   const deps = buildDeps({
     repoRoot: flags.repoRoot,
     runner,
@@ -477,7 +480,7 @@ async function depsFromFlags(flags: Flags): Promise<{
           },
         }),
   });
-  return { deps, providers };
+  return { deps, providers, ...(casts !== undefined ? { casts } : {}) };
 }
 
 // D12: SIGINT/SIGTERM tear the work down instead of orphaning it — workers
@@ -496,7 +499,17 @@ function teardownOnSignal(): AbortSignal {
 
 async function verbRun(planPath: string, flags: Flags): Promise<number> {
   const plan = await readPlan(planPath);
-  const { deps, providers } = await depsFromFlags(flags);
+  const { deps, providers, casts } = await depsFromFlags(flags);
+  // A cast the plan names that lacks a variable refuses the run here, before
+  // the lock and before any node's setup runs (D36).
+  const missing = missingCastVariable(
+    plan.nodes
+      .flatMap((n) => [n.worker.provider, n.accept.audit?.provider])
+      .filter((p): p is string => p !== undefined),
+    casts ?? {},
+    (name) => process.env[name],
+  );
+  if (missing !== null) throw new CastEnvError(missing.cast, missing.variable);
   const signal = teardownOnSignal();
 
   const summary = await runPlan(plan, deps, {
@@ -881,7 +894,8 @@ export async function runCli(argv: readonly string[]): Promise<number> {
     if (
       err instanceof UsageError ||
       err instanceof PlanInvalidError ||
-      err instanceof ConfigError
+      err instanceof ConfigError ||
+      err instanceof CastEnvError
     ) {
       const detail = err instanceof PlanInvalidError ? err.reasons.join('\n  ') : err.message;
       process.stderr.write(`pleach: ${detail}\n`);
