@@ -177,7 +177,16 @@ export interface Worker {
 }
 
 export interface RunnerSeam {
-  spawnWorker(spec: { provider?: string; model?: string; cwd: string }): Promise<Worker>;
+  spawnWorker(spec: {
+    provider?: string;
+    model?: string;
+    cwd: string;
+    env?: Record<string, string>;
+  }): Promise<Worker>;
+  // The provider names this runner can spawn (issue #146). The face hands them
+  // (plus the config's cast names) to validatePlan so a typo is refused before
+  // any spawn. Absent means the runner accepts any provider name (scripted).
+  providers?: readonly string[];
 }
 
 export interface LedgerSeam {

@@ -93,7 +93,16 @@ The full interface, from `src/loop/deps.ts`:
 
 ```ts
 export interface RunnerSeam {
-  spawnWorker(spec: { provider?: string; model?: string; cwd: string }): Promise<Worker>;
+  spawnWorker(spec: {
+    provider?: string;
+    model?: string;
+    cwd: string;
+    env?: Record<string, string>;
+  }): Promise<Worker>;
+  // The provider names this runner can spawn. The face hands them (plus the
+  // config's cast names) to validatePlan so a typo is refused before any spawn.
+  // Absent means the runner accepts any provider name (the scripted runner).
+  providers?: readonly string[];
 }
 
 export interface Worker {
@@ -229,6 +238,14 @@ local and requires no external service.
 export interface PleachConfig {
   runner: RunnerSeam;
   ledger: LedgerSeam | Promise<LedgerSeam>;
+  casts?: Record<
+    string,
+    {
+      provider: string;
+      model?: string;
+      env?: Record<string, string | { fromEnv: string }>;
+    }
+  >;
 }
 ```
 
@@ -272,6 +289,49 @@ names the provider the plan expects, and the config decides how that provider is
 tooling. A plan that says `provider: 'codex'` runs under any runner that can dispatch to
 codex: umbel, a hypothetical cloud runner, or a test double. Plans stay portable across
 environments; configs are environment-specific.
+
+### Named casts — two endpoints of one CLI
+
+A node's `worker.provider` is a free string, so a config can declare **casts**: a name the
+plan uses that the config resolves to a provider, model and environment. Two casts can reach
+two endpoints of one provider — the plan names the cast, the config decides how it is reached.
+The loop does not change: it passes the plan's name, and the face layer rewrites the spawn to
+the cast's `provider`, `model` (the plan's own model wins over the cast's) and `env`.
+
+```ts
+import { umbelRunner } from 'pleach/adapters/umbel';
+import { gitLedger } from 'pleach/adapters/git';
+import type { PleachConfig } from 'pleach/config';
+
+export default {
+  runner: umbelRunner({ bin: 'umbel', permissionMode: 'bypassPermissions' }),
+  ledger: gitLedger({ repo: '.' }),
+  casts: {
+    // Outline and audit nodes on Claude Opus, by the subscription.
+    opus: { provider: 'claude', model: 'claude-opus-4-5' },
+    // Test and fill nodes on DeepSeek, through the Anthropic-compatible endpoint.
+    deepseek: {
+      provider: 'claude',
+      env: {
+        ANTHROPIC_BASE_URL: 'https://api.deepseek.com/anthropic',
+        ANTHROPIC_AUTH_TOKEN: { fromEnv: 'DEEPSEEK_API_KEY' },
+        ANTHROPIC_MODEL: 'deepseek-chat',
+      },
+    },
+  },
+} satisfies PleachConfig;
+```
+
+An `env` value is a literal string, or `{ fromEnv: '<NAME>' }` to read `NAME` from the
+environment at spawn. A missing variable is a typed error naming the cast and the variable —
+never an empty value. Env values pass to the worker **by name only**: the umbel adapter runs
+`--env KEY` (the bare-name form) and puts the value in the spawn process's own environment,
+never `KEY=VALUE` on the command line where `ps` would show it.
+
+The runner's `providers` plus the cast names are the known set `pleach validate` and
+`pleach run` refuse a typo against: a node (or audit) naming neither is refused with the
+known names listed, before any spawn. A runner that names no `providers` (the scripted
+runner) refuses nothing.
 
 ---
 

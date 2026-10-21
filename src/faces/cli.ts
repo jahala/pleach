@@ -2,8 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { cpus } from 'node:os';
 import { join, resolve } from 'node:path';
 import { OUTPUT_TAIL_LINES, renderAuditResultBlock } from '../core/audit-egress.ts';
+import { type Cast, missingCastVariable } from '../core/cast.ts';
 import {
   AuditRefusedError,
+  CastEnvError,
   ConfigError,
   LandBlockedError,
   LandConflictError,
@@ -25,7 +27,7 @@ import {
 import { planJsonSchema } from '../core/schema-json.ts';
 import { nodeSummaries, planWarnings, validatePlan } from '../core/validate.ts';
 import { auditNode } from '../loop/audit-node.ts';
-import type { RunSummary } from '../loop/deps.ts';
+import type { ConductorDeps, RunSummary } from '../loop/deps.ts';
 import { type LandOpts, landPlan } from '../loop/land.ts';
 import { verifyReceipt } from '../loop/receipt-verify.ts';
 import { runPlan } from '../loop/run-plan.ts';
@@ -34,7 +36,7 @@ import { exec } from '../seams/exec.ts';
 import { resolveGitDir } from '../seams/gitdir.ts';
 import { createJournal } from '../seams/journal.ts';
 import { hasLiveHolder, requestStop, signalRun } from '../seams/lock.ts';
-import { buildDeps, receiptDeps, resolveSeams } from './config.ts';
+import { buildDeps, type ResolveSeamsOpts, receiptDeps, resolveSeams } from './config.ts';
 import { narrateEvent } from './narrate.ts';
 
 // The receipt version fence needs the real package version; read it from the
@@ -403,8 +405,11 @@ function verbSchema(): number {
 // per plan warning for stderr, and the exit code. Warnings are advice about a
 // valid plan (ledger D13), so the code stays 0 whether or not any fired; only a
 // PlanInvalidError (thrown out of here) changes it, at the face's catch.
-export function validateReport(plan: Plan): { code: number; stdout: string; stderr: string } {
-  const { order, waves } = validatePlan(plan);
+export function validateReport(
+  plan: Plan,
+  providers?: readonly string[],
+): { code: number; stdout: string; stderr: string } {
+  const { order, waves } = validatePlan(plan, providers);
   const warnings = planWarnings(plan);
   const summary = { valid: true, order, waves, nodes: nodeSummaries(plan), warnings };
   return {
@@ -414,8 +419,13 @@ export function validateReport(plan: Plan): { code: number; stdout: string; stde
   };
 }
 
-async function verbValidate(planPath: string): Promise<number> {
-  const { code, stdout, stderr } = validateReport(await readPlan(planPath));
+async function verbValidate(planPath: string, flags: Flags): Promise<number> {
+  const plan = await readPlan(planPath);
+  // The provider gate (issue #146) needs the runner's providers plus the
+  // config's cast names — resolved here, before the report, so a typo is
+  // refused by `pleach validate` rather than at spawn.
+  const { providers } = await resolveSeams(seamsOpts(flags));
+  const { code, stdout, stderr } = validateReport(plan, providers);
   process.stdout.write(stdout);
   if (stderr !== '') process.stderr.write(stderr);
   return code;
@@ -436,8 +446,8 @@ export function summaryExitCode(summary: RunSummary): number {
   return clean ? 0 : 1;
 }
 
-async function depsFromFlags(flags: Flags) {
-  const { runner, ledger } = await resolveSeams({
+function seamsOpts(flags: Flags): ResolveSeamsOpts {
+  return {
     repoRoot: flags.repoRoot,
     umbelBin: flags.umbelBin,
     ...(flags.permissionMode !== undefined ? { permissionMode: flags.permissionMode } : {}),
@@ -445,8 +455,16 @@ async function depsFromFlags(flags: Flags) {
     ...(flags.allowedTools !== undefined ? { allowedTools: flags.allowedTools } : {}),
     ...(flags.tendModule !== undefined ? { tendModule: flags.tendModule } : {}),
     ...(flags.runnerKind !== undefined ? { runnerKind: flags.runnerKind } : {}),
-  });
-  return buildDeps({
+  };
+}
+
+async function depsFromFlags(flags: Flags): Promise<{
+  deps: ConductorDeps;
+  providers?: readonly string[];
+  casts?: Record<string, Cast>;
+}> {
+  const { runner, ledger, providers, casts } = await resolveSeams(seamsOpts(flags));
+  const deps = buildDeps({
     repoRoot: flags.repoRoot,
     runner,
     ledger,
@@ -462,6 +480,7 @@ async function depsFromFlags(flags: Flags) {
           },
         }),
   });
+  return { deps, providers, ...(casts !== undefined ? { casts } : {}) };
 }
 
 // D12: SIGINT/SIGTERM tear the work down instead of orphaning it — workers
@@ -480,7 +499,17 @@ function teardownOnSignal(): AbortSignal {
 
 async function verbRun(planPath: string, flags: Flags): Promise<number> {
   const plan = await readPlan(planPath);
-  const deps = await depsFromFlags(flags);
+  const { deps, providers, casts } = await depsFromFlags(flags);
+  // A cast the plan names that lacks a variable refuses the run here, before
+  // the lock and before any node's setup runs (D36).
+  const missing = missingCastVariable(
+    plan.nodes
+      .flatMap((n) => [n.worker.provider, n.accept.audit?.provider])
+      .filter((p): p is string => p !== undefined),
+    casts ?? {},
+    (name) => process.env[name],
+  );
+  if (missing !== null) throw new CastEnvError(missing.cast, missing.variable);
   const signal = teardownOnSignal();
 
   const summary = await runPlan(plan, deps, {
@@ -495,6 +524,7 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     ...(flags.timeoutMs !== undefined ? { defaultTimeoutMs: flags.timeoutMs } : {}),
     ...(flags.fallbackProvider !== undefined ? { fallbackProvider: flags.fallbackProvider } : {}),
     ...(flags.fresh ? { fresh: true } : {}),
+    ...(providers !== undefined ? { providers } : {}),
   });
 
   const code = summaryExitCode(summary);
@@ -558,7 +588,7 @@ async function verbAudit(
 ): Promise<number> {
   if (nodeId === undefined) throw new UsageError('audit: <node> is required');
   const plan = await readPlan(planPath);
-  const deps = await depsFromFlags(flags);
+  const { deps } = await depsFromFlags(flags);
   const result = await auditNode(plan, nodeId, deps, {
     repoRoot: flags.repoRoot,
     pleachVersion: await pleachVersion(),
@@ -583,7 +613,7 @@ function landOpts(flags: Flags): LandOpts {
 
 async function verbLand(planPath: string, flags: Flags): Promise<number> {
   const plan = await readPlan(planPath);
-  const deps = await depsFromFlags(flags);
+  const { deps } = await depsFromFlags(flags);
   const land = await landPlan(plan, deps, landOpts(flags));
   process.stderr.write(`pleach: landed ${land.landed.join(', ')} on '${land.branch}'\n`);
   process.stdout.write(`${JSON.stringify(land)}\n`);
@@ -856,7 +886,7 @@ export async function runCli(argv: readonly string[]): Promise<number> {
       case 'wait':
         return await verbWait(plan(), flags);
       case 'validate':
-        return await verbValidate(plan());
+        return await verbValidate(plan(), flags);
       default:
         throw new UsageError(`unknown verb '${verb}'`);
     }
@@ -864,7 +894,8 @@ export async function runCli(argv: readonly string[]): Promise<number> {
     if (
       err instanceof UsageError ||
       err instanceof PlanInvalidError ||
-      err instanceof ConfigError
+      err instanceof ConfigError ||
+      err instanceof CastEnvError
     ) {
       const detail = err instanceof PlanInvalidError ? err.reasons.join('\n  ') : err.message;
       process.stderr.write(`pleach: ${detail}\n`);

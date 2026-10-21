@@ -10,6 +10,7 @@
 //   const deps = buildDeps({ repoRoot, runner: scriptedRunner([...]), ledger: gitLedger() });
 //   const summary = await runPlan(plan, deps, { repoRoot });
 
+export type { Cast, CastEnvValue } from './core/cast.ts';
 export * from './core/errors.ts';
 export type { AuditResult, Node, Plan, Verdict } from './core/plan.ts';
 export { AuditResultSchema, NodeSchema, PlanSchema, VerdictSchema } from './core/plan.ts';
