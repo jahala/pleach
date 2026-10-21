@@ -56,8 +56,8 @@ One command turns a plan into verified branches, and the exit code alone says wh
 - [x] (code) Retry ladder: flaky command node (fails once) retries and closes; node/id branch published with retry evidence. (inferred from test/e2e/cli.test.ts — requires real umbel + missoula) · test/e2e/cli.test.ts @5c0e8fc · by cli
 - [x] (code) Resume surfacing: an already-verified node is reported, not re-run — RunSummary.alreadyVerified lists it and verbRun's stderr says 'skipped N already-verified node(s)'. · test/loop/run-plan.test.ts @84ed1ac
 
-- [ ] (code) The run-state fold reads the latest run of the plan's source from journal lines alone: pending, running, the verdict's status, closed or partial, verified for a node the run-end lists as already verified, skipped otherwise; a run-end is matched by its runId · test/unit/run-state.test.ts
-- [ ] (code) Through the real CLI, `pleach wait` on a background run returns with every node closed and exit 0, `--node --timeout 1` on a sleeping node exits 124 naming it, `wait` after a resumed run with every node already verified exits 0, and `status` with no run exits 3 · test/e2e/status-wait.test.ts
+- [x] (code) The run-state fold reads the latest run of the plan's source from journal lines alone: pending, running, the verdict's status, closed or partial, verified for a node the run-end lists as already verified, skipped otherwise; a run-end is matched by its runId · test/unit/run-state.test.ts @38dd290 · by cli
+- [x] (code) Through the real CLI, `pleach wait` on a background run returns with every node closed and exit 0, `--node --timeout 1` on a sleeping node exits 124 naming it, `wait` after a resumed run with every node already verified exits 0, and `status` with no run exits 3 · test/e2e/status-wait.test.ts @dc28875 · by cli
 ## For #operator
 
 ## Tried
