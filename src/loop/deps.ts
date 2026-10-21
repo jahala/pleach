@@ -291,6 +291,11 @@ export interface ConductorDeps {
   lock: LockSeam;
   journal: JournalSeam;
   receipts: ReceiptStore;
+  // The conductor's own clock (issue #151): sleep for `ms` — the provider-error
+  // backoff wait, injected so tests never wait a wall-clock and a run's abort
+  // can cut the wait short around it. The real one is wired in faces/config.ts
+  // with setTimeout; the harness resolves at once and records what was asked.
+  sleep: (ms: number) => Promise<void>;
 }
 
 export interface RunSummary {

@@ -4,6 +4,7 @@ import {
   EXPECTED_EGRESS,
   extractAuditJson,
 } from '../core/audit-egress.ts';
+import { providerBackoff } from '../core/backoff.ts';
 import { classify, type GateFault, gateFault, isWorkerReason } from '../core/classify.ts';
 import { partitionDelivery } from '../core/delivery.ts';
 import {
@@ -219,6 +220,11 @@ export async function runNode(
   // first attempt.
   let evidence: string | undefined;
   let attempts = 0;
+  // The provider-error backoff bookkeeping (issue #151), reset per attempt:
+  // how many waits this attempt has spent, and the detail the verdict's
+  // journal line will carry once the budget is gone.
+  let providerErrorWaits = 0;
+  let providerErrorDetail: string | undefined;
   // Receipt facts (§D), reset per attempt: the ladder's gate records in run
   // order, the audit's records, and the staged set once staging happened.
   let gates: GateRecord[] = [];
@@ -235,7 +241,7 @@ export async function runNode(
   let lane: SeamLane = 'isolate';
 
   try {
-    for (;;) {
+    attempt: for (;;) {
       attempts += 1;
       lane = 'isolate';
       gates = [];
@@ -243,6 +249,8 @@ export async function runNode(
       lastStaged = undefined;
       smokeStdout = undefined;
       handback = undefined;
+      providerErrorWaits = 0;
+      providerErrorDetail = undefined;
 
       // ── isolate (or reuse the tree for a retryable retry) ───────────────────
       // Whether THIS attempt built its tree: a retryable retry reuses the one
@@ -310,51 +318,100 @@ export async function runNode(
       // {prompt}/{phases} node spawns a build worker — so a command-only plan
       // needs no runner at all.
       lane = 'worker';
-      const worker =
-        'command' in node.work ? null : await deps.runner.spawnWorker({ ...cast, cwd });
-      if (worker !== null) opts.onSpawn?.();
+      // A provider error is the provider's or the network's fault, not the
+      // work's (issue #151): the build is re-run inside THIS attempt — a fresh
+      // worker in the same tree, after an exponential backoff wait — so an
+      // outage does not burn an attempt. The wait budget per attempt is
+      // core/backoff's providerBackoff; once it is spent the attempt counts as
+      // failed exactly as it does today, and the non-stop block below settles
+      // it, carrying `providerErrorDetail` on the verdict's journal line.
       let result: WorkerResult;
-      try {
-        result = await runWork(node, worker, deps.exec, cwd, {
-          timeoutMs,
-          evidence: promptEvidence,
-          signal: opts.signal,
-          idleMs: opts.idleMs,
-          redSealedAt,
-          sealRed: async (red, exitCode, phaseIndex) => {
-            await sealRedPhase(node, cwd, deps, red, exitCode);
-            redSealedAt = phaseIndex;
-          },
-          wroteBlocked: async () => (await deps.isolate.readBlocked(cwd)) !== null,
-          recordGateTree: () => deps.isolate.recordTree(cwd),
-          restoreGateTree: (tree, gate) => restoreGateWrites(deps, node.id, gate, cwd, tree),
-        });
-      } catch (err) {
+      let workEvidence = promptEvidence;
+      for (;;) {
+        const worker =
+          'command' in node.work ? null : await deps.runner.spawnWorker({ ...cast, cwd });
+        if (worker !== null) opts.onSpawn?.();
+        try {
+          result = await runWork(node, worker, deps.exec, cwd, {
+            timeoutMs,
+            evidence: workEvidence,
+            signal: opts.signal,
+            idleMs: opts.idleMs,
+            redSealedAt,
+            sealRed: async (red, exitCode, phaseIndex) => {
+              await sealRedPhase(node, cwd, deps, red, exitCode);
+              redSealedAt = phaseIndex;
+            },
+            wroteBlocked: async () => (await deps.isolate.readBlocked(cwd)) !== null,
+            recordGateTree: () => deps.isolate.recordTree(cwd),
+            restoreGateTree: (tree, gate) => restoreGateWrites(deps, node.id, gate, cwd, tree),
+          });
+        } catch (err) {
+          await worker?.kill();
+          if (err instanceof GateCannotRunError) {
+            return handBack(
+              settleCannotRun(
+                node,
+                attempts,
+                gateRanLabel(node, err.gate),
+                err.exitCode,
+                err.fault,
+                err.output,
+              ),
+            );
+          }
+          if (err instanceof GateFailedError) {
+            const blocked = await settleIfBlocked(cwd, {});
+            if (blocked !== null) return blocked;
+            const decision = handleGate(node, attempts, maxAttempts, err);
+            if (decision.settle) return handBack(decision.settle);
+            evidence = decision.evidence;
+            continue attempt; // retryable — SAME tree
+          }
+          throw err;
+        }
         await worker?.kill();
-        if (err instanceof GateCannotRunError) {
-          return handBack(
-            settleCannotRun(
-              node,
-              attempts,
-              gateRanLabel(node, err.gate),
-              err.exitCode,
-              err.fault,
-              err.output,
-            ),
-          );
+        handback = result.finalMessage;
+
+        // Only a provider error re-runs within the attempt. Every other end —
+        // stop, or a named failure the non-stop block below settles — leaves
+        // this inner loop.
+        if (result.reason !== 'provider-error') break;
+
+        const waitMs = providerBackoff(providerErrorWaits);
+        if (waitMs === null) {
+          // Budget spent: the attempt counts as a failed attempt, and the
+          // verdict's detail names how many provider errors and what the last
+          // one said — the journal tells why without the worker transcript.
+          providerErrorDetail = providerErrorDetailOf(providerErrorWaits, result.message);
+          break;
         }
-        if (err instanceof GateFailedError) {
-          const blocked = await settleIfBlocked(cwd, {});
-          if (blocked !== null) return blocked;
-          const decision = handleGate(node, attempts, maxAttempts, err);
-          if (decision.settle) return handBack(decision.settle);
-          evidence = decision.evidence;
-          continue; // retryable — SAME tree
+        const message = providerMessageTail(result.message);
+        await deps.journal.append({
+          event: 'provider-error-backoff',
+          node: node.id,
+          attempt: attempts,
+          retry: providerErrorWaits,
+          waitMs,
+          ...(message !== undefined ? { message } : {}),
+        });
+        providerErrorWaits += 1;
+        // The re-run carries the provider's text as evidence (A3): the fresh
+        // worker is told why it is being asked again, so it never starts blind.
+        workEvidence = mergeEvidence(promptEvidence, providerErrorEvidence(result.message));
+        // A run teardown (D16) cuts the backoff short and settles aborted,
+        // having spent no further wait and spawned no further worker.
+        if (await sleepInterrupted(deps.sleep, waitMs, opts.signal)) {
+          const base = baseVerdict(node, attempts);
+          return handBack({
+            verdict: {
+              ...base,
+              status: 'aborted',
+              evidence: { ...base.evidence, gate: { ran: 'wait:aborted', exitCode: -1 } },
+            },
+          });
         }
-        throw err;
       }
-      await worker?.kill();
-      handback = result.finalMessage;
 
       // ── non-stop reasons ──────────────────────────────────────────────────
       if (result.reason !== 'stop') {
@@ -476,6 +533,9 @@ export async function runNode(
             gate: { ran: `wait:${reason}`, exitCode: -1 },
           }),
           ...detail,
+          // The provider-error budget was spent (issue #151): name the cause
+          // on the journal line, where the operator reads, not the transcript.
+          ...(providerErrorDetail !== undefined ? { verdictDetail: providerErrorDetail } : {}),
         });
       }
 
@@ -1099,6 +1159,63 @@ const NO_OUTPUT_MARKER =
 // Exported for run-plan: the verified commit is settle's gate (D21).
 export function outputTail(output: string): string {
   return output.length === 0 ? NO_OUTPUT_MARKER : output.slice(-EVIDENCE_TAIL);
+}
+
+// ── provider-error backoff (issue #151) ─────────────────────────────────────
+
+// The provider's message, capped from the end like a gate's output tail, or
+// undefined when the runner handed over nothing to name. The one line that
+// says WHY the provider or the network failed, kept so the journal reads it
+// without the worker transcript.
+function providerMessageTail(message: string | undefined): string | undefined {
+  if (message === undefined || message.length === 0) return undefined;
+  return message.slice(-EVIDENCE_TAIL);
+}
+
+// The verdict's journal detail once the backoff budget is spent: how many
+// provider errors the attempt survived, and what the last one said.
+function providerErrorDetailOf(waits: number, message: string | undefined): string {
+  const tail = providerMessageTail(message);
+  return `provider error ×${waits + 1}${tail !== undefined ? `: ${tail}` : ''}`;
+}
+
+// The re-prompt a provider-error re-run carries (A3): the fresh worker is told
+// why it is being asked again, so a retry never starts blind. The framing
+// matches every other retry's evidence — the work did not fail, but the attempt
+// to run it did.
+function providerErrorEvidence(message: string | undefined): string {
+  return message !== undefined
+    ? `previous attempt ended: provider-error\n${message}`
+    : 'previous attempt ended: provider-error';
+}
+
+// Sleep through a backoff wait, but a run teardown (D16) cuts it short. The
+// sleep port is injected and takes no signal, so the race against the run's
+// own abort is the loop's, not the seam's. Resolves true when the abort won.
+async function sleepInterrupted(
+  sleep: ConductorDeps['sleep'],
+  ms: number,
+  signal: AbortSignal | undefined,
+): Promise<boolean> {
+  if (signal === undefined) {
+    await sleep(ms);
+    return false;
+  }
+  if (signal.aborted) return true;
+  return new Promise<boolean>((resolve) => {
+    const onAbort = () => resolve(true);
+    signal.addEventListener('abort', onAbort, { once: true });
+    sleep(ms).then(
+      () => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(false);
+      },
+      () => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(false);
+      },
+    );
+  });
 }
 
 const BLOCKED_REASON_CAP = 4000;

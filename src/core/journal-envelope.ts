@@ -54,6 +54,7 @@ export const KINDS: Record<string, Kind> = {
   'node-start': 'node.lifecycle',
   blocked: 'node.lifecycle',
   'phase-commit': 'node.lifecycle',
+  'provider-error-backoff': 'node.lifecycle',
   'set-aside': 'node.lifecycle',
   'resumed-from-quarantine': 'node.lifecycle',
   'resume-refused': 'node.lifecycle',

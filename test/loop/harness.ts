@@ -278,6 +278,10 @@ export interface HarnessOpts {
   // Make the receipt store's list() throw (fault injection for the run-start
   // gap check, which must never fail the run, D21).
   receiptsListThrows?: Error;
+  // The sleep port the loop uses for a provider-error backoff (issue #151).
+  // The default records what was asked and resolves at once; override to hold
+  // the wait or fire the run's abort inside it (the abort-during-backoff test).
+  sleepScript?: (ms: number) => Promise<void>;
 }
 
 export interface Harness {
@@ -289,6 +293,9 @@ export interface Harness {
   receipts: Map<string, Receipt>;
   // Kept gate artifacts by the path the store returned (D14).
   artifacts: Map<string, string>;
+  // The waits the loop asked the sleep port for, in order (issue #151) — the
+  // provider-error backoff schedule, asserted by test/loop/provider-error-backoff.test.ts.
+  sleeps: number[];
   // Each run's copy of its own journal lines, by the path the store names (D21).
   runJournals: Map<string, string[]>;
   // The drain marker as the lock seam sees it (D16): set `requested` to write
@@ -793,7 +800,16 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     },
   };
 
-  const deps: ConductorDeps = { exec, isolate, runner, ledger, lock, journal, receipts };
+  // ── sleep ─────────────────────────────────────────────────────────────────
+  // The conductor's clock (issue #151): record what was asked, resolve at once,
+  // and let a test override the wait itself.
+  const sleeps: number[] = [];
+  const sleep = (ms: number): Promise<void> => {
+    sleeps.push(ms);
+    return opts.sleepScript ? opts.sleepScript(ms) : Promise.resolve();
+  };
+
+  const deps: ConductorDeps = { exec, isolate, runner, ledger, lock, journal, receipts, sleep };
 
   return {
     deps,
@@ -804,6 +820,7 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     receipts: receiptsStore,
     artifacts: artifactStore,
     runJournals,
+    sleeps,
     stop: stopMarker,
     get maxConcurrentWorkers() {
       return state.maxConcurrent;

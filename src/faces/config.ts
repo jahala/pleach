@@ -170,5 +170,8 @@ export function buildDeps(opts: BuildDepsOpts): ConductorDeps {
     runner: opts.runner,
     ledger: opts.ledger,
     receipts: createReceiptStore(join(pleachDir, 'receipts')),
+    // The conductor's clock: setTimeout is the whole sleep. The loop races this
+    // against the run's abort signal, so a backoff is cut short on teardown.
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   };
 }

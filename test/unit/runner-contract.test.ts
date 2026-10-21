@@ -111,7 +111,7 @@ describe('the loop over the contract (D23)', () => {
   // does not: it reads the reason as a string from the wait's JSON.
   const UNNAMED: string = 'wedged';
 
-  test('provider-error is retried on the same tree, the provider’s text in the re-prompt', async () => {
+  test('provider-error is retried in the same attempt, the provider’s text in the re-prompt', async () => {
     const provider: WorkerResult = {
       reason: 'provider-error' as WorkerReason,
       message: PROVIDER_TEXT,
@@ -127,7 +127,9 @@ describe('the loop over the contract (D23)', () => {
     const r = await runNode(makeNode({ id: 'n' }), ['base'], h.deps, { defaultTimeoutMs: DEF });
 
     expect(r.verdict.status).toBe('done');
-    expect(r.verdict.attempts).toBe(2);
+    // A provider error does not spend an attempt (issue #151): the re-run is
+    // the same attempt, so the close counts one, not two.
+    expect(r.verdict.attempts).toBe(1);
     expect(h.log.count('isolate', 'n')).toBe(1);
     const sends = h.log.of('send').filter((e) => e.node === 'n' && e.detail?.startsWith('build:'));
     expect(sends).toHaveLength(2);
