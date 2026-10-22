@@ -206,6 +206,14 @@ time anyone runs. Right after `run-end`, the run's lines from its `run-start` th
 `run-end` line names that file as `journalCopy`. The record can be rebuilt from what is kept
 beside the receipts.
 
+## A worker's handback is kept, or its absence is named
+
+The worker's final message carries its dated Tried line, and the close keeps it beside the
+receipt. When the runner cannot read that message (`umbel read` fails), the close keeps a handback
+that says so, with the runner's exit code and output. The journal records `handback-read-failed`,
+and the verdict's `detail` names the missing handback. A message that read back empty is kept as a
+note saying it was empty. pleach never puts other words in the worker's place.
+
 ## A worker that writes BLOCKED.md has finished
 
 A worker that cannot finish the plan in its tree writes `BLOCKED.md` at the tree's root: what

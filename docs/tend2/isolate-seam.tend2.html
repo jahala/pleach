@@ -104,6 +104,7 @@ Every node builds in a disposable worktree off its verified dependencies. The sc
 
 - [x] (code) A relative `--repo-root` that is not `.`, run from another cwd, closes a node: the face resolves the root once, so the isolate and clean seams' `git -C <root>` with `cwd: <root>` never resolve a relative path twice (D22, jahala/pleach#102) · test/e2e/repo-root-relative.test.ts @1eb86bc · by cli
 - [x] (code) Eight nodes isolating at once in a fresh repository all get a tree: the seam runs `git worktree` add, remove and list one at a time, so none reads another's half-written admin dir · test/integration/isolate-concurrent.test.ts @ff07847 · by cli
+- [ ] (code) Through the real CLI, a linked-worktree root passed relative or absolute, with a gate that cannot run, settles failed with the gate's reason, keeps its tree on `quarantine/<id>`, and journals no `quarantine-failed` · test/e2e/no-tree-settle.test.ts
 
 ## For #developer #operator
 
@@ -111,5 +112,6 @@ Every node builds in a disposable worktree off its verified dependencies. The sc
 - 2026-08-18 migrated from v1 (docs/tend/features/isolate-seam.tend.html) by `loop migrate`
 - 2026-09-11 D22 (jahala/pleach#102): conducting umbel's first loop on a plain clone with `--repo-root .` failed every node after the worker stopped — ENOTDIR from a relative git dir resolved twice; fixed by hand during a hold (no workers), test first, and verified with the pinned tend2.
 - 2026-09-23 a CI flake in `run --land --sinks` traced to concurrent `git worktree add` calls reading each other's half-written admin dirs (reproduced in plain git, 1 in 300 paired adds). Red first: eight concurrent isolates over 25 fresh repositories failed every run. The seam now queues its worktree commands; the test passed three runs in a row, and the end-to-end stress went from 1 failure in 48 to 0 in 64. A retry on that git error was rejected: it hides the race instead of removing it. Cross-process landing still shares the risk (D27).
+- 2026-10-22 D45 (#100): a DeepSeek V4 Pro worker reproduced the issue's scenario through the real CLI (a linked-worktree root, relative and absolute, a gate that cannot run) and found master already correct, cured by D22. No source change; the scenario is pinned as a regression. Rejected: a `no-tree` journal note, since nothing reaches the path it would mark.
 </script>
 <script src="./loop.js"></script>

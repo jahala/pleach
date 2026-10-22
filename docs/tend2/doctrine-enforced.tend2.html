@@ -21,6 +21,7 @@ Ledger D26, from the repository audit of 2026-09-23. The audit read every import
 - [x] (code) Every relative import in `src/` follows the layer rules, a planted `loop/` → `seams/` type import fails naming its file and line, and no `new Error(` appears outside `core/errors.ts` · test/unit/architecture.test.ts @8ddc055 · by cli
 - [x] (code) A `.git` file that is not a `gitdir:` pointer makes `resolveGitDir` throw `GitDirUnrecognizedError` carrying the path · test/unit/gitdir.test.ts @ba7d1ad · by cli
 - [x] (code) `pleach frobnicate` with no further argument exits 2 naming the unknown verb, and never asks for a plan file · test/e2e/cli.test.ts @0db4b10 · by cli
+- [ ] (code) `docs/contract/plan-schema.md` matches its content at the commit that last changed its version line, unless the version line changed too; a shallow clone fails the guard instead of passing it · test/unit/plan-version.test.ts
 
 ## Needs #conductor-loop #cli-run
 
@@ -28,5 +29,6 @@ Ledger D26, from the repository audit of 2026-09-23. The audit read every import
 
 ## Tried
 - 2026-09-23 shaped and built from the repository audit's findings F8, F11 and F12. Red first: the architecture test failed on exactly `src/seams/gitdir.ts:29`, and its layering half passed; a planted type import from `loop/` into `seams/` made it fail naming the line, and it passed again once removed. The gitdir test failed on the missing class; the CLI test failed with "frobnicate: <plan.json> is required". Rejected a hand-kept verb list in the face, which duplicated the switch and left its default branch dead; the plan path is now asked for inside each verb's case. Rejected a biome import rule: biome cannot express "type-only from this one file".
+- 2026-10-22 D44 (#123), built by a DeepSeek V4 Pro worker through umbel, guard proven red on master's text by the lead. Changed in review: the v1.1.6 entry in `CHANGES.md` named one edit; five had gone in under v1.1.5, and a re-vendoring consumer needs all five. The egress sentence inside v1.1.6 still awaits tend2's ratification.
 </script>
 <script src="./loop.js"></script>
