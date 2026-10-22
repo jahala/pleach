@@ -12,6 +12,9 @@
 
 set -euo pipefail
 
+# shellcheck source=fake-turn-start.sh
+source "$(dirname "$0")/fake-turn-start.sh" "$@"
+
 SESSION_ID="${UMBEL_SESSION_ID:-fake-session}"
 
 if [[ -n "${FAKE_CLAUDE_JSONL_DIR:-}" ]]; then
@@ -28,6 +31,7 @@ touch "${JSONL_FILE}"
 
 while IFS= read -r line || [[ -n "${line:-}" ]]; do
   [[ "${line:-}" == "/exit" ]] && exit 0
+  fire_turn_start
   # Record the prompt as a user turn, then produce nothing further — ever.
   printf '{"type":"human","message":{"role":"user","content":[{"type":"text","text":"prompt"}]},"uuid":"u-%s","timestamp":"%s"}\n' \
     "$$" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$JSONL_FILE"
