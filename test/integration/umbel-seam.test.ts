@@ -18,9 +18,9 @@
  * agent run, umbel spawn.ts will inherit it and pass it to the worker, causing all
  * waits to time out. The workerEnv explicitly sets FAKE_CLAUDE_DELAY=0 to override.
  */
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { randomBytes } from 'node:crypto';
-import { access, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, appendFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { createUmbelSeam } from '../../src/adapters/umbel.ts';
@@ -28,6 +28,7 @@ import { createUmbelSeam as makeUmbel } from '../../src/adapters/umbel.ts';
 import { WorkerSpawnError } from '../../src/core/errors.ts';
 import type { ExecFn, ExecResult } from '../../src/loop/deps.ts';
 import { exec } from '../../src/seams/exec.ts';
+import { createRepo } from '../support/git-repo.ts';
 
 // ── binary resolution ────────────────────────────────────────────────────────
 
@@ -104,6 +105,66 @@ describe.skipIf(!binPresent)('umbel seam integration', () => {
   afterAll(teardownState);
 
   void RUN_ID; // consumed implicitly via session name uniqueness per test
+
+  // issue #115 — any session a test spawns must not outlive it: clean reaps
+  // sessions, and a test's own spawns are reaped here so none leak into tmux.
+  const spawnedForCleanup: Array<Awaited<ReturnType<Seam['spawnWorker']>>> = [];
+  afterEach(async () => {
+    for (const worker of spawnedForCleanup) {
+      await worker.kill().catch(() => undefined);
+    }
+    spawnedForCleanup.length = 0;
+  });
+
+  // issue #115 — `pleach clean` reaps a session the journal proves this runner
+  // spawned: spawn a real session through the adapter, write the journal line,
+  // run clean against the real CLI, and assert `umbel ls` no longer lists the
+  // session.
+  test('clean reaps a session the journal names', async () => {
+    const { path: repo, cleanup } = await createRepo();
+    try {
+      const seam = makeSeam();
+      const worker = await seam.spawnWorker({ cwd: repo });
+      spawnedForCleanup.push(worker);
+      const session = worker.__name;
+
+      // The journal names the spawn with no kill — exactly what a crash leaves.
+      const journalDir = join(repo, '.git', 'pleach');
+      await mkdir(journalDir, { recursive: true });
+      await appendFile(
+        join(journalDir, 'journal.jsonl'),
+        `${JSON.stringify({ event: 'worker-spawned', node: 'n', session })}\n`,
+      );
+
+      const proc = Bun.spawn(
+        ['bun', join(import.meta.dir, '../../src/main.ts'), 'clean', '--repo-root', repo],
+        {
+          stdin: 'ignore',
+          stdout: 'pipe',
+          stderr: 'pipe',
+          env: { ...process.env, PLEACH_UMBEL_BIN: UMBEL_BIN, UMBEL_STATE: stateDir },
+        },
+      );
+      const [stdout, , code] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+
+      expect(code).toBe(0);
+      expect(stdout).toContain(`killed worker session ${session}`);
+
+      // The session is gone from the operator's view — `umbel ls` (what the
+      // issue counts leftover sessions in) no longer lists it.
+      const ls = await exec([UMBEL_BIN, 'ls'], {
+        cwd: repo,
+        env: { UMBEL_STATE: stateDir },
+      });
+      expect(ls.output).not.toContain(session);
+    } finally {
+      await cleanup();
+    }
+  }, 60_000);
 
   // ledger: D2 — happy path: spawn → send → wait → stop, non-empty finalMessage,
   // filesTouched array → kill

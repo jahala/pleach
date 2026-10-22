@@ -1,8 +1,9 @@
 // The aftermath sweeps (D12): a killed conductor leaves a registered worktree
 // and a lock file behind. Locks self-heal on the next run (stale takeover);
 // these sweeps let `pleach clean` heal them on demand — deterministically,
-// touching ONLY what pleach provably owns. Worker sessions are umbel's
-// jurisdiction and are deliberately not touched here.
+// touching ONLY what pleach provably owns. Worker sessions are reaped by the
+// face through the runner's `reap` (issue #115), not here: this seam knows
+// locks and worktrees, and only they are provably pleach's by path.
 import { readdir, realpath, rm, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -14,9 +15,11 @@ import { isAlive, readPid } from './lock.ts';
 // dead holder → unlink; live holder → reported, never touched (a live lock
 // means a run or a landing may be in flight). The drain marker `.lock.stop`
 // is not a lock: it holds no pid, and sweeping it would silently cancel an
-// operator's stop.
+// operator's stop. `dryRun` classifies and reports the same paths, unlinking
+// nothing — the face's `--dry-run` lists without changing.
 export async function sweepStaleLocks(
   repoRoot: string,
+  opts: { dryRun?: boolean } = {},
 ): Promise<{ removed: string[]; live: string[] }> {
   const gitDir = resolveGitDir(repoRoot);
   const removed: string[] = [];
@@ -31,8 +34,10 @@ export async function sweepStaleLocks(
       live.push(path);
       continue;
     }
-    await unlink(path);
     removed.push(path);
+  }
+  if (!opts.dryRun) {
+    for (const path of removed) await unlink(path);
   }
   return { removed: removed.sort(), live: live.sort() };
 }
@@ -53,7 +58,11 @@ export function ownsWorktree(path: string, ownBase: string, tmpBase: string): bo
   return path.startsWith(tmpBase) && /\/pleach-[^/]+\/wt$/.test(path);
 }
 
-export async function sweepOrphanWorktrees(exec: ExecFn, repoRoot: string): Promise<string[]> {
+export async function sweepOrphanWorktrees(
+  exec: ExecFn,
+  repoRoot: string,
+  opts: { dryRun?: boolean } = {},
+): Promise<string[]> {
   // git lists canonical paths (macOS: /private/var/…); canonicalize our side
   // too or the ownership prefix never matches under /var → /private/var.
   const rootReal = await realpath(repoRoot).catch(() => repoRoot);
@@ -70,6 +79,12 @@ export async function sweepOrphanWorktrees(exec: ExecFn, repoRoot: string): Prom
   const removed: string[] = [];
   for (const p of paths) {
     if (!ownsWorktree(p, ownBase, tmpReal)) continue;
+    // dryRun lists the owned worktrees without removing them (issue #115's
+    // `--dry-run`); the real sweep goes through git, never a bare rm.
+    if (opts.dryRun) {
+      removed.push(p);
+      continue;
+    }
     const r = await exec(['git', '-C', repoRoot, 'worktree', 'remove', '--force', p], {
       cwd: repoRoot,
     });
@@ -78,6 +93,8 @@ export async function sweepOrphanWorktrees(exec: ExecFn, repoRoot: string): Prom
       await rm(dirname(p), { recursive: true, force: true });
     }
   }
-  await exec(['git', '-C', repoRoot, 'worktree', 'prune'], { cwd: repoRoot });
+  if (!opts.dryRun) {
+    await exec(['git', '-C', repoRoot, 'worktree', 'prune'], { cwd: repoRoot });
+  }
   return removed.sort();
 }

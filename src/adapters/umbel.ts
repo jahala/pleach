@@ -258,7 +258,7 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
       await exec([bin, 'kill', name], { cwd, env: mergeEnv(), timeoutMs: 10_000 });
     }
 
-    return { send, wait, kill, __name: name };
+    return { send, wait, kill, session: name, __name: name };
   }
 
   // ── gatherWorkerResult ────────────────────────────────────────────────────
@@ -322,7 +322,22 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
     return { reason, finalMessage, actions, diff, filesTouched, telemetry: {} };
   }
 
-  return { spawnWorker, providers: UMBEL_PROVIDERS };
+  // ── reap ──────────────────────────────────────────────────────────────────
+  //
+  // Reap a session this runner spawned (issue #115): `pleach clean` names the
+  // sessions the journal proves pleach spawned, and this is how umbel ends them.
+  // A `status` that does not answer is the session already gone; otherwise the
+  // session is killed (non-zero tolerated — it may have died between the two).
+  // umbel locates sessions by name in its state root, so no cwd matters here.
+
+  async function reap(session: string): Promise<'killed' | 'gone'> {
+    const status = await exec([bin, 'status', session], { cwd: process.cwd(), env: mergeEnv() });
+    if (status.exitCode !== 0) return 'gone';
+    await exec([bin, 'kill', session], { cwd: process.cwd(), env: mergeEnv(), timeoutMs: 10_000 });
+    return 'killed';
+  }
+
+  return { spawnWorker, reap, providers: UMBEL_PROVIDERS };
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

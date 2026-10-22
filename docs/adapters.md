@@ -103,12 +103,21 @@ export interface RunnerSeam {
   // config's cast names) to validatePlan so a typo is refused before any spawn.
   // Absent means the runner accepts any provider name (the scripted runner).
   providers?: readonly string[];
+  // Reap a session this runner spawned (issue #115): 'killed' when the reap
+  // ended a live session, 'gone' when the session no longer exists. Runners
+  // that cannot name or kill a session leave this out; `pleach clean` then
+  // says so rather than guessing.
+  reap?(session: string): Promise<'killed' | 'gone'>;
 }
 
 export interface Worker {
   send(text: string): Promise<void>;
   wait(opts?: { timeoutMs?: number }): Promise<WorkerResult>;
   kill(): Promise<void>;
+  // The runner's own name for the session, when it has one (umbel sets it to
+  // `pl-…`); the loop journals it as `worker-spawned`/`worker-killed` so
+  // `pleach clean` can reap what a crash left alive (issue #115).
+  session?: string;
 }
 
 export interface WorkerResult {

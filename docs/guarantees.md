@@ -209,6 +209,22 @@ The node settles `blocked` at once, with the file's text as the verdict's `block
 the tree kept on `quarantine/<id>`, `BLOCKED.md` included. There is no retry, because a retry
 would only ask the worker to explain again.
 
+## A killed run's sessions are reaped
+
+Every worker the loop spawns is journaled as `worker-spawned { node, session }` and, when the loop
+kills it, `worker-killed { node, session }`. A run that dies mid-flight leaves the spawn without the
+kill, and that session keeps burning a subscription seat and a tmux pane.
+
+`pleach clean` reads the journal, and for each session it spawned and never killed it asks the runner
+to reap it: umbel checks the session, then kills it. It prints `killed worker session <name> (<node>)`
+or `worker session <name> already gone (<node>)`, and journals `worker-reaped` so the next clean does
+not ask again. A runner that cannot name its sessions (for example `direct-cli`) is told so, and
+clean continues with the rest.
+
+The order is unchanged: stale locks first; while any live lock exists a run may be in flight, so
+clean touches nothing else and exits 3. `--dry-run` lists the locks, sessions and worktrees it would
+act on, and changes nothing.
+
 ## Two operational facts
 
 **Claude Code workers need the repo trusted.** Trust follows the main checkout
