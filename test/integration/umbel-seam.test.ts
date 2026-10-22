@@ -127,13 +127,19 @@ describe.skipIf(!binPresent)('umbel seam integration', () => {
       const worker = await seam.spawnWorker({ cwd: repo });
       spawnedForCleanup.push(worker);
       const session = worker.__name;
+      // A second session that died before clean ran: umbel keeps its record
+      // (status answers, alive false), so clean must call it gone, not killed.
+      const dead = await seam.spawnWorker({ cwd: repo });
+      spawnedForCleanup.push(dead);
+      await dead.kill();
 
-      // The journal names the spawn with no kill — exactly what a crash leaves.
+      // The journal names both spawns with no kill — exactly what a crash leaves.
       const journalDir = join(repo, '.git', 'pleach');
       await mkdir(journalDir, { recursive: true });
       await appendFile(
         join(journalDir, 'journal.jsonl'),
-        `${JSON.stringify({ event: 'worker-spawned', node: 'n', session })}\n`,
+        `${JSON.stringify({ event: 'worker-spawned', node: 'n', session })}\n` +
+          `${JSON.stringify({ event: 'worker-spawned', node: 'm', session: dead.__name })}\n`,
       );
 
       const proc = Bun.spawn(
@@ -152,7 +158,8 @@ describe.skipIf(!binPresent)('umbel seam integration', () => {
       ]);
 
       expect(code).toBe(0);
-      expect(stdout).toContain(`killed worker session ${session}`);
+      expect(stdout).toContain(`killed worker session ${session} (n)`);
+      expect(stdout).toContain(`worker session ${dead.__name} already gone (m)`);
 
       // The session is gone from the operator's view — `umbel ls` (what the
       // issue counts leftover sessions in) no longer lists it.
