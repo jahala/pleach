@@ -18,9 +18,17 @@ import type { Verdict } from './plan.ts';
 import type { Redaction } from './redact.ts';
 
 // Pinned to the canonical doc's header (docs/contract/plan-schema.md); the
-// unit test asserts the pin. The fence makes an old receipt fail derivation
-// honestly ("wrong contract version"), never mysteriously.
+// unit test asserts the pin. A receipt is minted under this version.
 export const CONTRACT_VERSION = '1.1.6';
+
+// The versions whose receipts this build derives. The fence verifies each
+// receipt against the version it names and refuses only a version this build
+// does not know, so a receipt from a version it has never seen fails honestly
+// ("wrong contract version"), never mysteriously. Receipts began at 1.1.5,
+// and `deriveCore` has not changed since; 1.1.6 changed the contract's text
+// only. A version whose derivation rules differ is never added here: it gets
+// its own derivation instead.
+export const DERIVABLE_VERSIONS: readonly string[] = ['1.1.5', '1.1.6'];
 
 export interface GateRecord {
   gate: string; // ladder step: 'setup' | 'marker' | 'hygiene[:<kind>]' | 'smoke' | 'audit-tamper'
@@ -174,10 +182,10 @@ export function receiptPrefix(sha256: string): string {
 // dual close); 'fail' and 'skip' both block, because "never adjudicated" must
 // gate exactly as hard as "checked and failed".
 export function deriveStatus(facts: ReceiptFacts): Derivation {
-  if (facts.contractVersion !== CONTRACT_VERSION) {
+  if (!DERIVABLE_VERSIONS.includes(facts.contractVersion)) {
     return {
       ok: false,
-      reason: `contract version fence: receipt minted under v${facts.contractVersion}, current is v${CONTRACT_VERSION}`,
+      reason: `contract version fence: receipt minted under v${facts.contractVersion}, this build derives v${DERIVABLE_VERSIONS.join(', v')}`,
     };
   }
   return { ok: true, status: deriveCore(facts) };

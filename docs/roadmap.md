@@ -14,7 +14,7 @@ Each package becomes a tend2 loop when work starts, with a ledger item for each 
 | 2 | The operator's seat | #63 #86 #71 #87; #114, #115 done (D31, D43) | The largest field pain: 806 `tail` polls across 25 sessions, and sessions killed by hand. |
 | 3 | Casting and the config | #149, #146, #126, #128 done (D33, D36, D40) | Found dogfooding on cfanalytics: one plan cannot reach two endpoints of one CLI, and an ordinary audit command costs a whole build before it fails. |
 | 4 | Landing that finishes the job | #124 #116 #85 #130; #116's replay design was tried and rejected (see the issue) | One small honesty fix first. Then land stops handing conflicts to a person. |
-| 5 | Contract v1.2, one round with tend2 | #113 #104 #90; #123, #106 done (D44, D41) | Schema changes batched into one conversation once tend2 is public. The receipt version fence is an open decision for the owner. |
+| 5 | Contract v1.2, one round with tend2 | #113 #104 #90; #123, #106 done (D44, D41) | Schema changes batched into one conversation once tend2 is public. The receipt version fence is decided (D46). |
 | 6 | Umbrella fit | #108 #112 | Small, and they need plotplot's contracts. |
 | — | Blocked or parked | #111 (umbel#92) · #117 (an experiment outside this repo) · #70 (needs a design); #107 done (D37) | See below. |
 
@@ -82,11 +82,9 @@ store.
 
 ## 5. Contract v1.2, one round with tend2
 
-**The receipt version fence is open.** D44 moved the contract to v1.1.6 with the fence as it stands, so
-every receipt minted under v1.1.5 now fails `pleach receipt`, although nothing it derives from changed.
-Proposal: verify each receipt against the contract version it names, and refuse only versions this
-build does not know. Accepting older receipts is a backward-compatibility change, so it waits on the
-owner's approval.
+**The receipt version fence is decided (D46).** Each receipt is verified against the contract version
+it names, and only a version this build does not know is refused. A version bump that changes how a
+receipt derives adds a derivation for it, never a place on the accepted list.
 
 Then batch the changes into one round:
 - **#123:** a test that fails when the contract text changes without a version bump. Done in D44 (v1.1.6).

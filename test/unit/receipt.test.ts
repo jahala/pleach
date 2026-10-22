@@ -12,6 +12,7 @@ import {
   CONTRACT_VERSION,
   canonicalJson,
   computeDegraded,
+  DERIVABLE_VERSIONS,
   deriveStatus,
   mintReceipt,
   rehash,
@@ -131,6 +132,14 @@ describe('deriveStatus', () => {
     expect(d.ok).toBe(false);
     if (!d.ok) expect(d.reason).toContain('0.9.0');
   });
+
+  test('a receipt minted under an earlier version this build knows still derives', () => {
+    // v1.1.6 changed the contract's text, not the rules a receipt derives by:
+    // a v1.1.5 close is judged exactly as it was the day it was minted.
+    const r = mintReceipt(makeFacts());
+    const earlier = { ...r.facts, contractVersion: '1.1.5' };
+    expect(deriveStatus(earlier)).toEqual({ ok: true, status: r.derived });
+  });
 });
 
 describe('computeDegraded', () => {
@@ -146,6 +155,10 @@ describe('computeDegraded', () => {
 });
 
 describe('the version constant', () => {
+  test('the current version is one the fence derives', () => {
+    expect(DERIVABLE_VERSIONS).toContain(CONTRACT_VERSION);
+  });
+
   test('CONTRACT_VERSION matches the canonical contract doc header', () => {
     const header = readFileSync('docs/contract/plan-schema.md', 'utf8').split('\n')[0] ?? '';
     expect(header).toContain(`v${CONTRACT_VERSION}`);

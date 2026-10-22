@@ -94,6 +94,22 @@ describe('verifyReceipt (§D)', () => {
     if (check.outcome === 'underivable') expect(check.detail).toContain('0.9.0');
   });
 
+  test('a receipt minted under v1.1.5 still verifies after the v1.1.6 text change', async () => {
+    const h = await closedHarness();
+    const r = h.receipts.get('x');
+    if (!r) throw new Error('missing receipt');
+    // A close made yesterday: its facts name v1.1.5, its seal is the hash of
+    // those facts, and its commit's trailer pins that seal.
+    const facts = { ...r.facts, contractVersion: '1.1.5' };
+    const sha256 = receiptHash(facts, r.derived);
+    h.receipts.set('x', { ...r, facts, sha256 });
+    for (const [ref, message] of h.git.commitMessages) {
+      h.git.commitMessages.set(ref, message.replace(r.sha256, sha256));
+    }
+    const check = await verifyReceipt('x', h.deps, '/r');
+    expect(check.outcome).toBe('pass');
+  });
+
   test('an unresolvable ref is UNDERIVABLE', async () => {
     const h = await closedHarness();
     // Simulate branch deletion: the ref map forgets node/x.
