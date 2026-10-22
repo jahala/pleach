@@ -14,10 +14,12 @@ import {
   NoRunError,
   PlanInvalidError,
   RebuildRequiredError,
+  RedactionUnavailableError,
   TendTransportError,
 } from '../core/errors.ts';
 import { type Plan, PlanSchema } from '../core/plan.ts';
 import { receiptPrefix } from '../core/receipt.ts';
+import type { Redaction } from '../core/redact.ts';
 import {
   foldRunState,
   type NodeRunState,
@@ -115,6 +117,13 @@ Flags (run):
                           CLIs over tmux) or 'direct-cli' (headless \`claude -p\` / \`codex exec\` —
                           no umbel, no tmux, single-turn {prompt} nodes only)
   --umbel-bin PATH        umbel binary (default: $PLEACH_UMBEL_BIN or 'umbel' on PATH)
+  --plotplot-bin PATH     plotplot binary for secret redaction (default: $PLEACH_PLOTPLOT_BIN
+                          or 'plotplot' on PATH). plotplot redacts agent and gate text before
+                          it reaches the journal and the receipts; without it pleach run / land
+                          / audit refuse to start (install: cargo install --locked --git
+                          https://github.com/jahala/plotplot)
+  --no-redact             turn secret redaction off (recorded on run-start and in every
+                          receipt's facts, so an unredacted run is always visible)
   --config PATH           pleach.config.ts selecting the runner + ledger
                           (default: <repo-root>/pleach.config.ts if present)
   --tend-module PATH      use the tend ledger via this ingester module ($PLEACH_TEND_MODULE);
@@ -220,6 +229,8 @@ interface Flags {
   fallbackProvider?: string;
   journal?: string;
   umbelBin: string;
+  plotplotBin: string;
+  noRedact: boolean;
   tendModule?: string;
   allowedTools?: string;
   permissionMode?: string;
@@ -259,6 +270,8 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
     repoRoot: process.cwd(),
     idleMs: DEFAULT_IDLE_MS,
     umbelBin: process.env.PLEACH_UMBEL_BIN ?? 'umbel',
+    plotplotBin: process.env.PLEACH_PLOTPLOT_BIN ?? 'plotplot',
+    noRedact: false,
     ...(process.env.PLEACH_SETTLE_MS !== undefined
       ? { settleMs: nonNegativeMs('$PLEACH_SETTLE_MS', process.env.PLEACH_SETTLE_MS) }
       : {}),
@@ -334,6 +347,13 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
       case '--umbel-bin':
         flags.umbelBin = takeValue(arg, next);
         i += 1;
+        break;
+      case '--plotplot-bin':
+        flags.plotplotBin = takeValue(arg, next);
+        i += 1;
+        break;
+      case '--no-redact':
+        flags.noRedact = true;
         break;
       case '--config':
         flags.config = takeValue(arg, next);
@@ -495,6 +515,8 @@ async function depsFromFlags(flags: Flags): Promise<{
     repoRoot: flags.repoRoot,
     runner,
     ledger,
+    redaction: redactionOf(flags),
+    plotplotBin: flags.plotplotBin,
     ...(flags.journal !== undefined ? { journal: flags.journal } : {}),
     // The narration floor: every journal event a human should glance at gets
     // one plain stderr line; --quiet silences it (the journal file remains).
@@ -508,6 +530,28 @@ async function depsFromFlags(flags: Flags): Promise<{
         }),
   });
   return { deps, providers, ...(casts !== undefined ? { casts } : {}) };
+}
+
+// The redaction this run writes under: the explicit `--no-redact` opt-out, or
+// plotplot otherwise. Recorded on the run-start line and in every receipt.
+function redactionOf(flags: Flags): Redaction {
+  return flags.noRedact ? 'off' : 'plotplot';
+}
+
+// Fail closed at the face (issue #107): before the lock is taken — before any
+// journal line is written — prove the redactor works by redacting a known
+// string. A missing or broken `plotplot` refuses the run (exit 2) naming the
+// install; it never starts and writes unredacted text.
+async function assertRedactionReady(deps: ConductorDeps, flags: Flags): Promise<void> {
+  if (flags.noRedact) return;
+  try {
+    await deps.redact.redact('pleach redaction probe');
+  } catch (err) {
+    throw new RedactionUnavailableError(
+      flags.plotplotBin,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
 }
 
 // D12: SIGINT/SIGTERM tear the work down instead of orphaning it — workers
@@ -527,6 +571,9 @@ function teardownOnSignal(): AbortSignal {
 async function verbRun(planPath: string, flags: Flags): Promise<number> {
   const plan = await readPlan(planPath);
   const { deps, providers, casts } = await depsFromFlags(flags);
+  // The redactor must work before the lock is taken and any journal line is
+  // written — a run that cannot redact refuses here, not mid-run (issue #107).
+  await assertRedactionReady(deps, flags);
   // A cast the plan names that lacks a variable refuses the run here, before
   // the lock and before any node's setup runs (D36).
   const missing = missingCastVariable(
@@ -542,6 +589,7 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
   const summary = await runPlan(plan, deps, {
     repoRoot: flags.repoRoot,
     pleachVersion: await pleachVersion(),
+    redaction: redactionOf(flags),
     signal,
     // The contract's conductor default when neither flag nor plan caps it:
     // cores−2, floored at 1 (the loop stays environment-free).
@@ -620,9 +668,11 @@ async function verbAudit(
   if (nodeId === undefined) throw new UsageError('audit: <node> is required');
   const plan = await readPlan(planPath);
   const { deps } = await depsFromFlags(flags);
+  await assertRedactionReady(deps, flags);
   const result = await auditNode(plan, nodeId, deps, {
     repoRoot: flags.repoRoot,
     pleachVersion: await pleachVersion(),
+    redaction: redactionOf(flags),
     signal: teardownOnSignal(),
     idleMs: flags.idleMs,
     ...(flags.timeoutMs !== undefined ? { defaultTimeoutMs: flags.timeoutMs } : {}),
@@ -645,6 +695,7 @@ function landOpts(flags: Flags): LandOpts {
 async function verbLand(planPath: string, flags: Flags): Promise<number> {
   const plan = await readPlan(planPath);
   const { deps } = await depsFromFlags(flags);
+  await assertRedactionReady(deps, flags);
   const land = await landPlan(plan, deps, landOpts(flags));
   process.stderr.write(`pleach: landed ${land.landed.join(', ')} on '${land.branch}'\n`);
   process.stdout.write(`${JSON.stringify(land)}\n`);
@@ -935,6 +986,14 @@ export async function runCli(argv: readonly string[]): Promise<number> {
     if (err instanceof LockHeldError || err instanceof NoRunError) {
       process.stderr.write(`pleach: ${err.message}\n`);
       return 3;
+    }
+    if (err instanceof RedactionUnavailableError) {
+      process.stderr.write(
+        `pleach: ${err.message}\n` +
+          `pleach: install plotplot: cargo install --locked --git https://github.com/jahala/plotplot\n` +
+          `pleach: or pass --no-redact to run without redaction (recorded in the run and every receipt)\n`,
+      );
+      return 2;
     }
     if (
       err instanceof AuditRefusedError ||

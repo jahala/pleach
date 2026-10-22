@@ -13,6 +13,7 @@ import {
   type Receipt,
   sha256Hex,
 } from '../core/receipt.ts';
+import type { Redaction } from '../core/redact.ts';
 import { DEFAULT_WORKER_PROVIDER, validatePlan } from '../core/validate.ts';
 import type { ArtifactKind, ConductorDeps, Isolation, RunSummary } from './deps.ts';
 import { outputTail, type ResumedFrom, type RunNodeResult, runNode } from './run-node.ts';
@@ -64,6 +65,12 @@ export interface RunPlanOpts {
   // (issue #146) — handed to validatePlan so a typo refuses the run before any
   // spawn. Absent (e.g. a scripted runner) → no provider name is refused.
   providers?: readonly string[];
+  // Which redaction this run wrote under (issue #107): `plotplot`, or `off`
+  // when the operator passed `--no-redact`. Recorded on the run-start line and
+  // in every receipt's facts, so a run that wrote without redaction is always
+  // visible. The face refuses to start before this when the redactor is
+  // missing; the loop just records and composes the injected redactor.
+  redaction?: Redaction;
 }
 
 export const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes (binding prose).
@@ -93,6 +100,7 @@ export async function runPlan(
       fresh: opts.fresh === true,
       ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       ...(opts.idleMs !== undefined ? { idleMs: opts.idleMs } : {}),
+      redaction: opts.redaction ?? 'plotplot',
       ...(opts.providerBackoffMs !== undefined
         ? { providerBackoffMs: opts.providerBackoffMs }
         : {}),
@@ -115,6 +123,7 @@ interface ResolvedOpts {
   providerBackoffMs?: number;
   settleMs?: number;
   fallbackProvider?: string;
+  redaction: Redaction;
 }
 
 async function runUnderLock(
@@ -131,6 +140,7 @@ async function runUnderLock(
     source: plan.source,
     nodes: plan.nodes.length,
     runId,
+    redaction: opts.redaction,
   });
   await journalGapsOrJournal(deps);
 
@@ -369,19 +379,27 @@ async function runUnderLock(
     // The tree's own record (D14): no gate produced it, so nothing sealed it —
     // it is read here, the last moment the worktree exists, and hashed over
     // the bytes kept. Collection has already set the directory aside, so what
-    // is kept is exactly what no commit carries.
+    // is kept is exactly what no commit carries. The bytes are redacted (issue
+    // #107) before they are hashed and written, so the friction journal can
+    // never leak a secret the weeder/tend2 recorded.
     const friction = await keepOrJournal(node, 'friction', 'friction', receipt.sha256, async () => {
       const text = iso === undefined ? null : await deps.isolate.readFriction(iso.cwd);
-      return text === null ? null : { bytes: text, sha256: sha256Hex(text) };
+      if (text === null) return null;
+      const bytes = await deps.redact.redact(text);
+      return { bytes, sha256: sha256Hex(bytes) };
     });
     // What the worker said when it handed the work back (D17) — the message
     // whose dated Tried line the garden's law asks for, which until now
     // survived only in the provider's own transcript. Kept verbatim and read
     // by nobody: agents produce, code decides. A worker that said nothing
-    // hands back nothing to keep.
+    // hands back nothing to keep. Redacted (issue #107) before it is hashed
+    // and written — a secret the worker echoed in its handback never reaches
+    // the receipt store.
     const handback = await keepOrJournal(node, 'handback', 'handback', receipt.sha256, async () => {
       const text = outcome.handback;
-      return text === undefined || text === '' ? null : { bytes: text, sha256: sha256Hex(text) };
+      if (text === undefined || text === '') return null;
+      const bytes = await deps.redact.redact(text);
+      return { bytes, sha256: sha256Hex(bytes) };
     });
     if (sarif === undefined && friction === undefined && handback === undefined) return undefined;
     return {
@@ -457,7 +475,7 @@ async function runUnderLock(
         throw new GateFailedError('marker', lateMarkers.join('\n'), -1); // N/A: marker scan has no exit code
       }
       const receipt = mintReceipt(
-        buildFacts(plan, node, outcome, durationMs, opts.pleachVersion, resumed),
+        buildFacts(plan, node, outcome, durationMs, opts.pleachVersion, resumed, opts.redaction),
       );
       const { sha } = await deps.isolate.commitBranch(
         iso.cwd,
@@ -559,7 +577,7 @@ async function runUnderLock(
       }
       await deps.ledger.emitVerdict(verdict, plan.source);
       const receipt = mintReceipt(
-        buildFacts(plan, node, outcome, durationMs, opts.pleachVersion, resumed),
+        buildFacts(plan, node, outcome, durationMs, opts.pleachVersion, resumed, opts.redaction),
       );
       // A failed strict gate wrote the log that says why — exactly the log the
       // calibration folds want, so the quarantine path keeps it too.
@@ -993,6 +1011,7 @@ function buildFacts(
   durationMs: number,
   pleachVersion: string,
   resumed: ResumedFrom | undefined,
+  redaction: Redaction,
 ): MintFacts {
   const { verdict } = outcome;
   return {
@@ -1017,5 +1036,6 @@ function buildFacts(
     telemetry: verdict.telemetry,
     durationMs,
     pleachVersion,
+    redaction,
   };
 }

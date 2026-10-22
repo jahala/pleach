@@ -335,3 +335,34 @@ export class GitDirUnrecognizedError extends Error {
     this.path = path;
   }
 }
+
+// A redaction run failed: the `plotplot redact` process could not be spawned,
+// or it exited non-zero. Fail closed — the caller never falls back to writing
+// the input unredacted; it halts the run or refuses it at the face.
+export class RedactError extends Error {
+  readonly name = 'RedactError';
+  readonly bin: string;
+  readonly detail: string;
+
+  constructor(bin: string, detail: string) {
+    super(`redaction failed ('${bin} redact'): ${detail}`);
+    this.bin = bin;
+    this.detail = detail;
+  }
+}
+
+// Redaction is required (no `--no-redact`) and the redactor cannot run: the
+// binary is missing or its probe failed. Thrown by the face before the lock is
+// taken, so the run refuses (exit 2) naming the install instead of writing
+// unredacted text silently.
+export class RedactionUnavailableError extends Error {
+  readonly name = 'RedactionUnavailableError';
+  readonly bin: string;
+  readonly detail: string;
+
+  constructor(bin: string, detail: string) {
+    super(`redaction is required but '${bin} redact' failed: ${detail}`);
+    this.bin = bin;
+    this.detail = detail;
+  }
+}

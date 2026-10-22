@@ -2,7 +2,8 @@ import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { JournalRunMissingError } from '../core/errors.ts';
 import { envelope } from '../core/journal-envelope.ts';
-import type { JournalSeam } from '../loop/deps.ts';
+import { redactStrings } from '../core/redact.ts';
+import type { JournalSeam, Redactor } from '../loop/deps.ts';
 
 // Append-only JSONL run journal. Each call wraps `event` in the garden's one
 // event envelope (core/journal-envelope.ts — ledger D15), serialises the
@@ -13,6 +14,13 @@ import type { JournalSeam } from '../loop/deps.ts';
 // `envelope` is pure and takes the instant as a parameter, so the one impure
 // fact — what time it is — lives at the edge with the write it stamps. The
 // loop keeps appending the events it always appended; nothing upstream knows.
+//
+// It is also the one home for journal redaction (issue #107): every string an
+// event holds — agent and gate output among them — is redacted through the
+// injected redactor before the envelope is applied and the line is written, so
+// a secret can reach disk no sooner than a line is serialised. The redactor is
+// a parameter, like the tee; the read-only status/wait surface constructs a
+// journal that never appends, so it passes none.
 //
 // Errors from the underlying fs calls are NOT swallowed: a real filesystem
 // error (permissions, disk full, etc.) propagates as a typed NodeJS error so
@@ -25,6 +33,7 @@ import type { JournalSeam } from '../loop/deps.ts';
 export function createJournal(
   path: string,
   tee?: (event: Record<string, unknown>) => void,
+  redact?: Redactor,
 ): JournalSeam {
   const dir = dirname(path);
   // Track whether we've confirmed the directory exists so we only pay the
@@ -40,9 +49,14 @@ export function createJournal(
 
   return {
     async append(event: Record<string, unknown>): Promise<void> {
+      // Redacted before the envelope so the mirror fields the envelope adds can
+      // never carry an unredacted secret out of an event the redactor covered.
+      const redacted = redact
+        ? ((await redactStrings(event, (t) => redact.redact(t))) as Record<string, unknown>)
+        : event;
       // Enveloped before the mkdir so an unknown event name fails loudly
       // without leaving a half-made journal directory behind.
-      const line = envelope(event, new Date());
+      const line = envelope(redacted, new Date());
       await ensureDir();
       await appendFile(path, `${JSON.stringify(line)}\n`, 'utf8');
       if (tee) {

@@ -7,6 +7,30 @@ a failing test before its fix.
 The short version: **work is never silently lost, and a verdict is never invented.**
 A node that cannot finish keeps its tree on `quarantine/<id>` and writes a receipt.
 
+## Secrets are redacted before they reach disk
+
+Agent- and gate-produced text reaches pleach's records in three places: the run
+journal, the run log, and the artifacts kept beside a receipt (a worker's handback,
+a findings log, the tree's friction journal). A secret in any of it — a worker that
+echoes a `.env` value, a gate that prints a token — must never reach disk.
+
+pleach redacts all of it through `plotplot redact` (the one shared implementation
+the plotplot stem ships) before a single byte is written. Every journal line's string
+values are redacted before the line is serialised, and the handback and friction
+journal are redacted before they are hashed and kept; a findings log is redacted
+before its hash is sealed onto the gate record, so the sealed hash and the kept file
+always agree.
+
+Redaction is fail-closed. `pleach run`, `pleach land` and `pleach audit` prove the
+redactor works before they take the lock; a missing `plotplot` refuses the run (exit
+2) naming the install — `cargo install --locked --git https://github.com/jahala/plotplot`
+— never a silent write of unredacted text.
+
+`--no-redact` is the explicit opt-out for a machine without plotplot. It is recorded
+on the `run-start` line and in every receipt's facts (`redaction: 'off'`), so a run
+that wrote without redaction is always visible. `--plotplot-bin PATH` (or
+`$PLEACH_PLOTPLOT_BIN`) selects the binary.
+
 ## Landing
 
 Landing is deterministic and fail-closed. It refuses unless every plan node is
