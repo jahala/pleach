@@ -18,9 +18,18 @@ import type { Verdict } from './plan.ts';
 import type { Redaction } from './redact.ts';
 
 // Pinned to the canonical doc's header (docs/contract/plan-schema.md); the
-// unit test asserts the pin. The fence makes an old receipt fail derivation
-// honestly ("wrong contract version"), never mysteriously.
+// unit test asserts the pin. A receipt is minted under this version.
 export const CONTRACT_VERSION = '1.1.6';
+
+// The contract follows semantic versioning from v1.1.5, where receipts began:
+// a patch changes the contract's text and never how a receipt derives, so the
+// fence compares major.minor only. A change to `deriveCore` bumps the minor at
+// least, and a test pins `deriveCore` to the minor it belongs to. A receipt
+// from another minor fails derivation honestly ("wrong contract version"),
+// never mysteriously.
+function minorLine(version: string): string | undefined {
+  return /^(\d+\.\d+)\.\d+$/.exec(version)?.[1];
+}
 
 export interface GateRecord {
   gate: string; // ladder step: 'setup' | 'marker' | 'hygiene[:<kind>]' | 'smoke' | 'audit-tamper'
@@ -174,10 +183,11 @@ export function receiptPrefix(sha256: string): string {
 // dual close); 'fail' and 'skip' both block, because "never adjudicated" must
 // gate exactly as hard as "checked and failed".
 export function deriveStatus(facts: ReceiptFacts): Derivation {
-  if (facts.contractVersion !== CONTRACT_VERSION) {
+  const line = minorLine(facts.contractVersion);
+  if (line === undefined || line !== minorLine(CONTRACT_VERSION)) {
     return {
       ok: false,
-      reason: `contract version fence: receipt minted under v${facts.contractVersion}, current is v${CONTRACT_VERSION}`,
+      reason: `contract version fence: receipt minted under v${facts.contractVersion}, this build derives v${minorLine(CONTRACT_VERSION)}.x receipts`,
     };
   }
   return { ok: true, status: deriveCore(facts) };

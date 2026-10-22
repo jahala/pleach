@@ -554,8 +554,7 @@ checkpoint but have different lifetimes and trust domains.**
   texts. **Fix:** the text is v1.1.6, with `CHANGES.md` listing all five edits; a guard fails when the doc
   differs from its content at the commit that last changed the version line unless the version line
   changed too, and fails on a shallow clone rather than passing vacuously (CI checks out full history).
-  Receipts minted under v1.1.5 fail `pleach receipt`'s version fence, as designed. Tests:
-  `test/unit/plan-version.test.ts`.
+  Receipts minted under v1.1.5 still verify (D46). Tests: `test/unit/plan-version.test.ts`.
 - **D45 ◦ [field] A node that failed before its tree was usable reported a catastrophic isolate
   failure.** jahala/pleach#100 (plotplot's first conducted node, 2026-09-11). Not reproducible on master:
   D22 resolves the repo root absolutely, and the settle preserves a tree only when isolate provisioned one.
@@ -563,6 +562,13 @@ checkpoint but have different lifetimes and trust domains.**
   `quarantine-failed`; a linked-worktree root, relative or absolute, with a gate that cannot run settles
   failed with the gate's reason and its tree quarantined. Tests: `test/loop/no-tree-settle.test.ts`,
   `test/e2e/no-tree-settle.test.ts`.
+- **D46 ◦ [review] The contract version fence refused receipts whose rules had not changed.** Found
+  while landing D44: the fence compared a receipt's contract version with the build's exactly, so v1.1.6,
+  a text-only patch, made every v1.1.5 receipt fail `pleach receipt`. **Fix:** the contract follows
+  semantic versioning from v1.1.5, and the fence compares major.minor only, refusing a receipt from
+  another minor or with no readable version. A test pins `deriveCore` to its minor, so a change to how
+  receipts derive cannot land without a minor bump. Tests: `test/unit/receipt.test.ts`,
+  `test/loop/receipt-verify.test.ts`.
 
 ### Verified-sound (attacks refuted — do not relitigate)
 

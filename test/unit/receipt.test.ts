@@ -131,6 +131,23 @@ describe('deriveStatus', () => {
     expect(d.ok).toBe(false);
     if (!d.ok) expect(d.reason).toContain('0.9.0');
   });
+
+  test('a receipt minted under an earlier patch of the same minor still derives', () => {
+    // Semantic versioning: a patch never changes how a receipt derives, so a
+    // v1.1.5 close is judged exactly as it was the day it was minted.
+    const r = mintReceipt(makeFacts());
+    const earlier = { ...r.facts, contractVersion: '1.1.5' };
+    expect(deriveStatus(earlier)).toEqual({ ok: true, status: r.derived });
+  });
+
+  test('a receipt from another minor or major, or with no readable version, is underivable', () => {
+    const r = mintReceipt(makeFacts());
+    for (const version of ['1.2.0', '1.0.9', '2.1.6', '1.1', 'one.one.six', '']) {
+      const d = deriveStatus({ ...r.facts, contractVersion: version });
+      expect(d.ok).toBe(false);
+      if (!d.ok) expect(d.reason).toContain('contract version fence');
+    }
+  });
 });
 
 describe('computeDegraded', () => {
@@ -145,7 +162,25 @@ describe('computeDegraded', () => {
   });
 });
 
+// The rules a receipt derives by, pinned to the contract minor they belong to.
+// The fence trusts every patch of a minor to derive the same way, so a change
+// to `deriveCore` must move the minor: bump CONTRACT_VERSION and the doc's
+// version line to the next minor, add a docs/contract/CHANGES.md entry, then
+// pin the new function's hash under the new minor here.
+const DERIVATION_BY_MINOR: Record<string, string> = {
+  '1.1': 'f93a2e95c1f7cc286d178e2887af3a697d4b5441ca9a34cb7a935bd82e4b9388',
+};
+
 describe('the version constant', () => {
+  test('the rules a receipt derives by changed only with a minor bump', () => {
+    const source = readFileSync('src/core/receipt.ts', 'utf8');
+    const start = source.indexOf('function deriveCore(');
+    const end = source.indexOf('\n}\n', start) + 2;
+    expect(start).toBeGreaterThan(-1);
+    const minor = CONTRACT_VERSION.split('.').slice(0, 2).join('.');
+    expect(DERIVATION_BY_MINOR[minor]).toBe(sha256Hex(source.slice(start, end)));
+  });
+
   test('CONTRACT_VERSION matches the canonical contract doc header', () => {
     const header = readFileSync('docs/contract/plan-schema.md', 'utf8').split('\n')[0] ?? '';
     expect(header).toContain(`v${CONTRACT_VERSION}`);
