@@ -127,6 +127,12 @@ export interface IsolateSeam {
   // what the interrupted attempt was holding when its tree was quarantined
   // (D17) — the worker is about to continue inside that work.
   commitStat(cwd: string, ref: string): Promise<string | null>;
+  // Is `ancestor` an ancestor of (or equal to) `descendant` (D17)? The resume
+  // asks it to tell a conductor's commit on top of a quarantined tree (kept)
+  // from a branch rewritten or moved elsewhere (refused). False when it is not
+  // an ancestor, including when the ancestor commit no longer resolves — a
+  // moved branch is not to be trusted either way.
+  isAncestor(cwd: string, ancestor: string, descendant: string): Promise<boolean>;
   // Land verified refs onto the branch checked out in repoRoot (ledger B3).
   // Builds the merges in a throwaway detached worktree; the checkout is only
   // ever touched by a final `merge --ff-only`, so a conflict (LandConflictError),

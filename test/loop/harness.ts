@@ -224,6 +224,11 @@ export interface HarnessOpts {
   ) => { output: string; stdout?: string; exitCode: number };
   // pre-seeded refs (id/sha) — e.g. recorded SHAs for B1 reconciliation tests.
   refs?: Record<string, string>;
+  // Is `ancestor` an ancestor of `descendant` in this in-memory world (D17)?
+  // The in-memory git models no commit graph, so a test states the one fact the
+  // resume cares about; the default is "a commit is its own ancestor and
+  // nothing else is", matching a world where distinct shas share no history.
+  isAncestor?: (ancestor: string, descendant: string) => boolean;
   // closed map tend returns from readClosed.
   closed?: Map<string, string | null>;
   // emitVerdict decision: returns {closed}. Default closes audit-done verdicts.
@@ -587,6 +592,9 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     },
     async refSha(_cwd, ref): Promise<string | null> {
       return git.refs.get(ref) ?? null;
+    },
+    async isAncestor(_cwd, ancestor, descendant): Promise<boolean> {
+      return opts.isAncestor ? opts.isAncestor(ancestor, descendant) : ancestor === descendant;
     },
     // What a commit this git made introduced: known for every commit it made,
     // and unknown — null, like a ref that does not resolve — for a sha a test

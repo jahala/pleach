@@ -253,14 +253,31 @@ async function runUnderLock(
     // tree, refuses the seed; a node with no receipt at all keeps it, the
     // quarantine being then the only account of the work there is.
     const receipt = await deps.receipts.read(node.id);
-    if (receipt !== null && receipt.refs?.quarantineSha !== sha) {
-      await deps.journal.append({
-        event: 'resume-refused',
-        node: node.id,
-        sha,
-        detail: "the node's latest close kept a different tree — the quarantine is superseded",
-      });
-      return undefined;
+    const recorded = receipt?.refs?.quarantineSha;
+    // A conductor's commit ON TOP of the quarantined tree is the one exception
+    // to "the receipt must name this very tree": the tip descends from the
+    // recorded sha, so it IS that work, plus the fix. Standing on the tip keeps
+    // the fix; rebuilding from nothing would meet the tree the fix already
+    // resolved. A tip that does NOT descend from it — the branch reset to an
+    // unrelated commit, or moved elsewhere — is refused exactly as today, and
+    // the journal says why.
+    let moved = false;
+    if (receipt !== null && recorded !== sha) {
+      const kept =
+        recorded !== undefined && (await deps.isolate.isAncestor(opts.repoRoot, recorded, sha));
+      if (!kept) {
+        await deps.journal.append({
+          event: 'resume-refused',
+          node: node.id,
+          sha,
+          detail:
+            recorded === undefined
+              ? "the node's latest close kept a different tree — the quarantine is superseded"
+              : 'the quarantine branch moved to a commit that does not descend from the tree its close recorded — not resumed',
+        });
+        return undefined;
+      }
+      moved = true;
     }
     // How far through a phased list that tree got (D13), from the same receipt
     // that vouched for it. What a quarantine HOLDS is trusted by no gate, but
@@ -283,9 +300,15 @@ async function runUnderLock(
       return undefined;
     }
     const stat = await deps.isolate.commitStat(opts.repoRoot, sha);
-    await deps.journal.append({ event: 'resumed-from-quarantine', node: node.id, sha });
+    await deps.journal.append({
+      event: 'resumed-from-quarantine',
+      node: node.id,
+      sha,
+      ...(moved ? { moved: true } : {}),
+    });
     return {
       sha,
+      ...(moved ? { moved: true } : {}),
       ...(stat !== null ? { stat } : {}),
       ...(redSealedAt !== undefined ? { redSealedAt } : {}),
     };
@@ -1006,8 +1029,17 @@ function buildFacts(
     ...(outcome.audit !== undefined ? { audit: outcome.audit } : {}),
     // What this close stood on when it did not build its own tree (D17) —
     // sealed inside the envelope, so a resumed close is distinguishable from a
-    // fresh one for as long as the receipt exists.
-    ...(resumed !== undefined ? { base: { kind: 'quarantine' as const, sha: resumed.sha } } : {}),
+    // fresh one for as long as the receipt exists. `moved` marks a resume whose
+    // tip had moved past the recorded sha (a conductor's commit on top).
+    ...(resumed !== undefined
+      ? {
+          base: {
+            kind: 'quarantine' as const,
+            sha: resumed.sha,
+            ...(resumed.moved ? { moved: true } : {}),
+          },
+        }
+      : {}),
     // Where the phase ladder left off in the tree this close held (D13) — the
     // one thing a later attempt seeded from that tree needs from this one.
     ...(outcome.redSealedAt !== undefined ? { redSealedAt: outcome.redSealedAt } : {}),

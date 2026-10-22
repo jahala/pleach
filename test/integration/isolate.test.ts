@@ -657,6 +657,64 @@ test('commitStat shows what a commit introduced, and nothing else', async () => 
   }
 });
 
+// ledger: D17 (#152) — a resume stands on a tip that descends from the recorded
+// quarantine sha, so a conductor's fix on top is kept; a tip that does not is
+// refused. The seam's `isAncestor` is that descent test, proven against real
+// git: the recorded sha is an ancestor of a commit made on top of it, never of
+// the commit it stands on, and a sha that does not resolve is not an ancestor.
+test('isAncestor tells a commit on top of the quarantine from an unrelated one', async () => {
+  const repo = await createRepo();
+  try {
+    await makeBranch(repo.path, 'node/anc-base', { 'kept.txt': 'kept\n' });
+
+    const seam = createIsolateSeam(execLocal, repo.path);
+    const node = { id: 'anc-node', needs: [], work: { prompt: 'x' } } as never;
+    const iso = await seam.isolate(node, ['node/anc-base']);
+
+    // The interrupted tree, quarantined as it stands.
+    await writeFile(join(iso.cwd, 'wip.txt'), 'one\ntwo\n');
+    await seam.stage(iso.cwd, ['wip.txt']);
+    const { sha: recorded } = await seam.snapshot(
+      iso.cwd,
+      'quarantine/anc-node',
+      'pleach: quarantined',
+    );
+    await iso.dispose();
+
+    // The conductor fixes the shared test on top of the quarantined tree.
+    await gitIn(repo.path, 'checkout', 'quarantine/anc-node');
+    await writeFile(join(repo.path, 'fix.txt'), 'the fix\n');
+    await gitIn(repo.path, 'add', '-A');
+    await gitIn(repo.path, 'commit', '-m', 'conductor: fix on top');
+    const tip = await gitIn(repo.path, 'rev-parse', 'HEAD');
+    const base = await gitIn(repo.path, 'rev-parse', 'node/anc-base');
+    const branches = (await execLocal(['git', '-C', repo.path, 'branch'], { cwd: repo.path }))
+      .output;
+    const defaultBranch = branches.includes('master') ? 'master' : 'main';
+    await gitIn(repo.path, 'checkout', defaultBranch);
+
+    // The tip descends from the recorded sha — the resume keeps it.
+    expect(await seam.isAncestor(repo.path, recorded, tip)).toBe(true);
+    // The reverse never holds: the recorded sha is not an ancestor of the tip's
+    // parent (nor of an unrelated commit).
+    expect(await seam.isAncestor(repo.path, tip, recorded)).toBe(false);
+    expect(await seam.isAncestor(repo.path, recorded, base)).toBe(false);
+    // A sha that does not resolve is not an ancestor either — the resume must
+    // not trust a tip it cannot prove descends from the close's record.
+    expect(await seam.isAncestor(repo.path, '0'.repeat(40), tip)).toBe(false);
+
+    // Checking out the tip is what hands the worker the conductor's file.
+    const resumed = await seam.isolate(node, [tip]);
+    try {
+      expect(await readFile(join(resumed.cwd, 'fix.txt'), 'utf8')).toBe('the fix\n');
+    } finally {
+      await resumed.dispose();
+    }
+  } finally {
+    await repo.cleanup();
+  }
+});
+
 // ledger: D32 (#131) — a failed gate's writes are inherited by the retry. The seam's
 // recordTree/restoreTree pair is the fix's foundation: record the whole tree
 // through a TEMPORARY index (real index untouched), then rewind the gate's

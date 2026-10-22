@@ -105,6 +105,13 @@ A pending node whose `quarantine/<id>` still resolves is isolated from it. The q
 the checkout base and its dependencies merge onto it as they always do. The worker's first
 prompt names the sha it is resuming and what the tree holds.
 
+A commit on top of the quarantine is kept. When the branch tip descends from the sha the
+close recorded (`git merge-base --is-ancestor`), the resume stands on that tip — a
+conductor's fix on the quarantined tree is part of the work, and the close records
+`facts.base.moved` so it stays distinguishable. A branch that was reset to an unrelated
+commit, or moved elsewhere, is ignored exactly as if it did not descend: the node builds from
+its dependencies, and the journal says why.
+
 Nothing about that tree is trusted. It was never gated, so the whole ladder runs over it,
 from the marker scan through smoke and the cross-provider audit. The close records
 `facts.base`, so a resumed close stays distinguishable from a fresh one forever.
