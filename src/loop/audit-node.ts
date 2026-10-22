@@ -13,6 +13,7 @@ import {
   mintReceipt,
   sha256Hex,
 } from '../core/receipt.ts';
+import type { Redaction } from '../core/redact.ts';
 import { DEFAULT_WORKER_PROVIDER, validatePlan } from '../core/validate.ts';
 import type { ConductorDeps, Isolation } from './deps.ts';
 import { execGateWithRetry, runAuditLadder } from './run-node.ts';
@@ -57,6 +58,9 @@ export interface AuditNodeOpts {
   // its tree kept, rather than leaving a worktree behind.
   signal?: AbortSignal;
   pleachVersion?: string;
+  // Which redaction this close wrote under (issue #107), recorded in the
+  // receipt's facts exactly as a run records it.
+  redaction?: Redaction;
 }
 
 export interface AuditNodeResult {
@@ -147,6 +151,7 @@ async function auditUnderLock(
     gates: [],
     startedAt,
     pleachVersion: opts.pleachVersion ?? '0.0.0-dev',
+    redaction: opts.redaction ?? 'plotplot',
   };
   try {
     return await adjudicate(settle, opts, timeoutMs);
@@ -243,6 +248,7 @@ interface Settle {
   records?: AuditRecord[];
   startedAt: number;
   pleachVersion: string;
+  redaction: Redaction;
 }
 
 // A pass: commit-before-emit (B2). node/<id> and its SHA exist before the
@@ -529,6 +535,7 @@ function auditFacts(settle: Settle, verdict: Verdict, durationMs: number): MintF
     telemetry: verdict.telemetry,
     durationMs,
     pleachVersion: settle.pleachVersion,
+    redaction: settle.redaction,
   };
 }
 

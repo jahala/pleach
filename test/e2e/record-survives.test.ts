@@ -48,7 +48,7 @@ async function pleachRun(
   repo: string,
   planPath: string,
 ): Promise<{ code: number; summary: Summary; stderr: string }> {
-  const proc = Bun.spawn(['bun', MAIN, 'run', planPath, '--repo-root', repo], {
+  const proc = Bun.spawn(['bun', MAIN, 'run', '--no-redact', planPath, '--repo-root', repo], {
     stdin: 'ignore',
     stdout: 'pipe',
     stderr: 'pipe',

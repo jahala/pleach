@@ -148,7 +148,10 @@ describe('fail before spend — through the real CLI', () => {
     // The escape hatch exec names is the one validate names.
     expect(validate.stderr).toContain('bash -lc');
 
-    const run = await pleach(['run', planPath, '--repo-root', repo, '--journal', journal], repo);
+    const run = await pleach(
+      ['run', '--no-redact', planPath, '--repo-root', repo, '--journal', journal],
+      repo,
+    );
     expect(run.code).toBe(2);
     expect(run.stderr).toContain("node 'joined'");
     // Nothing ran: no journal, no lock, no tree, no branch, no work.
@@ -170,7 +173,10 @@ describe('fail before spend — through the real CLI', () => {
     // The plan is well-formed: the fault is the machine's, so validate passes it.
     expect((await pleach(['validate', planPath], repo)).code).toBe(0);
 
-    const run = await pleach(['run', planPath, '--repo-root', repo, '--journal', journal], repo);
+    const run = await pleach(
+      ['run', '--no-redact', planPath, '--repo-root', repo, '--journal', journal],
+      repo,
+    );
     expect(run.code).toBe(1);
     const summary = JSON.parse(run.stdout.trim()) as { failed: string[]; quarantined: string[] };
     expect(summary.failed).toEqual(['fragile']);

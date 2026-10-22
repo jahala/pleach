@@ -7,13 +7,15 @@ import { umbelRunner } from '../adapters/umbel.ts';
 import type { Cast, CastEnvValue } from '../core/cast.ts';
 import { resolveCastSpawn } from '../core/cast.ts';
 import { ConfigError } from '../core/errors.ts';
-import type { ConductorDeps, LedgerSeam, RunnerSeam } from '../loop/deps.ts';
+import type { Redaction } from '../core/redact.ts';
+import type { ConductorDeps, LedgerSeam, Redactor, RunnerSeam } from '../loop/deps.ts';
 import { exec } from '../seams/exec.ts';
 import { resolveGitDir } from '../seams/gitdir.ts';
 import { createIsolateSeam } from '../seams/isolate.ts';
 import { createJournal } from '../seams/journal.ts';
 import { createLockSeam } from '../seams/lock.ts';
 import { createReceiptStore } from '../seams/receipts.ts';
+import { createRedactor } from '../seams/redact.ts';
 
 export type { Cast, CastEnvValue };
 
@@ -187,6 +189,14 @@ export interface BuildDepsOpts {
   // after its durable journal append. The CLI passes a stderr renderer; a
   // library caller can pass anything (or nothing).
   narrate?: (event: Record<string, unknown>) => void;
+  // The plotplot binary that redacts secrets (issue #107); defaults to
+  // 'plotplot'. Ignored when `redaction` is 'off'.
+  plotplotBin?: string;
+  // Which redaction this run writes under; defaults to 'plotplot'. 'off' is the
+  // explicit `--no-redact` opt-out, which injects an identity redactor so the
+  // loop's redact calls are no-ops — recorded on the run-start line and in
+  // every receipt, never a silent fallback.
+  redaction?: Redaction;
 }
 
 // Assemble a ConductorDeps for runPlan from the four pleach-owned seams
@@ -205,14 +215,28 @@ export function receiptDeps(repoRoot: string): Pick<ConductorDeps, 'receipts' | 
 export function buildDeps(opts: BuildDepsOpts): ConductorDeps {
   const pleachDir = join(resolveGitDir(opts.repoRoot), 'pleach');
   const journalPath = opts.journal ?? join(pleachDir, 'journal.jsonl');
+  const redaction = opts.redaction ?? 'plotplot';
+  // The redactor the loop and the journal share. 'off' is the explicit opt-out
+  // (--no-redact): an identity redactor, so every redact call is a no-op and
+  // the run records `redaction: 'off'` — never a silent fallback, which is
+  // what the fail-closed face probe already refused before this runs.
+  const redactor: Redactor =
+    redaction === 'off'
+      ? {
+          async redact(text) {
+            return text;
+          },
+        }
+      : createRedactor(opts.plotplotBin ?? 'plotplot');
   return {
     exec,
     isolate: createIsolateSeam(exec, opts.repoRoot),
     lock: createLockSeam(),
-    journal: createJournal(journalPath, opts.narrate),
+    journal: createJournal(journalPath, opts.narrate, redactor),
     runner: opts.runner,
     ledger: opts.ledger,
     receipts: createReceiptStore(join(pleachDir, 'receipts')),
+    redact: redactor,
     // The conductor's clock: setTimeout is the whole sleep. The loop races this
     // against the run's abort signal, so a backoff is cut short on teardown.
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),

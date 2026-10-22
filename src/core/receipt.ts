@@ -15,6 +15,7 @@
 // Hashing is stdlib computation (no I/O, deterministic) — core stays pure.
 import { createHash } from 'node:crypto';
 import type { Verdict } from './plan.ts';
+import type { Redaction } from './redact.ts';
 
 // Pinned to the canonical doc's header (docs/contract/plan-schema.md); the
 // unit test asserts the pin. The fence makes an old receipt fail derivation
@@ -94,6 +95,10 @@ export interface ReceiptFacts {
   durationMs: number;
   contractVersion: string;
   pleachVersion: string;
+  // Whether this close's text was redacted before it reached disk, and by
+  // whom (`plotplot`) or not at all (`off` — an explicit `--no-redact`). Sealed
+  // INSIDE the envelope: a close that redacted nothing must say so forever.
+  redaction: Redaction;
 }
 
 // Mint stamps contractVersion itself — callers cannot mint under a foreign fence.

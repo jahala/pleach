@@ -73,6 +73,7 @@ describe('three-ways case 0 — payload plan through the scripted runner', () =>
     const r = await pleach(
       [
         'run',
+        '--no-redact',
         join(PAYLOAD, 'plan.json'),
         '--config',
         CONFIG,

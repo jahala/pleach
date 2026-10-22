@@ -62,7 +62,7 @@ describe('pleach land — a hook-refused merge, through the real CLI', () => {
       }),
     );
 
-    const run = await pleach(['run', planPath, '--repo-root', repo], repo);
+    const run = await pleach(['run', '--no-redact', planPath, '--repo-root', repo], repo);
     expect(run.code).toBe(0);
 
     // Move the checked-out branch one commit past the node branch's base.
@@ -84,7 +84,7 @@ describe('pleach land — a hook-refused merge, through the real CLI', () => {
 
     const before = await gitIn(repo, 'rev-parse', 'HEAD');
 
-    const land = await pleach(['land', planPath, '--repo-root', repo], repo);
+    const land = await pleach(['land', '--no-redact', planPath, '--repo-root', repo], repo);
 
     expect(land.code).toBe(1);
     expect(land.stderr).toContain('house rule: no merges from this tree');

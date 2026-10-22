@@ -207,6 +207,14 @@ export interface LedgerSeam {
   emitVerdict(v: Verdict, source: string): Promise<{ closed: boolean }>;
 }
 
+// The redaction port: text in, text with every secret replaced by
+// `[REDACTED]` out. The seam (src/seams/redact.ts) spawns `plotplot redact`;
+// the test harness replaces a fixed fake-secret pattern. Fail closed — a
+// redactor that cannot run throws, it never returns the input untouched.
+export interface Redactor {
+  redact(text: string): Promise<string>;
+}
+
 export interface LockHandle {
   release(): Promise<void>;
 }
@@ -311,6 +319,11 @@ export interface ConductorDeps {
   lock: LockSeam;
   journal: JournalSeam;
   receipts: ReceiptStore;
+  // The redactor, injected like every other seam. The loop calls it on the
+  // agent- and gate-produced text it keeps (the handback, the friction journal)
+  // so the bytes written beside a receipt are redacted before they reach disk;
+  // the journal seam holds its own redactor for the lines it serialises.
+  redact: Redactor;
   // The conductor's own clock: sleep for `ms`. The provider-error backoff
   // (#151) and the settle wait (#127) use it; injected so tests never wait a
   // wall clock, and raced against the run's abort signal by its callers. The

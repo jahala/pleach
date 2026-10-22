@@ -56,7 +56,7 @@ async function pleach(repo: string, args: string[]): Promise<{ code: number; std
 async function run(repo: string, p: unknown): Promise<{ code: number; closed: string[] }> {
   const planPath = join(repo, 'plan.json');
   await Bun.write(planPath, JSON.stringify(p));
-  const r = await pleach(repo, ['run', planPath, '--repo-root', repo]);
+  const r = await pleach(repo, ['run', '--no-redact', planPath, '--repo-root', repo]);
   const summary = JSON.parse(r.stdout.trim()) as { closed: string[] };
   return { code: r.code, closed: summary.closed };
 }

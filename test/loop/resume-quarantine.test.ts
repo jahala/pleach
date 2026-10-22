@@ -421,6 +421,7 @@ describe('opting out leaves the first run’s behaviour (D17)', () => {
       telemetry: {},
       durationMs: 1,
       pleachVersion: '0.0.1-test',
+      redaction: 'plotplot',
     });
     const h = harnessFor(
       { refs: { 'quarantine/x': QSHA } },
@@ -460,6 +461,7 @@ describe('opting out leaves the first run’s behaviour (D17)', () => {
       telemetry: {},
       durationMs: 1,
       pleachVersion: '0.0.1-test',
+      redaction: 'plotplot',
     });
     const h = harnessFor(
       { refs: { 'quarantine/x': QSHA } },

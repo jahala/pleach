@@ -110,7 +110,7 @@ describe('consumer repo — documented pleach.config.ts resolves (#147)', () => 
       }),
     );
 
-    const r = await pleach(['run', 'plan.json', '--repo-root', repo], repo);
+    const r = await pleach(['run', '--no-redact', 'plan.json', '--repo-root', repo], repo);
 
     expect(r.stderr).not.toContain('Cannot find module');
     expect(r.code).toBe(0);

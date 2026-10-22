@@ -7,6 +7,7 @@ import {
 } from '../../src/core/errors.ts';
 import type { Node, Verdict } from '../../src/core/plan.ts';
 import { type Receipt, receiptPrefix } from '../../src/core/receipt.ts';
+import { redactStrings } from '../../src/core/redact.ts';
 import type {
   ArtifactKind,
   ConductorDeps,
@@ -18,6 +19,7 @@ import type {
   LockHandle,
   LockSeam,
   ReceiptListing,
+  Redactor,
   RunnerSeam,
   Worker,
   WorkerResult,
@@ -30,6 +32,12 @@ import type {
 // under test: the subject is the loop's scheduling/retry/close logic, and these
 // seams are the world it composes. Everything funnels through one shared,
 // ordered EventLog so tests can assert sequencing and concurrency invariants.
+
+// The fake secret the harness redactor replaces (issue #107). A loop test
+// plants this in a worker's message and asserts it never reaches the journal
+// or a kept artifact; the redactor turns it into `[REDACTED]`, which is a real
+// transformation — not a passthrough.
+export const FAKE_SECRET = 'fake-secret-0123456789abcdef';
 
 export interface Event {
   kind: string;
@@ -316,6 +324,16 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   const git = new InMemoryGit();
   const emitted: Verdict[] = [];
   const journalEvents: Record<string, unknown>[] = [];
+
+  // The in-memory redactor (issue #107): a real transformation of the one fake
+  // secret the tests plant, never a passthrough — a test can trust that the
+  // bytes it writes were actually redacted, and that ordinary text is left
+  // alone exactly as plotplot leaves it.
+  const redact: Redactor = {
+    async redact(text: string): Promise<string> {
+      return text.replaceAll(FAKE_SECRET, '[REDACTED]');
+    },
+  };
 
   for (const [ref, sha] of Object.entries(opts.refs ?? {})) git.refs.set(ref, sha);
 
@@ -754,9 +772,15 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
   const lock: LockSeam = lockImpl;
 
   // ── journal ─────────────────────────────────────────────────────────────────
+  // Faithful to the real journal seam (src/seams/journal.ts), which redacts
+  // every string an event holds through the injected redactor before the line
+  // is serialised. The in-memory one stores the redacted event, so a loop test
+  // reads the journal exactly as an operator would: secrets replaced.
   const journal: JournalSeam = {
     async append(event): Promise<void> {
-      journalEvents.push(event);
+      journalEvents.push(
+        (await redactStrings(event, (t) => redact.redact(t))) as Record<string, unknown>,
+      );
     },
     async verdictNodes(): Promise<Set<string>> {
       const nodes = new Set<string>();
@@ -854,7 +878,17 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     return opts.sleepScript ? opts.sleepScript(ms) : Promise.resolve();
   };
 
-  const deps: ConductorDeps = { exec, isolate, runner, ledger, lock, journal, receipts, sleep };
+  const deps: ConductorDeps = {
+    exec,
+    isolate,
+    runner,
+    ledger,
+    lock,
+    journal,
+    receipts,
+    sleep,
+    redact,
+  };
 
   return {
     deps,

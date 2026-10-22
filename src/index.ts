@@ -14,6 +14,7 @@ export type { Cast, CastEnvValue } from './core/cast.ts';
 export * from './core/errors.ts';
 export type { AuditResult, Node, Plan, Verdict } from './core/plan.ts';
 export { AuditResultSchema, NodeSchema, PlanSchema, VerdictSchema } from './core/plan.ts';
+export type { Redaction } from './core/redact.ts';
 export { planJsonSchema } from './core/schema-json.ts';
 export type { NodeSummary } from './core/validate.ts';
 export { nodeSummaries, validatePlan } from './core/validate.ts';
@@ -29,6 +30,7 @@ export type {
   LedgerSeam,
   LockHandle,
   LockSeam,
+  Redactor,
   RunnerSeam,
   RunSummary,
   Worker,
@@ -37,3 +39,4 @@ export type {
 export type { LandOpts, LandSummary } from './loop/land.ts';
 export { landPlan } from './loop/land.ts';
 export { runPlan } from './loop/run-plan.ts';
+export { createRedactor } from './seams/redact.ts';

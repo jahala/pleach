@@ -71,7 +71,7 @@ describe('direct-cli runner — e2e with fake headless binaries', () => {
     await writeFile(planPath, JSON.stringify(PLAN));
 
     const proc = Bun.spawn(
-      ['bun', MAIN, 'run', planPath, '--repo-root', repo, '--runner', 'direct-cli'],
+      ['bun', MAIN, 'run', '--no-redact', planPath, '--repo-root', repo, '--runner', 'direct-cli'],
       {
         stdin: 'ignore',
         stdout: 'pipe',
@@ -99,13 +99,16 @@ describe('direct-cli runner — e2e with fake headless binaries', () => {
     const planPath = join(repo, 'plan.json');
     await writeFile(planPath, JSON.stringify(PLAN));
 
-    const proc = Bun.spawn(['bun', MAIN, 'run', planPath, '--runner', 'warp-drive'], {
-      stdin: 'ignore',
-      stdout: 'pipe',
-      stderr: 'pipe',
-      cwd: repo,
-      env: process.env,
-    });
+    const proc = Bun.spawn(
+      ['bun', MAIN, 'run', '--no-redact', planPath, '--runner', 'warp-drive'],
+      {
+        stdin: 'ignore',
+        stdout: 'pipe',
+        stderr: 'pipe',
+        cwd: repo,
+        env: process.env,
+      },
+    );
     const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
 
     expect(code).toBe(2);
@@ -118,7 +121,17 @@ describe('direct-cli runner — e2e with fake headless binaries', () => {
     const configPath = join(import.meta.dir, '../fixtures/pleach.config.custom.ts');
 
     const proc = Bun.spawn(
-      ['bun', MAIN, 'run', planPath, '--config', configPath, '--runner', 'direct-cli'],
+      [
+        'bun',
+        MAIN,
+        'run',
+        '--no-redact',
+        planPath,
+        '--config',
+        configPath,
+        '--runner',
+        'direct-cli',
+      ],
       {
         stdin: 'ignore',
         stdout: 'pipe',

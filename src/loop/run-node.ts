@@ -682,13 +682,17 @@ export async function runNode(
         // A findings log outlives the tree (D14). The parse decides, not the
         // exit code: a `weeder check --strict` that fails wrote the log that
         // says why. The hash is over the stdout bytes verbatim — one sha256,
-        // sealed here and cited by whatever keeps the file.
+        // sealed here and cited by whatever keeps the file. Redacted (issue
+        // #107) before it is hashed and carried: a findings log can quote file
+        // content, and a secret in it must never reach the receipt store, so
+        // the sealed hash and the kept file agree on the redacted bytes.
         const isFindingsLog = parseSarif(stdout) !== null;
-        if (isFindingsLog) smokeStdout = stdout;
+        const keptStdout = isFindingsLog ? await deps.redact.redact(stdout) : undefined;
+        if (keptStdout !== undefined) smokeStdout = keptStdout;
         gates.push({
           gate: 'smoke',
           exitCode,
-          ...(isFindingsLog ? { artifactSha: sha256Hex(stdout) } : {}),
+          ...(keptStdout !== undefined ? { artifactSha: sha256Hex(keptStdout) } : {}),
         });
         const fault = gateFault(exitCode);
         if (fault !== null) {

@@ -76,7 +76,7 @@ describe('gate writes restored — e2e', () => {
     const planPath = join(repo, 'plan.json');
     await Bun.write(planPath, JSON.stringify(plan(`bash ${smoke} ${marker}`)));
 
-    const r = await pleach(repo, ['run', planPath, '--repo-root', repo]);
+    const r = await pleach(repo, ['run', '--no-redact', planPath, '--repo-root', repo]);
     expect(r.code).toBe(0);
     expect((JSON.parse(r.stdout.trim()) as { closed: string[] }).closed).toEqual(['x']);
 
