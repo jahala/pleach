@@ -131,3 +131,11 @@
   this file differs from its content at the commit that last changed the version line, unless the
   version line changed too. Receipts minted under v1.1.5 fail `pleach receipt`'s version fence, as
   the fence is designed to. tend2 must re-vendor this text.
+
+- **Receipt, not schema (2026-10-22)** — the contract follows semantic versioning from v1.1.5, where
+  receipts began, and the receipt version fence compares major.minor only. A patch changes the
+  contract's text and never how a receipt derives; a change to how a receipt derives bumps the minor at
+  least, and `test/unit/receipt.test.ts` pins `deriveCore` to the minor it belongs to, so that change
+  cannot land under a patch. The v1.1.6 entry above says v1.1.5 receipts fail `pleach receipt`; that
+  held for the few hours between the two changes and no longer does. `@agent-contract/plan` is
+  untouched: no schema-block change and nothing for tend or umbel to re-vendor.
