@@ -105,6 +105,7 @@ Flags (run):
                           Re-cast a node on this provider when an attempt comes back dead —
                           a provider outage, not a red gate. Without it a dead attempt settles
                           the node instead of spending a second attempt on the same outage.
+                          A spawn refused for a sign-in (exit 126) re-casts the same way.
                           The audit diversity rule is re-checked against the fallback.
   --fresh                 Ignore quarantine/<id> and build every pending node from its
                           dependencies alone. By default a node that has an unverified tree
@@ -175,6 +176,8 @@ nodes execute. The JSON summary's "alreadyVerified" lists what was skipped.
 A 'blocked' node means its worker stopped at a permission/approval prompt. The
 session is terminated (nothing to attach to); the prompt text is recorded in
 the journal as blockedReason. Fix --permission-mode / --allowed-tools and
+re-run. A spawn the provider refused because its CLI needs a person to sign in
+(exit 126) settles blocked too: sign in once, outside the conductor, then
 re-run. A failed node's uncommitted work is preserved on quarantine/<id> for
 inspection (summary field "quarantined"); it is never treated as verified.
 

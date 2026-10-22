@@ -140,10 +140,16 @@ export class AuditParseError extends Error {
 export class WorkerSpawnError extends Error {
   readonly name = 'WorkerSpawnError';
   readonly detail: string;
+  // The spawn's own exit code. The loop reads it to name a refusal: umbel exits
+  // 126 when the provider's CLI needs a person to sign in (issue #128), and a
+  // retry meets the same screen. Every non-zero spawn carries its code here
+  // instead of burying it in the message.
+  readonly exitCode: number;
 
-  constructor(detail: string) {
+  constructor(detail: string, exitCode: number) {
     super(`worker spawn failed: ${detail}`);
     this.detail = detail;
+    this.exitCode = exitCode;
   }
 }
 

@@ -325,7 +325,7 @@ describe('every verdict journal line carries `spawned` beside the cast it names'
   test('a node that throws before its worker spawns: the failed line says spawned false', async () => {
     const h = makeHarness();
     h.deps.runner.spawnWorker = async () => {
-      throw new WorkerSpawnError('umbel spawn exited 1: no such provider');
+      throw new WorkerSpawnError('umbel spawn exited 1: no such provider', 1);
     };
     await runPlan(plan([{ id: 'p', work: { prompt: 'build p' } }]), h.deps, OPTS);
 

@@ -1,4 +1,5 @@
-import { WorkerSeamError } from '../core/errors.ts';
+import { SPAWN_FAILED_EXIT } from '../core/classify.ts';
+import { WorkerSeamError, WorkerSpawnError } from '../core/errors.ts';
 import type { RunnerSeam, Worker, WorkerResult } from '../loop/deps.ts';
 
 // directCliRunner — RunnerSeam over headless agent CLIs (`claude -p`,
@@ -145,7 +146,19 @@ export function directCliRunner(opts: DirectCliOpts = {}): RunnerSeam {
           turnUsed = true;
           const argv = buildArgv(spec.provider, prompt, spec.model);
 
-          const handle = spawn(argv, spec.cwd, spec.env);
+          // A CLI the environment cannot start (not on PATH) is the spawn's
+          // own fault, named with the exec seam's 127 convention — a typed
+          // WorkerSpawnError the loop classifies like any other spawn failure.
+          let handle: SpawnHandle;
+          try {
+            handle = spawn(argv, spec.cwd, spec.env);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            throw new WorkerSpawnError(
+              `direct-cli could not start '${argv[0]}': ${message}`,
+              SPAWN_FAILED_EXIT,
+            );
+          }
           inFlight = handle;
 
           // ledger D1: a hung CLI must not consume a slot forever — kill on
