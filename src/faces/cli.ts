@@ -18,6 +18,7 @@ import {
   TendTransportError,
 } from '../core/errors.ts';
 import { type Plan, PlanSchema } from '../core/plan.ts';
+import { unreapedSessions } from '../core/reap.ts';
 import { receiptPrefix } from '../core/receipt.ts';
 import type { Redaction } from '../core/redact.ts';
 import {
@@ -82,10 +83,11 @@ Usage:
                                      same plan before it takes the lock.
   pleach schema                      Emit the plan contract as JSON Schema (for planners / codegen)
   pleach receipt <node> [flags]      Verify a settled node's close receipt (--repo-root applies)
-  pleach clean [flags]               Sweep a killed run's leavings: stale locks + orphaned pleach
-                                     worktrees (--repo-root applies). Refuses the worktree sweep
-                                     while a LIVE lock exists — a run may be in flight. Worker
-                                     sessions are umbel's; list them with \`umbel ls\`.
+  pleach clean [flags]               Sweep a killed run's leavings: stale locks, orphaned pleach
+                                     worktrees, and the worker sessions its journal names
+                                     (--repo-root applies). Refuses the sweep while a LIVE lock
+                                     exists — a run may be in flight. --dry-run lists without
+                                     changing.
   pleach --help
   pleach --version
 
@@ -172,6 +174,10 @@ Flags (status / wait):
 Flags (audit-wrap):
   --check ID              The check id the verdict block reports (default: the command text)
 
+Flags (clean):
+  --dry-run               List the stale locks, worker sessions and worktrees that would be
+                          swept, without changing anything
+
 Landing: verified work is published as node/<id> branches; \`pleach land\` merges
 the plan's sinks onto the branch checked out in --repo-root. It refuses unless
 EVERY plan node is verified (with --sinks, unless every named one is), and a
@@ -246,6 +252,7 @@ interface Flags {
   landGates: string[];
   now: boolean;
   quiet: boolean;
+  dryRun: boolean;
   node?: string;
   timeoutSeconds?: number;
   runnerKind?: 'umbel' | 'direct-cli';
@@ -285,6 +292,7 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
     landGates: [],
     now: false,
     quiet: false,
+    dryRun: false,
   };
   if (process.env.PLEACH_TEND_MODULE !== undefined) {
     flags.tendModule = process.env.PLEACH_TEND_MODULE;
@@ -401,6 +409,9 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
         break;
       case '--quiet':
         flags.quiet = true;
+        break;
+      case '--dry-run':
+        flags.dryRun = true;
         break;
       case '--runner': {
         const kind = takeValue(arg, next);
@@ -878,19 +889,56 @@ async function verbWait(planPath: string, flags: Flags): Promise<number> {
 }
 
 // D12 (bandung P5): sweep a killed run's leavings. Stale locks always clear;
-// the worktree sweep refuses while any LIVE lock exists — a run may be in
-// flight, and cleaning under it would be the tmux-kill-server lesson replayed.
+// the session and worktree sweeps refuse while any LIVE lock exists — a run may
+// be in flight, and cleaning under it would be the tmux-kill-server lesson
+// replayed. The sessions come from the journal (issue #115): every spawn the
+// loop recorded without a matching kill is reaped through the runner the same
+// way `run` builds it. `--dry-run` lists the same leavings and changes nothing.
 async function verbClean(flags: Flags): Promise<number> {
-  const { removed, live } = await sweepStaleLocks(flags.repoRoot);
-  for (const path of removed) process.stdout.write(`removed stale lock ${path}\n`);
+  const dry = flags.dryRun;
+  const { removed, live } = await sweepStaleLocks(flags.repoRoot, { dryRun: dry });
+  for (const path of removed) {
+    process.stdout.write(`${dry ? 'would remove' : 'removed'} stale lock ${path}\n`);
+  }
   if (live.length > 0) {
     for (const path of live) process.stdout.write(`live lock ${path} — a run may be in flight\n`);
     process.stdout.write('worktree sweep refused while a live lock exists\n');
     return 3;
   }
-  const worktrees = await sweepOrphanWorktrees(exec, flags.repoRoot);
-  for (const path of worktrees) process.stdout.write(`removed orphaned worktree ${path}\n`);
-  if (removed.length === 0 && worktrees.length === 0) {
+
+  const journal = createJournal(flags.journal ?? defaultJournalPath(flags.repoRoot));
+  const unreaped = unreapedSessions(await journal.readAll());
+  if (unreaped.length > 0) {
+    const { runner } = await resolveSeams(seamsOpts(flags));
+    if (runner.reap === undefined) {
+      process.stdout.write('the runner cannot reap worker sessions\n');
+    } else if (dry) {
+      for (const s of unreaped) {
+        process.stdout.write(`would reap worker session ${s.session} (${s.node})\n`);
+      }
+    } else {
+      for (const s of unreaped) {
+        const outcome = await runner.reap(s.session);
+        process.stdout.write(
+          outcome === 'killed'
+            ? `killed worker session ${s.session} (${s.node})\n`
+            : `worker session ${s.session} already gone (${s.node})\n`,
+        );
+        await journal.append({
+          event: 'worker-reaped',
+          node: s.node,
+          session: s.session,
+          outcome,
+        });
+      }
+    }
+  }
+
+  const worktrees = await sweepOrphanWorktrees(exec, flags.repoRoot, { dryRun: dry });
+  for (const path of worktrees) {
+    process.stdout.write(`${dry ? 'would remove' : 'removed'} orphaned worktree ${path}\n`);
+  }
+  if (removed.length === 0 && unreaped.length === 0 && worktrees.length === 0) {
     process.stdout.write('nothing to clean\n');
   }
   return 0;

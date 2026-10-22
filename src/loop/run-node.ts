@@ -409,6 +409,7 @@ export async function runNode(
           }
         }
         if (worker !== null) opts.onSpawn?.();
+        await journalWorkerSpawned(deps, node.id, worker);
         try {
           result = await runWork(node, worker, deps.exec, cwd, {
             timeoutMs,
@@ -428,6 +429,7 @@ export async function runNode(
           });
         } catch (err) {
           await worker?.kill();
+          await journalWorkerKilled(deps, node.id, worker);
           if (err instanceof GateCannotRunError) {
             return handBack(
               settleCannotRun(
@@ -451,6 +453,7 @@ export async function runNode(
           throw err;
         }
         await worker?.kill();
+        await journalWorkerKilled(deps, node.id, worker);
         handback = result.finalMessage;
         readFailure = result.readFailure;
         // A completed stop whose read succeeded but returned nothing is named
@@ -950,12 +953,14 @@ async function runAudit(
       model: audit.model,
       cwd,
     });
+    await journalWorkerSpawned(deps, node.id, worker);
     let res: WorkerResult;
     try {
       await worker.send(buildAuditPrompt(audit.command));
       res = await worker.wait({ timeoutMs, signal: wait.signal, idleMs: wait.idleMs });
     } finally {
       await worker.kill();
+      await journalWorkerKilled(deps, node.id, worker);
     }
 
     // A non-stop auditor produced no verdict to read — it died, timed out, or
@@ -995,6 +1000,31 @@ async function runAudit(
     return { kind: 'pass', result: parsed };
   }
   return { kind: 'parse-exhausted' };
+}
+
+// ── session bookkeeping (#115) ─────────────────────────────────────────────
+//
+// The loop names every session it spawns and kills so `pleach clean` can reap
+// what a crash left alive. A worker without a `session` (a runner that cannot
+// name one, e.g. direct-cli) is nothing to record — the journal lines only ever
+// carry a session the runner itself supplied.
+
+async function journalWorkerSpawned(
+  deps: ConductorDeps,
+  nodeId: string,
+  worker: Worker | null,
+): Promise<void> {
+  if (worker === null || worker.session === undefined) return;
+  await deps.journal.append({ event: 'worker-spawned', node: nodeId, session: worker.session });
+}
+
+async function journalWorkerKilled(
+  deps: ConductorDeps,
+  nodeId: string,
+  worker: Worker | null,
+): Promise<void> {
+  if (worker === null || worker.session === undefined) return;
+  await deps.journal.append({ event: 'worker-killed', node: nodeId, session: worker.session });
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

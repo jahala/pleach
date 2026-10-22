@@ -53,6 +53,9 @@ export const KINDS: Record<string, Kind> = {
   // record kept or refused along the way.
   'node-start': 'node.lifecycle',
   blocked: 'node.lifecycle',
+  'worker-spawned': 'node.lifecycle',
+  'worker-killed': 'node.lifecycle',
+  'worker-reaped': 'node.lifecycle',
   'phase-commit': 'node.lifecycle',
   'provider-error-backoff': 'node.lifecycle',
   'set-aside': 'node.lifecycle',

@@ -295,6 +295,10 @@ export interface HarnessOpts {
   // The default records what was asked and resolves at once; override to hold
   // the wait or fire the run's abort inside it (the abort-during-backoff test).
   sleepScript?: (ms: number) => Promise<void>;
+  // The session name each spawned worker carries (issue #115). When set, the
+  // worker reports it and the loop journals `worker-spawned`/`worker-killed`,
+  // exactly as the umbel adapter does. Absent, workers carry no session.
+  workerSession?: (ctx: SpawnCtx) => string;
 }
 
 export interface Harness {
@@ -673,10 +677,12 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
       liveWorkers += 1;
       if (liveWorkers > state.maxConcurrent) state.maxConcurrent = liveWorkers;
       log.push(`spawn:${role}`, nodeId, `concurrent=${liveWorkers}`);
+      const session = opts.workerSession?.(ctx);
 
       let waitIndex = 0;
       let alive = true;
       return {
+        ...(session !== undefined ? { session } : {}),
         async send(text) {
           log.push('send', nodeId, `${role}:${text}`);
         },

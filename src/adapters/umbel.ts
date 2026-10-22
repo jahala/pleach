@@ -258,7 +258,7 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
       await exec([bin, 'kill', name], { cwd, env: mergeEnv(), timeoutMs: 10_000 });
     }
 
-    return { send, wait, kill, __name: name };
+    return { send, wait, kill, session: name, __name: name };
   }
 
   // ── gatherWorkerResult ────────────────────────────────────────────────────
@@ -339,7 +339,29 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
     };
   }
 
-  return { spawnWorker, providers: UMBEL_PROVIDERS };
+  // ── reap ──────────────────────────────────────────────────────────────────
+  //
+  // Reap a session this runner spawned (issue #115): `pleach clean` names the
+  // sessions the journal proves pleach spawned, and this is how umbel ends them.
+  // A `status` that does not answer is a session umbel never knew or forgot.
+  // A dead session keeps its record (status answers with `alive: false`), and
+  // the kill clears that record from `umbel ls` too; only a session umbel
+  // reported alive counts as killed. Non-zero kill is tolerated — the session
+  // may have died between the two. umbel finds sessions by name in its state
+  // root, so no cwd matters here.
+
+  async function reap(session: string): Promise<'killed' | 'gone'> {
+    const status = await exec([bin, 'status', '--json', session], {
+      cwd: process.cwd(),
+      env: mergeEnv(),
+    });
+    if (status.exitCode !== 0) return 'gone';
+    const alive = reportedAlive(status.output);
+    await exec([bin, 'kill', session], { cwd: process.cwd(), env: mergeEnv(), timeoutMs: 10_000 });
+    return alive ? 'killed' : 'gone';
+  }
+
+  return { spawnWorker, reap, providers: UMBEL_PROVIDERS };
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -355,6 +377,22 @@ const READ_OUTPUT_TAIL = 2000;
 
 function readOutputTail(output: string): string {
   return output.slice(-READ_OUTPUT_TAIL);
+}
+
+// `umbel status --json <name>` prints a one-element array; `alive` is its
+// liveness. Anything else (unparseable, no `alive` field) is read as alive, so
+// a session umbel still answers for is never reported gone on a guess.
+function reportedAlive(output: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(output);
+    const first = Array.isArray(parsed) ? (parsed[0] as unknown) : undefined;
+    if (typeof first === 'object' && first !== null && 'alive' in first) {
+      return (first as { alive: unknown }).alive !== false;
+    }
+  } catch {
+    // fall through: unreadable status is treated as alive
+  }
+  return true;
 }
 
 function randomHex(nibbles: number): string {
