@@ -75,6 +75,14 @@ export interface ReceiptFacts {
   // The node's acceptance AS RUN — the evolution-invalidation record. A later
   // run whose plan carries different strings must not skip-trust this close.
   acceptance: { smoke?: string; audit?: string };
+  // The audit command this close actually ran, recorded so a later `pleach
+  // audit` can tell "the same question re-asked" (refused) from "a changed
+  // audit" (allowed) when the latest close was itself a re-audit (D17). Absent
+  // for a node with no audit and for a receipt minted before the field existed
+  // — 'unknown', which a re-audit may cross once. `canonicalJson` drops
+  // undefined, so a receipt without it hashes exactly as it did before the
+  // field existed.
+  auditCommand?: string;
   degraded: string[]; // every check the plan never configured
   stagedFiles: number;
   telemetry: Verdict['telemetry'];

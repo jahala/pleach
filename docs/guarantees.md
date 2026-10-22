@@ -47,6 +47,12 @@ receipt of every close before it is still on file. It refuses a node whose lates
 is not a quarantine with a green smoke, because an audit verdict over an unproven build
 proves nothing.
 
+A re-audit is one question answered once: after a re-audit closes, asking `pleach audit`
+again for the same `accept.audit.command` is refused (the command is unchanged). Change the
+command and the re-audit is a different audit, so it runs. Every audit close records the
+command it ran; a close from before that record existed has no command to compare, and the
+next re-audit is allowed once — the close it writes then records the command.
+
 ## A provider outage is paid once
 
 An attempt that comes back `dead` never got a working session, which is an outage rather
