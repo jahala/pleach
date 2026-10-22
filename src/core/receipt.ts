@@ -20,7 +20,7 @@ import type { Redaction } from './redact.ts';
 // Pinned to the canonical doc's header (docs/contract/plan-schema.md); the
 // unit test asserts the pin. The fence makes an old receipt fail derivation
 // honestly ("wrong contract version"), never mysteriously.
-export const CONTRACT_VERSION = '1.1.5';
+export const CONTRACT_VERSION = '1.1.6';
 
 export interface GateRecord {
   gate: string; // ladder step: 'setup' | 'marker' | 'hygiene[:<kind>]' | 'smoke' | 'audit-tamper'
