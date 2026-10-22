@@ -113,13 +113,21 @@
   still verifies. `deriveStatus` does not read it: where a tree left off changes what an attempt
   runs next, never what a close's facts imply.
 
-- **v1.1.6 (2026-10-22)** — the `Worker.wait` opts' `idleMs?: number` in the informative "Seam
-  interfaces" block, the text change that went in under v1.1.5 without a version bump (issue #123).
-  That decision was wrong: the canonical text changed, so a reader pinning "plan schema v1.1.5" now
-  means one of two texts. The version number is the only thing a consumer can pin cheaply, so it now
-  moves with any change to the canonical text, seam block included: `test/unit/plan-version.test.ts`
-  fails when `docs/contract/plan-schema.md` differs from its content at the commit that last changed
-  the version line, unless the version line changed too. This entry corrects the "Seam prose, not
-  schema" entry below — history stays as written, but its "no version bump" was wrong. Receipts minted
-  under v1.1.5 now fail `pleach receipt`'s version fence, exactly as the fence is designed to, and
-  tend2 must re-vendor this text.
+- **v1.1.6 (2026-10-22)** — the version catches up with the text. Five edits went into this file
+  under an unchanged v1.1.5 title (issue #123), so a reader pinning "plan schema v1.1.5" meant one of
+  two texts:
+  - the informative "Seam interfaces" block: `Worker.wait`'s opts gained `idleMs?: number`
+    (ledger D16), and `WorkerResult.reason` gained `file`, `pattern` and `provider-error`;
+  - "Self-integral audits" is marked tend2-ratified (2026-08-17), no longer a draft;
+  - the self-integral section gained one sentence: the audit command emits the audit egress fence
+    itself. That sentence still says "pending ratification": v1.1.6 publishes it, and tend2 has
+    not ratified it yet;
+  - the "Shared law" paragraph names tend2's `docs/bridge/working-together.md` as its explanatory
+    home and no longer cites a private deliberation archive.
+
+  The "Seam prose, not schema" entry above says the `idleMs` change needed no version bump. That was
+  wrong, and history stays as written: this entry corrects it. The version line now moves with any
+  change to the canonical text, the seam block included. `test/unit/plan-version.test.ts` fails when
+  this file differs from its content at the commit that last changed the version line, unless the
+  version line changed too. Receipts minted under v1.1.5 fail `pleach receipt`'s version fence, as
+  the fence is designed to. tend2 must re-vendor this text.

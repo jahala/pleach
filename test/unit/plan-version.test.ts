@@ -11,7 +11,7 @@ import { join } from 'node:path';
 // the commit that last changed the version line, found with `git log -G`.
 // ---------------------------------------------------------------------------
 
-const ROOT = new URL('../..', import.meta.url).pathname;
+const ROOT = join(import.meta.dir, '../..');
 const CONTRACT_REL = 'docs/contract/plan-schema.md';
 const CONTRACT_PATH = join(ROOT, CONTRACT_REL);
 
