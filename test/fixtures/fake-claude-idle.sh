@@ -18,6 +18,9 @@
 
 set -euo pipefail
 
+# shellcheck source=fake-turn-start.sh
+source "$(dirname "$0")/fake-turn-start.sh" "$@"
+
 SESSION_ID="${UMBEL_SESSION_ID:-fake-session}"
 WORK_FILE="${FAKE_CLAUDE_IDLE_FILE:-idle-work.txt}"
 
@@ -35,6 +38,7 @@ touch "${JSONL_FILE}"
 
 while IFS= read -r line || [[ -n "${line:-}" ]]; do
   [[ "${line:-}" == "/exit" ]] && exit 0
+  fire_turn_start
   # Work started: a file in the tree, one line in the pane. Written once and
   # renamed into place, never truncated again: umbel's kill closes stdin, which
   # runs this body one last time while pleach snapshots the tree, and a

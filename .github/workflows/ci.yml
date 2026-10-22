@@ -29,7 +29,7 @@ jobs:
     env:
       # umbel has no releases, so a commit is the pin. Bump it once canary.yml's
       # umbel-head job is green on the new commit.
-      UMBEL_REF: 74cd093a5d4c6df0831fe1056c5a8f23dc1075b1
+      UMBEL_REF: 998679613a9a469c6e8c0997a88e90702d384008
     steps:
       - name: Install tmux
         run: sudo apt-get update && sudo apt-get install -y tmux

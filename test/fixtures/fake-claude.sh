@@ -11,6 +11,9 @@
 
 set -euo pipefail
 
+# shellcheck source=fake-turn-start.sh
+source "$(dirname "$0")/fake-turn-start.sh" "$@"
+
 DELAY="${FAKE_CLAUDE_DELAY:-0}"
 SESSION_ID="${UMBEL_SESSION_ID:-fake-session}"
 
@@ -72,5 +75,6 @@ write_turn() {
 # Read prompts from stdin in a loop; write a turn per line; exit on /exit or EOF
 while IFS= read -r line || [[ -n "${line:-}" ]]; do
   [[ "${line:-}" == "/exit" ]] && exit 0
+  fire_turn_start
   write_turn "${line:-}"
 done
