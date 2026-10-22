@@ -316,6 +316,29 @@ describe('the handback is kept beside the receipt (D17)', () => {
     expect(handbackEvents(h)).toHaveLength(2);
   });
 
+  test('a close that keeps no handback forgets what an earlier close left', async () => {
+    const h = makeHarness({
+      // The first close hands back a message; the second run's worker dies, so
+      // no worker reached a stop and there is nothing to keep.
+      waitScript: (ctx) =>
+        ctx.role === 'build'
+          ? ctx.spawnIndex === 0
+            ? stop({ finalMessage: HANDBACK })
+            : stop({ reason: 'dead', finalMessage: '' })
+          : stop(),
+    });
+
+    expect((await run(h)).closed).toEqual(['x']);
+    expect(h.artifacts.get(`${RECEIPTS}/x.handback.md`)).toBe(HANDBACK);
+
+    expect((await run(h)).closed).toEqual([]);
+    // The artifact name is the node's, not the close's: left alone, the first
+    // close's message would be read as this one's.
+    expect(h.artifacts.has(`${RECEIPTS}/x.handback.md`)).toBe(false);
+    expect(keptPaths(h).handback).toBeUndefined();
+    expect(handbackEvents(h)).toHaveLength(1);
+  });
+
   test('a stop whose read failed keeps a handback naming the failure, and journals handback-read-failed', async () => {
     const tail = 'umbel: no transcript on disk yet\n';
     const h = makeHarness({
