@@ -287,6 +287,7 @@ describe('a re-run resumes from the quarantined tree (D17)', () => {
   });
 });
 
+// ledger: D38 — a conductor's commit on top of the quarantine is resumed from.
 // The interrupted close's own account: it kept the tree at RECORDED, and the
 // branch has since moved. What the branch moved TO decides whether the resume
 // stands on it (a conductor's commit on top) or refuses it (a rewrite elsewhere).

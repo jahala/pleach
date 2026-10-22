@@ -1,3 +1,4 @@
+// ledger: D40
 // issue #128 — a spawn that exits 126 means the provider needs a person to sign
 // in before its CLI can work (umbel#105; plotplot contracts/runner.md pins 126
 // as the code and class of the wait reason `input`). umbel refuses such a spawn

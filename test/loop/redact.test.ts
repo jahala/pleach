@@ -1,3 +1,4 @@
+// ledger: D37
 // issue #107 — a secret in a worker's output never reaches disk. Agent text
 // reaches pleach's records in two places: the journal (a blocked node's
 // `blockedReason`, a gate's output tail) and the artifacts kept beside a

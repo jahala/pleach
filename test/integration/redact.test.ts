@@ -1,3 +1,4 @@
+// ledger: D37
 // issue #107 — the redaction seam, against the real plotplot binary. The seam
 // runs `plotplot redact` with the text on stdin and returns stdout; a secret in
 // the input never comes back, ordinary text is left alone, and a binary that

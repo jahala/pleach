@@ -1,3 +1,4 @@
+// ledger: D37
 // issue #107 — redaction at the face, as a real process. Two edges the loop
 // suite cannot reach: a run refused (exit 2) before any journal line when the
 // redactor binary is missing, and `--no-redact` letting a run proceed with its

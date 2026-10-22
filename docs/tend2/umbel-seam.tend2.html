@@ -124,9 +124,11 @@ Stochastic agents are driven through one spawn/send/wait/kill boundary, with dea
 - [x] (code) Dead: killing tmux session out-of-band returns reason=dead. (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @bfa2ba4 · by cli
 - [x] (code) Spawn failure on nonexistent cwd throws WorkerSpawnError. (inferred from test/integration/umbel-seam.test.ts) · test/integration/umbel-seam.test.ts @38c3730 · by cli
 
+- [ ] (code) A spawn that exits 126 (the provider needs a person to sign in) settles the node blocked after one spawn, its reason naming the sign-in, its tree quarantined; with a usable fallback provider the node is re-cast once and can close · test/loop/spawn-needs-signin.test.ts
 ## For #developer #operator
 
 ## Tried
 - 2026-08-18 migrated from v1 (docs/tend/features/umbel-seam.tend.html) by `loop migrate`
+- 2026-10-22 D40 (#128), built by a DeepSeek V4 Pro worker through umbel; reverting only the loop's routing turns all four loop tests red. The same day umbel 9986796 began requiring a turn-start hook on send; the fake claude workers now fire it (#157).
 </script>
 <script src="./loop.js"></script>

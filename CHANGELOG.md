@@ -7,12 +7,16 @@ Entries carry the defect-ledger id where one exists (`D8`, `D21`, ...); the ledg
 ## [Unreleased]
 
 ### Added
+- Secret redaction: everything pleach writes from agents or gates goes through `plotplot redact` first. `run`, `land` and `audit` refuse to start without `plotplot` (install: `cargo install --locked --git https://github.com/jahala/plotplot`); `--no-redact` opts out explicitly and is recorded on every run and receipt (D37).
 - Named casts in `pleach.config.ts`: a node names a cast (provider, model and environment) as its provider, so one plan can reach two endpoints of one CLI, such as Claude by subscription and DeepSeek through Claude Code. `validate` and `run` refuse a provider name that is neither the runner's nor a cast's, and `run` refuses a cast whose variable is unset before it starts (D36).
 - `--provider-backoff-ms` and `--settle-ms` (or `$PLEACH_SETTLE_MS`) on `pleach run` (D34, D35).
 - `pleach status <plan>` and `pleach wait <plan>`: a run's state read from its journal, so a conductor stops polling the log. `wait` blocks until the run (or `--node`) settles and exits 0 when everything is closed or was already verified, 1 otherwise, 124 on `--timeout` (D31).
 - `pleach audit-wrap -- <check>` turns any check into the `tend-audit-result` block an audit command must print (D33).
 
 ### Fixed
+- A commit you add on top of a blocked node's `quarantine/<id>` is kept when the next run resumes it (D38).
+- `pleach audit` re-audits again once the plan's audit command has changed (D39).
+- A worker whose provider needs a person to sign in settles blocked at once, or moves to `--fallback-provider`, instead of retrying into the sign-in screen (D40).
 - A provider or network error waits and runs again inside the same attempt, so a short outage no longer burns a node's attempts; once the waits are spent the verdict names the cause (D34).
 - Gates wait until a worker's tree has stopped changing, so a background command still writing is no longer judged half-done (D35).
 - Worker environment values reach umbel by name only, never on the command line where `ps` shows them (#126, D36).

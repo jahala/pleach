@@ -495,6 +495,32 @@ checkpoint but have different lifetimes and trust domains.**
   runner declares nor a cast, and `run` refuses a cast whose variable is unset before it takes the lock.
   Tests: `test/unit/cast.test.ts`, `test/unit/validate-providers.test.ts`, `test/unit/umbel-seam.test.ts`,
   `test/e2e/casts.test.ts`.
+- **D37 ⛔ [field] Secrets reached the journal, the run log and the receipts.** jahala/pleach#107 (plotplot#52).
+  An agent that read a `.env` file, or a gate that printed a token, put the secret on disk. **Fix:** every
+  write of agent- or gate-produced text goes through a redact seam backed by `plotplot redact` (stdin to
+  stdout, fails closed): every string of every journal event (one plotplot call per event, its strings
+  joined by a boundary line; a result that does not split back fails closed), the handback and friction
+  artifacts beside receipts, and the smoke gate's findings log before its hash is sealed. `run`, `land` and
+  `audit` prove the redactor works before the lock and refuse with exit 2, naming the install, when
+  `plotplot` is missing; `--no-redact` is the explicit opt-out, recorded as `redaction` on `run-start` and in
+  every receipt. Tests: `test/unit/redact-strings.test.ts`, `test/loop/redact.test.ts`,
+  `test/integration/redact.test.ts`, `test/e2e/redact.test.ts`.
+- **D38 ⚠ [field] A fix committed on top of a quarantine was ignored on resume.** jahala/pleach#152
+  (jahala/cfanalytics, 2026-10-21): resume refused the seed whenever the branch tip differed from the sha the
+  receipt recorded, so a conductor's fix on top was dropped and the worker met the old test again. **Fix:**
+  a tip that descends from the recorded sha is resumed from, recorded as `moved` on the
+  `resumed-from-quarantine` line and in `facts.base`; a tip that does not descend is refused as before, the
+  journal saying why. Tests: `test/loop/resume-quarantine.test.ts`.
+- **D39 ◦ [field] A second re-audit was refused even after the audit command was fixed.** jahala/pleach#154
+  (split from #149). **Fix:** every audit close records the audit command it ran; `pleach audit` allows a
+  further re-audit when the plan's command differs from the last re-audit's (once, when a pre-change receipt
+  recorded none), and refuses an unchanged command saying what would allow it. Tests:
+  `test/loop/reaudit-changed-command.test.ts`.
+- **D40 ⚠ [field] A spawn that needs a person to sign in was retried into the same screen.** jahala/pleach#128
+  (umbel exit 126). **Fix:** `WorkerSpawnError` carries the exit code; `classify` names 126 a sign-in
+  refusal; the node re-casts once on a usable `--fallback-provider` (as a dead attempt does, D17), and
+  otherwise settles blocked at once with umbel's message and the next step, its tree quarantined. Tests:
+  `test/unit/classify.test.ts`, `test/loop/spawn-needs-signin.test.ts`, `test/unit/umbel-seam.test.ts`.
 
 ### Verified-sound (attacks refuted — do not relitigate)
 
