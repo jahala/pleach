@@ -80,6 +80,18 @@ describe('narrateEvent (W1 narration floor)', () => {
     expect(line).toContain('quarantine/api');
   });
 
+  test('handback-read-failed names the node, the read exit, and that a note stands in', () => {
+    const line = narrateEvent({
+      event: 'handback-read-failed',
+      node: 'api',
+      exitCode: 1,
+      outputTail: 'no transcript',
+    });
+    expect(line).toContain('api');
+    expect(line).toContain('1');
+    expect(line).toContain('note');
+  });
+
   test('run-end summarizes the buckets', () => {
     const line = narrateEvent({
       event: 'run-end',

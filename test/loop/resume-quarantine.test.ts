@@ -18,7 +18,7 @@ import { PlanSchema } from '../../src/core/plan.ts';
 import { canonicalJson, mintReceipt, type Receipt, rehash } from '../../src/core/receipt.ts';
 import type { RunSummary } from '../../src/loop/deps.ts';
 import { runPlan } from '../../src/loop/run-plan.ts';
-import { type Harness, type HarnessOpts, makeHarness } from './harness.ts';
+import { type Harness, type HarnessOpts, makeHarness, stop } from './harness.ts';
 
 const OPTS = { repoRoot: '/r', pleachVersion: '0.0.1-test' };
 const SOURCE = 'docs/tend2/nothing-is-lost.tend2.html';
@@ -375,6 +375,85 @@ describe("a conductor's commit on top of the quarantine is kept (D17)", () => {
     expect(refusedLines(h)).toHaveLength(1);
     expect(refusedLines(h)[0]).toMatchObject({ node: 'x', sha: UNRELATED });
     expect(refusedLines(h)[0].detail).toContain('does not descend');
+  });
+});
+
+// ledger: D17 / issue #109 — a phased node quarantined after its red seal,
+// resumed on the next run, and closed keeps the handback of the attempt that
+// closed it. The red seal is recorded as `facts.redSealedAt`, so the resumed
+// attempt re-enters the phase ladder after the red one; whatever phases ran,
+// the final message the worker handed back outlives the tree.
+const HANDBACK = 'Kept the resumed attempt handback.\n\nTried: 2026-09-15 resumed and closed.\n';
+
+describe('a resumed phased node keeps its handback (issue #109)', () => {
+  test('quarantined after its red seal, resumed, closed → the handback is journaled and kept', async () => {
+    let attempt = 1;
+    let testRuns = 0;
+    const h = makeHarness({
+      changedByNode: { x: ['test/x.test.ts'] },
+      waitScript: (_ctx, waitIndex) =>
+        stop({
+          filesTouched: waitIndex === 0 ? ['test/x.test.ts'] : [],
+          finalMessage: HANDBACK,
+        }),
+      execScript: (argv) => {
+        if (argv[0] === 'runtests') {
+          testRuns += 1;
+          // One honest red/green cycle: the red must fail, the green must pass.
+          return testRuns === 1
+            ? { output: 'FAIL x: not implemented', exitCode: 1 }
+            : { output: 'ok 1 x', exitCode: 0 };
+        }
+        if (argv[0] === 'weeder') {
+          return attempt === 1
+            ? { output: 'FAIL smoke', exitCode: 1 }
+            : { output: 'ok smoke', exitCode: 0 };
+        }
+        return { output: '', exitCode: 0 };
+      },
+    });
+
+    const plan = () =>
+      PlanSchema.parse({
+        goal: 'g',
+        source: SOURCE,
+        nodes: [
+          {
+            id: 'x',
+            work: {
+              test: 'runtests',
+              phases: [
+                { phase: 'red', prompt: 'write the failing test' },
+                { phase: 'impl', prompt: 'make it pass' },
+                { phase: 'green', prompt: 'run the suite' },
+              ],
+            },
+            accept: { smoke: 'weeder check' },
+            policy: { maxAttempts: 1 },
+          },
+        ],
+      });
+
+    const first = await runPlan(plan(), h.deps, OPTS);
+    expect(first.failed).toEqual(['x']);
+    // The red sealed, and the failed tree was quarantined with that seal.
+    expect(h.journal.filter((e) => e.event === 'phase-commit')).toHaveLength(1);
+    expect(h.git.refs.get('quarantine/x')).toBeDefined();
+
+    attempt = 2;
+    const second = await runPlan(plan(), h.deps, OPTS);
+    expect(second.closed).toEqual(['x']);
+
+    // The resumed close kept the handback of the attempt that closed it.
+    expect(h.journal.filter((e) => e.event === 'resumed-from-quarantine')).toHaveLength(1);
+    const handbackEvents = h.journal.filter(
+      (e) => e.event === 'gate-artifact' && e.gate === 'handback',
+    );
+    expect(handbackEvents.length).toBeGreaterThan(0);
+    const receipt = h.receipts.get('x');
+    const path = receipt?.artifacts?.handback;
+    expect(path).toBeDefined();
+    expect(h.artifacts.get(path as string)).toBe(HANDBACK);
   });
 });
 

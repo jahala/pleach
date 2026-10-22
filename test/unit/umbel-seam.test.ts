@@ -295,6 +295,44 @@ describe('createUmbelSeam.spawnWorker — env passes by name only', () => {
   });
 });
 
+// ── a stop whose read fails (issue #109) ─────────────────────────────────────
+// `umbel read` exits non-zero: the worker's final message could not be read. It
+// must not be treated as an empty message — the read failure is carried as
+// `readFailure` {exitCode, outputTail}, `finalMessage` stays '', and nothing
+// else stands in for the message.
+describe('createUmbelSeam.wait — a stop whose read fails (issue #109)', () => {
+  // A real ExecFn that answers each verb: spawn echoes the name, status reports
+  // the session, send hands back a sinceMtime, wait reports a finished turn,
+  // and read exits non-zero with umbel's own error on stderr.
+  function makeExec(readExitCode: number, readOutput: string): ExecFn {
+    return async (argv) => {
+      const a = [...argv];
+      const ok = (output: string) => ({ exitCode: 0, output, stdout: output });
+      if (a.includes('spawn')) return ok(`spawned: ${a[a.indexOf('--name') + 1] ?? ''}\n`);
+      if (a[1] === 'status') return ok('running\n');
+      if (a[1] === 'send') return ok('{"sinceMtime":17}\n');
+      if (a[1] === 'wait') return ok('{"reason":"stop"}\n');
+      if (a[1] === 'read')
+        return { exitCode: readExitCode, output: readOutput, stdout: readOutput };
+      if (a[1] === 'actions') return ok('{"filesEdited":[],"filesWritten":[]}\n');
+      if (a[1] === 'diff') return ok('');
+      return ok('');
+    };
+  }
+
+  test('a non-zero read exit carries readFailure with the exit code and output, finalMessage empty', async () => {
+    const output = 'umbel: no transcript: the final entry is not on disk yet\n';
+    const seam = createUmbelSeam(makeExec(1, output), { bin: 'umbel' });
+    const worker = await seam.spawnWorker({ cwd: '/tmp' });
+    await worker.send('do the work');
+    const result = await worker.wait();
+
+    expect(result.reason).toBe('stop');
+    expect(result.finalMessage).toBe('');
+    expect(result.readFailure).toEqual({ exitCode: 1, outputTail: output });
+  });
+});
+
 // ── a spawn that needs a person (issue #128) ────────────────────────────────
 // umbel refuses a worker whose CLI opens on its sign-in screen by exiting 126
 // (umbel#105; contracts/runner.md). The adapter carries that exit code on the

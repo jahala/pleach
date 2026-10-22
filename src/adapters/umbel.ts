@@ -288,6 +288,15 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
       timeoutMs: 30_000,
     });
     const finalMessage = readResult.exitCode === 0 ? readResult.output.trim() : '';
+    // A failed read is not an empty message (issue #109): the worker may have
+    // spoken and umbel could not hand the transcript back. The exit code and
+    // the tail of umbel's own output are carried so the loop can journal the
+    // failure and keep a handback that says so — the message is never invented
+    // and nothing else stands in for it.
+    const readFailure =
+      readResult.exitCode === 0
+        ? undefined
+        : { exitCode: readResult.exitCode, outputTail: readOutputTail(readResult.output) };
 
     // umbel actions --json — the raw ActionManifest (toolsUsed, files*, errors,
     // finalMessage, turnCount). Unparseable/failed → actions = undefined.
@@ -319,7 +328,15 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
     // filesTouched: dedup(filesEdited ∪ filesWritten) from the manifest.
     const filesTouched = extractFilesTouched(actions);
 
-    return { reason, finalMessage, actions, diff, filesTouched, telemetry: {} };
+    return {
+      reason,
+      finalMessage,
+      actions,
+      diff,
+      filesTouched,
+      ...(readFailure !== undefined ? { readFailure } : {}),
+      telemetry: {},
+    };
   }
 
   return { spawnWorker, providers: UMBEL_PROVIDERS };
@@ -330,6 +347,15 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
 // The provider names umbel can spawn (issue #146) — what validatePlan refuses a
 // plan's typos against.
 const UMBEL_PROVIDERS = ['claude', 'codex', 'gemini', 'opencode', 'agy'] as const;
+
+// The cap on the output tail a failed `umbel read` hands back (issue #109):
+// the journal and the kept handback carry it, and journal command output is
+// capped (ENGINEERING.md). Matches the 2000-char gate/output tails elsewhere.
+const READ_OUTPUT_TAIL = 2000;
+
+function readOutputTail(output: string): string {
+  return output.slice(-READ_OUTPUT_TAIL);
+}
 
 function randomHex(nibbles: number): string {
   // nibbles = number of hex chars (each byte = 2 hex chars)

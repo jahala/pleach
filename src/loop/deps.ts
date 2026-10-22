@@ -171,6 +171,12 @@ export interface WorkerResult {
   // absent otherwise — never fabricated. Journal-only diagnostics.
   paneTail?: string;
   processExit?: number;
+  // The runner could not read the worker's final message at a stop (issue
+  // #109): the `umbel read` verb exited non-zero, so `finalMessage` stays '' —
+  // the message is never invented and nothing else stands in for it. Carries
+  // the exit code and the tail of the runner's own output, capped. Journal and
+  // settle material only.
+  readFailure?: { exitCode: number; outputTail: string };
   telemetry: { tokens?: number; contextPct?: number; compacted?: boolean };
 }
 

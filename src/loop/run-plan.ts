@@ -415,13 +415,23 @@ async function runUnderLock(
     // What the worker said when it handed the work back (D17) — the message
     // whose dated Tried line the garden's law asks for, which until now
     // survived only in the provider's own transcript. Kept verbatim and read
-    // by nobody: agents produce, code decides. A worker that said nothing
-    // hands back nothing to keep. Redacted (issue #107) before it is hashed
-    // and written — a secret the worker echoed in its handback never reaches
-    // the receipt store.
+    // by nobody: agents produce, code decides. Every close whose attempt ran a
+    // worker to a stop keeps a handback: the message verbatim, a note when the
+    // runner could not read it (issue #109), or a note when the message read
+    // back empty — none of those is ever silently lost. Redacted (issue #107)
+    // before it is hashed and written — a secret the worker echoed in its
+    // handback never reaches the receipt store.
+    if (outcome.readFailure !== undefined) {
+      await deps.journal.append({
+        event: 'handback-read-failed',
+        node: node.id,
+        exitCode: outcome.readFailure.exitCode,
+        outputTail: outcome.readFailure.outputTail,
+      });
+    }
     const handback = await keepOrJournal(node, 'handback', 'handback', receipt.sha256, async () => {
-      const text = outcome.handback;
-      if (text === undefined || text === '') return null;
+      const text = handbackText(outcome);
+      if (text === undefined) return null;
       const bytes = await deps.redact.redact(text);
       return { bytes, sha256: sha256Hex(bytes) };
     });
@@ -536,6 +546,11 @@ async function runUnderLock(
     }
     const outcome = commit?.kind === 'refused' ? commit.outcome : ran;
     const { verdict, iso } = outcome;
+    // Why the node settled where it did when no gate says it (D17) — an
+    // attempt left unspent on a dead provider, a fallback refused — plus the
+    // handback-missing note when the read failed (issue #109). The operator
+    // reads the journal, not the source.
+    const detail = verdictDetailWithHandback(outcome);
     // Every non-progress verdict carries a reason and a next step, computed
     // from what the loop observed (issue #106): the operator reads the journal,
     // not a disposed worktree or a dead session.
@@ -595,7 +610,7 @@ async function runUnderLock(
       // Why the node settled where it did when no gate says it (D17) — an
       // attempt left unspent on a dead provider, a fallback refused. The
       // operator reads the journal, not the source.
-      ...(outcome.verdictDetail !== undefined ? { detail: outcome.verdictDetail } : {}),
+      ...(detail !== undefined ? { detail } : {}),
       // What the runner saw at an abnormal end (D11) — capped, never fabricated.
       ...(outcome.runnerDetail?.paneTail !== undefined
         ? { paneTail: outcome.runnerDetail.paneTail.slice(-2000) }
@@ -1036,6 +1051,46 @@ function refusedOutcome(outcome: RunNodeResult, gate: string, output: string): R
 
 function commitMessage(plan: Plan, node: Node, verdict: Verdict): string {
   return `pleach: ${node.id} verified (${verdict.status})\n\nsource: ${plan.source}\ngoal: ${plan.goal}`;
+}
+
+// ── the handback settle keeps (issue #109) ───────────────────────────────────
+//
+// What a close keeps as its handback: the worker's message verbatim, a note
+// when the runner could not read it, a note when the message was empty, or
+// nothing when no worker handed the work back at all. The message is never
+// invented — the two notes name the failure or the emptiness, never stand in
+// for the words.
+
+const EMPTY_HANDBACK = "The worker's final message was empty.\n";
+
+function readFailedHandback(read: { exitCode: number; outputTail: string }): string {
+  const tail = read.outputTail.trim() === '' ? '(no output)' : read.outputTail;
+  return (
+    `The runner could not read the worker's final message (read exited ${read.exitCode}); ` +
+    `the handback is missing.\nRunner output: ${tail}\n`
+  );
+}
+
+function handbackText(outcome: RunNodeResult): string | undefined {
+  if (outcome.readFailure !== undefined) return readFailedHandback(outcome.readFailure);
+  if (outcome.handback !== undefined && outcome.handback !== '') return outcome.handback;
+  if (outcome.handbackEmpty === true) return EMPTY_HANDBACK;
+  return undefined;
+}
+
+// The `detail` a verdict line carries when the handback could not be read,
+// merged with the detail the node already settled with (D17/D19) into one
+// field — the parallel reason/nextStep work on the same line keeps the merge
+// to a single spread of `detail`.
+function verdictDetailWithHandback(outcome: RunNodeResult): string | undefined {
+  const read = outcome.readFailure;
+  const missing =
+    read === undefined
+      ? undefined
+      : `the handback is missing: the runner could not read the worker's final message (read exited ${read.exitCode})`;
+  if (missing === undefined) return outcome.verdictDetail;
+  if (outcome.verdictDetail === undefined) return missing;
+  return `${outcome.verdictDetail}\n${missing}`;
 }
 
 // The journal keeps the failing gate's verbatim output tail; the sealed

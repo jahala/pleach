@@ -66,6 +66,7 @@ export const KINDS: Record<string, Kind> = {
   'quarantine-failed': 'node.lifecycle',
   receipt: 'node.lifecycle',
   'gate-artifact': 'node.lifecycle',
+  'handback-read-failed': 'node.lifecycle',
   'receipt-write-failed': 'node.lifecycle',
   'acceptance-changed': 'node.lifecycle',
   'acceptance-cascade': 'node.lifecycle',
