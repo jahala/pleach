@@ -53,7 +53,7 @@ test('pleach run with a relative --config path, run from the repo, closes the no
     );
 
     const proc = Bun.spawn(
-      ['bun', MAIN, 'run', planPath, '--config', '.context/pleach/pleach.config.ts'],
+      ['bun', MAIN, 'run', '--no-redact', planPath, '--config', '.context/pleach/pleach.config.ts'],
       { cwd: repo, stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: process.env },
     );
     const [stdout, stderr, code] = await Promise.all([

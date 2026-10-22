@@ -162,7 +162,7 @@ describe('a seam’s surprise never costs the tree — e2e (D23)', () => {
   }
 
   async function run(): Promise<{ code: number; summary: Summary }> {
-    const r = await pleach(['run', planPath, '--provider-backoff-ms', '10']);
+    const r = await pleach(['run', '--no-redact', planPath, '--provider-backoff-ms', '10']);
     return { code: r.code, summary: JSON.parse(r.stdout.trim()) as Summary };
   }
 
@@ -277,7 +277,7 @@ describe('a seam’s surprise never costs the tree — e2e (D23)', () => {
     // The lane alone re-runs: a new auditor, no builder, and the node closes.
     await writeFile(join(state, 'codex.relay'), PASSING_RELAY);
     await scriptWaits('codex', [{ exit: 0, stdout: '{"reason":"stop"}' }]);
-    const audit = await pleach(['audit', planPath, 'audited']);
+    const audit = await pleach(['audit', '--no-redact', planPath, 'audited']);
     expect(audit.code).toBe(0);
     expect(await served('codex')).toBe(1);
     expect(await served('claude')).toBe(1);

@@ -96,13 +96,16 @@ test('pleach run refuses, before anything runs, a plan whose cast needs an unset
     await writeFile(join(repo, 'plan.json'), planBody('deepseek'));
     const env = { ...process.env };
     delete env.DEEPSEEK_API_KEY;
-    const proc = Bun.spawn(['bun', MAIN, 'run', 'plan.json', '--config', 'pleach.config.ts'], {
-      cwd: repo,
-      stdin: 'ignore',
-      stdout: 'pipe',
-      stderr: 'pipe',
-      env,
-    });
+    const proc = Bun.spawn(
+      ['bun', MAIN, 'run', '--no-redact', 'plan.json', '--config', 'pleach.config.ts'],
+      {
+        cwd: repo,
+        stdin: 'ignore',
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env,
+      },
+    );
     const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
     expect(code).toBe(2);
     expect(stderr).toContain('deepseek');

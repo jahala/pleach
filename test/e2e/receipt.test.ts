@@ -55,7 +55,7 @@ describe('receipt verb — e2e', () => {
     const planPath = join(repo, 'plan.json');
     await writeFile(planPath, JSON.stringify(PLAN));
 
-    const run = await pleach(repo, ['run', planPath, '--repo-root', repo]);
+    const run = await pleach(repo, ['run', '--no-redact', planPath, '--repo-root', repo]);
     expect(run.code).toBe(0);
 
     // The trailer is pinned in the published commit.

@@ -83,13 +83,16 @@ function planFor(layout: Layout) {
 async function pleachRun(repo: string, plan: unknown): Promise<{ code: number; stdout: string }> {
   const planPath = join(repo, 'plan.json');
   await writeFile(planPath, JSON.stringify(plan));
-  const proc = Bun.spawn(['bun', MAIN, 'run', planPath, '--config', CONFIG, '--repo-root', repo], {
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
-    cwd: repo,
-    env: process.env,
-  });
+  const proc = Bun.spawn(
+    ['bun', MAIN, 'run', '--no-redact', planPath, '--config', CONFIG, '--repo-root', repo],
+    {
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'pipe',
+      cwd: repo,
+      env: process.env,
+    },
+  );
   const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
   return { code: code ?? 1, stdout };
 }

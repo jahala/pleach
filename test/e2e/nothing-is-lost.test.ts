@@ -193,7 +193,7 @@ describe('nothing a worker produced is lost — e2e (D17)', () => {
     const halt = join(signals, 'impl-started');
     const interrupted = spawnPleach(
       repo,
-      ['run', planPath, '--config', CONFIG, '--repo-root', repo],
+      ['run', '--no-redact', planPath, '--config', CONFIG, '--repo-root', repo],
       { PLEACH_TEST_HALT: halt },
     );
     await waitForFile(halt, 60_000);
@@ -227,7 +227,15 @@ describe('nothing a worker produced is lost — e2e (D17)', () => {
     expect(await handbackOf(aborted)).toBe(INTERRUPTED_HANDBACK);
 
     // ── the re-run, standing on the tree the halt left behind ─────────────
-    const rerun = await pleach(repo, ['run', planPath, '--config', CONFIG, '--repo-root', repo]);
+    const rerun = await pleach(repo, [
+      'run',
+      '--no-redact',
+      planPath,
+      '--config',
+      CONFIG,
+      '--repo-root',
+      repo,
+    ]);
     const resumed = JSON.parse(rerun.stdout.trim()) as Summary;
 
     expect(resumed.closed).toEqual(['feature']);
@@ -281,7 +289,7 @@ describe('nothing a worker produced is lost — e2e (D17)', () => {
 
     const audit = await pleach(
       repo,
-      ['audit', planPath, 'report', '--config', CONFIG, '--repo-root', repo],
+      ['audit', '--no-redact', planPath, 'report', '--config', CONFIG, '--repo-root', repo],
       { PLEACH_TEST_AUDIT_RELAY: 'pass' },
     );
     expect(audit.code).toBe(0);

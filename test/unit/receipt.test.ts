@@ -35,6 +35,7 @@ function makeFacts(overrides: Partial<MintFacts> = {}): MintFacts {
     telemetry: {},
     durationMs: 1234,
     pleachVersion: '0.0.1',
+    redaction: 'plotplot',
     ...overrides,
   };
 }

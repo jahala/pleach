@@ -128,7 +128,7 @@ describe('teardown keeps the work — e2e', () => {
       }),
     );
 
-    const run = spawnPleach(repo, ['run', planPath, '--repo-root', repo]);
+    const run = spawnPleach(repo, ['run', '--no-redact', planPath, '--repo-root', repo]);
     await waitForFile(started, 30_000);
     run.kill('SIGINT');
     const { code, stdout } = await collect(run);
@@ -188,7 +188,7 @@ describe('teardown keeps the work — e2e', () => {
       }),
     );
 
-    const run = spawnPleach(repo, ['run', planPath, '--repo-root', repo]);
+    const run = spawnPleach(repo, ['run', '--no-redact', planPath, '--repo-root', repo]);
     await waitForFile(started, 30_000);
 
     // A second process, exactly as an operator drains a run.
