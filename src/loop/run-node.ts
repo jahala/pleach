@@ -121,6 +121,14 @@ export interface RunNodeResult {
   // the session it came from is killed moments later. Journal/settle material
   // only, like smokeStdout; absent when the attempt never got a result.
   handback?: string;
+  // The runner could not read the worker's final message at a stop (issue
+  // #109), carried like `handback` so settle keeps a handback naming the
+  // failure instead of none. Absent when the read succeeded.
+  readFailure?: WorkerResult['readFailure'];
+  // The final attempt's worker stopped and its read succeeded but returned an
+  // empty message (issue #109): the emptiness is named, not lost. Absent for a
+  // non-stop end (dead, timeout, …), which keeps nothing either way.
+  handbackEmpty?: boolean;
   // The red phase index the tree this attempt hands back has sealed (D13),
   // when it sealed one. Journal/settle material like `handback`: the receipt
   // records it, so an attempt later seeded from that tree re-enters the phase
@@ -173,6 +181,8 @@ export async function runNode(
       gates,
       ...(smokeStdout !== undefined ? { smokeStdout } : {}),
       ...(handback !== undefined ? { handback } : {}),
+      ...(readFailure !== undefined ? { readFailure } : {}),
+      ...(handbackEmpty !== undefined ? { handbackEmpty } : {}),
       ...(redSealedAt !== undefined ? { redSealedAt } : {}),
       ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
       ...(result.stagedFiles === undefined && lastStaged !== undefined
@@ -253,6 +263,10 @@ export async function runNode(
   // never the auditor's, which is egress the loop parses rather than work a
   // worker produced.
   let handback: string | undefined;
+  // Whether the read of the final message failed (issue #109), and whether the
+  // message read back empty on a completed stop — both carried like `handback`.
+  let readFailure: WorkerResult['readFailure'];
+  let handbackEmpty: boolean | undefined;
   // Where the attempt in flight stands on its ladder — the lane a surprise
   // names when it settles the node (D23).
   let lane: SeamLane = 'isolate';
@@ -266,6 +280,8 @@ export async function runNode(
       lastStaged = undefined;
       smokeStdout = undefined;
       handback = undefined;
+      readFailure = undefined;
+      handbackEmpty = undefined;
       providerErrorWaits = 0;
       providerErrorDetail = undefined;
 
@@ -431,6 +447,17 @@ export async function runNode(
         }
         await worker?.kill();
         handback = result.finalMessage;
+        readFailure = result.readFailure;
+        // A completed stop whose read succeeded but returned nothing is named
+        // (issue #109), never treated as a worker that said nothing. A non-stop
+        // end keeps nothing either way, so it does not set this; nor does a
+        // {command} node, whose "handback" is its command output and which ran
+        // no worker at all.
+        handbackEmpty =
+          !('command' in node.work) &&
+          result.reason === 'stop' &&
+          result.finalMessage === '' &&
+          result.readFailure === undefined;
 
         // Only a provider error re-runs within the attempt. Every other end —
         // stop, or a named failure the non-stop block below settles — leaves
@@ -791,6 +818,8 @@ export async function runNode(
         gates,
         ...(smokeStdout !== undefined ? { smokeStdout } : {}),
         ...(handback !== undefined ? { handback } : {}),
+        ...(readFailure !== undefined ? { readFailure } : {}),
+        ...(handbackEmpty !== undefined ? { handbackEmpty } : {}),
         ...(redSealedAt !== undefined ? { redSealedAt } : {}),
         ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
       };

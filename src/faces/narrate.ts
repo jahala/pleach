@@ -65,6 +65,8 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       return `${s(e.node)}: ledger declined to close — branch published, not verified`;
     case 'quarantined':
       return `${s(e.node)}: unfinished or failed work kept on ${s(e.branch)} for inspection`;
+    case 'handback-read-failed':
+      return `${s(e.node)}: could not read the worker's final message (read exited ${n(e.exitCode)}) — keeping a note in its place`;
     case 'quarantine-failed':
       return `${s(e.node)}: could not preserve failed work (${s(e.detail)})`;
     case 'rebuild-required':

@@ -292,7 +292,7 @@ describe('the handback is kept beside the receipt (D17)', () => {
     ).toEqual(['friction', 'handback', 'smoke']);
   });
 
-  test('an empty handback keeps nothing, and forgets what an earlier close left', async () => {
+  test('an empty final message keeps a handback that says the message was empty (issue #109)', async () => {
     const h = makeHarness({
       // The first close hands back a message; the second (the same node id run
       // again) hands back nothing at all.
@@ -306,11 +306,47 @@ describe('the handback is kept beside the receipt (D17)', () => {
     expect(h.artifacts.get(handbackPath(h))).toBe(HANDBACK);
 
     expect((await run(h)).closed).toEqual(['x']);
-    // The artifact name is the node's, not the close's: left alone, the first
-    // close's message would be read as this one's.
-    expect(h.artifacts.has(handbackPath(h))).toBe(false);
-    expect(keptPaths(h).handback).toBeUndefined();
+    // A worker that stopped with an empty message keeps a handback that names
+    // the emptiness, superseding the earlier close's message under the node's
+    // own name (the earlier close keeps its own under its hash — D17).
+    const bytes = h.artifacts.get(handbackPath(h));
+    expect(bytes).toContain('empty');
+    expect(bytes).not.toBe(HANDBACK);
+    expect(keptPaths(h).handback).toBe(handbackPath(h));
+    expect(handbackEvents(h)).toHaveLength(2);
+  });
+
+  test('a stop whose read failed keeps a handback naming the failure, and journals handback-read-failed', async () => {
+    const tail = 'umbel: no transcript on disk yet\n';
+    const h = makeHarness({
+      waitScript: (ctx) =>
+        ctx.role === 'audit'
+          ? stop({
+              finalMessage:
+                '```tend-audit-result\n{"verdicts":[{"check":"c","verdict":"pass"}]}\n```',
+            })
+          : stop({ finalMessage: '', readFailure: { exitCode: 1, outputTail: tail } }),
+    });
+    const summary = await run(h);
+    expect(summary.closed).toEqual(['x']);
+
+    // The read failure is journaled, so the operator sees why the handback is
+    // not the worker's words.
+    const failed = h.journal.filter((e) => e.event === 'handback-read-failed');
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).toMatchObject({ node: 'x', exitCode: 1, outputTail: tail });
+
+    // A handback is still kept — a note naming the failure, not none.
+    const bytes = h.artifacts.get(handbackPath(h));
+    expect(bytes).toBeDefined();
+    expect(bytes).toContain('exited 1');
+    expect(keptPaths(h).handback).toBe(handbackPath(h));
     expect(handbackEvents(h)).toHaveLength(1);
+
+    // The verdict says the handback is missing and why.
+    const verdict = h.journal.find((e) => e.event === 'verdict' && e.node === 'x');
+    expect(String(verdict?.detail)).toContain('handback is missing');
+    expect(String(verdict?.detail)).toContain('exited 1');
   });
 
   test('a store that cannot write journals receipt-write-failed and the close stands', async () => {
