@@ -5,6 +5,8 @@ import {
   GUARD_REFUSED_EXIT,
   gateFault,
   SPAWN_FAILED_EXIT,
+  SPAWN_NEEDS_SIGNIN_EXIT,
+  spawnRefusalKind,
 } from '../../src/core/classify.ts';
 import {
   AuditParseError,
@@ -12,6 +14,7 @@ import {
   GateFailedError,
   LockHeldError,
   PlanInvalidError,
+  WorkerSpawnError,
 } from '../../src/core/errors.ts';
 
 // Helper to make a worker-result input
@@ -116,6 +119,25 @@ describe('classify — errors', () => {
 
   test('non-Error thrown value → "terminal"', () => {
     expect(classify({ kind: 'error', error: new TypeError('unexpected') })).toBe('terminal');
+  });
+
+  // issue #128 — a spawn the runner refused because the provider needs a person
+  // to sign in (exit 126, contracts/runner.md) is blocked: a retry meets the
+  // same screen, so the loop never re-runs that provider.
+  test('a spawn refusal at exit 126 (needs-signin) → "blocked"', () => {
+    expect(spawnRefusalKind(SPAWN_NEEDS_SIGNIN_EXIT)).toBe('needs-signin');
+    expect(classify(errorInput(new WorkerSpawnError('umbel spawn exited 126: sign in', 126)))).toBe(
+      'blocked',
+    );
+  });
+
+  test('any other spawn exit is not the refusal → "terminal" (today’s behaviour)', () => {
+    for (const code of [0, 1, 127, 128]) {
+      expect(spawnRefusalKind(code)).toBeNull();
+      expect(classify(errorInput(new WorkerSpawnError(`umbel spawn exited ${code}`, code)))).toBe(
+        'terminal',
+      );
+    }
   });
 });
 

@@ -69,6 +69,17 @@ attempt, on the same tree, with the provider's words in the prompt: 15 s, then d
 waits in all (`--provider-backoff-ms` sets the first). Only when the waits are spent does the
 error cost an attempt, and the verdict's `detail` names the cause.
 
+## A spawn that needs a person settles blocked
+
+The runner refuses a worker whose provider CLI opens on its sign-in screen. umbel exits 126
+(`contracts/runner.md` pins it as the code and class of the wait reason `input`), and pleach
+settles the node `blocked` at once with umbel's message and "sign in to `<provider>` once,
+outside the conductor, then re-run" as the next step. The tree is kept on `quarantine/<id>`.
+It is never retried on that provider, because a retry meets the same sign-in screen.
+
+`--fallback-provider` re-casts the refusal once, audit diversity re-checked, exactly as it
+re-casts a `dead` attempt; only when no usable fallback exists does the node settle blocked.
+
 ## A worker's background work is waited for
 
 A worker can end its turn while a command it started is still writing. Before any gate reads

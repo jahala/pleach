@@ -91,13 +91,17 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
     const result = await exec(argv, { cwd: spec.cwd, env: mergeEnv(workerEnv) });
 
     if (result.exitCode !== 0) {
-      throw new WorkerSpawnError(`umbel spawn exited ${result.exitCode}: ${result.output.trim()}`);
+      throw new WorkerSpawnError(
+        `umbel spawn exited ${result.exitCode}: ${result.output.trim()}`,
+        result.exitCode,
+      );
     }
 
     // stdout: "spawned: <name>\n" — verify the name appears
     if (!result.output.includes(name)) {
       throw new WorkerSpawnError(
         `umbel spawn succeeded but name not found in output: ${result.output.trim()}`,
+        result.exitCode,
       );
     }
 
@@ -113,6 +117,7 @@ export function createUmbelSeam(exec: ExecFn, opts: UmbelSeamOpts) {
       throw new WorkerSpawnError(
         `umbel spawn reported success but session ${name} does not exist — ` +
           `is a tmux server running for this user? (${probe.output.trim()})`,
+        probe.exitCode,
       );
     }
 

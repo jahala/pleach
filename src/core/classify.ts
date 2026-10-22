@@ -4,6 +4,7 @@ import {
   GateFailedError,
   LockHeldError,
   PlanInvalidError,
+  WorkerSpawnError,
 } from './errors.ts';
 
 // The two exits a gate reports when its command could not run at all (ledger
@@ -14,6 +15,22 @@ import {
 // way. Their producers use these; gateFault reads them.
 export const GUARD_REFUSED_EXIT = -1;
 export const SPAWN_FAILED_EXIT = 127;
+
+// A spawn the runner refused because the provider's CLI needs a person to sign
+// in before it can work (umbel#105, issue #128). 126 is the exit contracts/
+// runner.md pins for "a spawn that needs a person is blocked, and says so by
+// its exit code" — the same code as the wait reason `input`. A retry meets the
+// same sign-in screen, so this refusal is blocked, never a retry on that
+// provider.
+export const SPAWN_NEEDS_SIGNIN_EXIT = 126;
+
+// The named refusal a spawn's exit code carries: `needs-signin` for the 126
+// above, null for every other code. The loop reads it so the decision is made
+// here, pure, and a spawn that failed for any other reason keeps its exit code
+// as a plain terminal failure.
+export function spawnRefusalKind(exitCode: number): 'needs-signin' | null {
+  return exitCode === SPAWN_NEEDS_SIGNIN_EXIT ? 'needs-signin' : null;
+}
 
 // Whose fault a gate that never ran is: the plan's when it authored a command
 // that cannot be exec'd, the environment's when it cannot provide what the
@@ -99,6 +116,12 @@ function classifyError(error: Error): ClassifyResult {
   if (error instanceof AuditParseError) return 'reaudit';
   if (error instanceof LockHeldError) return 'terminal';
   if (error instanceof PlanInvalidError) return 'terminal';
+  // A spawn the runner refused for a sign-in (exit 126) is blocked: no retry
+  // meets a different screen (issue #128). Any other spawn failure is terminal,
+  // as today.
+  if (error instanceof WorkerSpawnError && spawnRefusalKind(error.exitCode) === 'needs-signin') {
+    return 'blocked';
+  }
   // unknown error → terminal (never default-retry what we can't name)
   return 'terminal';
 }

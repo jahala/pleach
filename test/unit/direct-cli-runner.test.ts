@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { directCliRunner, type SpawnHandle } from '../../src/adapters/direct-cli.ts';
-import { WorkerSeamError } from '../../src/core/errors.ts';
+import { SPAWN_FAILED_EXIT } from '../../src/core/classify.ts';
+import { WorkerSeamError, WorkerSpawnError } from '../../src/core/errors.ts';
 
 // Subject: directCliRunner — the bundled RunnerSeam for headless agent CLIs
 // (claude -p / codex exec) as one-shot subprocesses. The argv table is pinned
@@ -222,5 +223,26 @@ describe('directCliRunner — injected-fake unit tests', () => {
     await worker.wait();
 
     await expect(worker.send('turn two')).rejects.toBeInstanceOf(WorkerSeamError);
+  });
+
+  test('a CLI that cannot start throws WorkerSpawnError carrying its own exit code (127)', async () => {
+    const runner = directCliRunner({
+      spawn: () => {
+        throw new Error('ENOENT: no such file or directory, open claude');
+      },
+      changedFiles: async () => [],
+    });
+    const worker = await runner.spawnWorker({ provider: 'claude', cwd: '/tmp/x' });
+    await worker.send('do it');
+
+    let caught: unknown;
+    try {
+      await worker.wait();
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(WorkerSpawnError);
+    expect((caught as WorkerSpawnError).exitCode).toBe(SPAWN_FAILED_EXIT);
   });
 });

@@ -5,7 +5,13 @@ import {
   extractAuditJson,
 } from '../core/audit-egress.ts';
 import { providerBackoff } from '../core/backoff.ts';
-import { classify, type GateFault, gateFault, isWorkerReason } from '../core/classify.ts';
+import {
+  classify,
+  type GateFault,
+  gateFault,
+  isWorkerReason,
+  spawnRefusalKind,
+} from '../core/classify.ts';
 import { partitionDelivery } from '../core/delivery.ts';
 import {
   AuditParseError,
@@ -14,13 +20,14 @@ import {
   type GateKind,
   IsolateCatastrophicError,
   PlanInvalidError,
+  WorkerSpawnError,
 } from '../core/errors.ts';
 import { checkDiffHygiene, type HygieneFailure } from '../core/hygiene.ts';
 import { type AuditResult, AuditResultSchema, type Node, type Verdict } from '../core/plan.ts';
 import { type AuditRecord, type GateRecord, sha256Hex } from '../core/receipt.ts';
 import { parseSarif } from '../core/sarif.ts';
 import { DEFAULT_WORKER_PROVIDER } from '../core/validate.ts';
-import type { ConductorDeps, ExecResult, Isolation, WorkerResult } from './deps.ts';
+import type { ConductorDeps, ExecResult, Isolation, Worker, WorkerResult } from './deps.ts';
 import { guardedExec, runWork } from './run-work.ts';
 import { type SettleOutcome, settleWorkingTree } from './settle.ts';
 
@@ -338,8 +345,48 @@ export async function runNode(
       let result: WorkerResult;
       let workEvidence = promptEvidence;
       for (;;) {
-        const worker =
-          'command' in node.work ? null : await deps.runner.spawnWorker({ ...cast, cwd });
+        let worker: Worker | null;
+        if ('command' in node.work) {
+          worker = null;
+        } else {
+          try {
+            worker = await deps.runner.spawnWorker({ ...cast, cwd });
+          } catch (err) {
+            if (
+              err instanceof WorkerSpawnError &&
+              spawnRefusalKind(err.exitCode) === 'needs-signin'
+            ) {
+              const decision = settleSpawnRefusal(
+                node,
+                attempts,
+                maxAttempts,
+                cast,
+                opts.fallbackProvider,
+                err,
+              );
+              if (decision.kind === 'blocked') {
+                const base = baseVerdict(node, attempts);
+                return handBack({
+                  verdict: {
+                    ...base,
+                    status: 'blocked',
+                    evidence: { ...base.evidence, blockedReason: decision.blockedReason },
+                  },
+                  ...(decision.detail !== undefined ? { verdictDetail: decision.detail } : {}),
+                });
+              }
+              // A usable fallback re-casts once, exactly as a `dead` attempt
+              // re-casts (D17): the refused tree is disposed and re-isolated on
+              // the second provider.
+              cast = { provider: decision.fallback };
+              await disposeQuiet(iso);
+              iso = null;
+              evidence = undefined;
+              continue attempt;
+            }
+            throw err;
+          }
+        }
         if (worker !== null) opts.onSpawn?.();
         try {
           result = await runWork(node, worker, deps.exec, cwd, {
@@ -1292,6 +1339,50 @@ function resumeEvidence(resumed: ResumedFrom | undefined): string | undefined {
 // Why an attempt was left unspent when the run named no second cast (D17).
 const NO_FALLBACK =
   'no fallback provider; the second attempt would have spent the same dead provider';
+
+// issue #128 — a spawn refused for a sign-in (exit 126) is the provider's need
+// for a person, not the work's. The decision is the dead re-cast's (D17): the
+// run's fallback takes over once, audit diversity re-checked; only when no
+// usable fallback exists does the node settle blocked, never a retry on the
+// provider that needs the person.
+type SpawnRefusalDecision =
+  | { kind: 'blocked'; blockedReason: string; detail?: string }
+  | { kind: 'recast'; fallback: string };
+
+function settleSpawnRefusal(
+  node: Node,
+  attempts: number,
+  maxAttempts: number,
+  cast: { provider?: string; model?: string },
+  fallbackProvider: string | undefined,
+  err: WorkerSpawnError,
+): SpawnRefusalDecision {
+  const resolved = cast.provider ?? DEFAULT_WORKER_PROVIDER;
+  const blockedReason = signInBlockedReason(err, resolved);
+
+  if (node.policy.onDead === 'resume' && attempts < maxAttempts) {
+    const fallback = fallbackProvider;
+    if (fallback !== undefined && fallback !== resolved) {
+      const refusal = auditDiversityRefusal(node, fallback);
+      if (refusal === undefined) return { kind: 'recast', fallback };
+      // A fallback that is the auditor is no usable fallback → blocked.
+      return { kind: 'blocked', blockedReason, detail: refusal };
+    }
+    const detail =
+      fallback === undefined
+        ? 'no fallback provider; the second attempt would have met the same sign-in screen'
+        : `fallback provider '${fallback}' is the provider that needs a sign-in`;
+    return { kind: 'blocked', blockedReason, detail };
+  }
+  return { kind: 'blocked', blockedReason };
+}
+
+// The reason a blocked verdict carries: umbel's own message, then the one next
+// step that is a person's to take — sign in once, outside the conductor, where
+// a sign-in can actually happen.
+function signInBlockedReason(err: WorkerSpawnError, provider: string): string {
+  return `${err.detail.trim()}\nSign in to ${provider} once, outside the conductor, then re-run.`;
+}
 
 // The audit diversity rule (binding prose), against the provider that will
 // actually build: an auditor may never be the builder. Checked before the first
