@@ -121,6 +121,14 @@ export interface RunNodeResult {
   // the session it came from is killed moments later. Journal/settle material
   // only, like smokeStdout; absent when the attempt never got a result.
   handback?: string;
+  // The runner could not read the worker's final message at a stop (issue
+  // #109), carried like `handback` so settle keeps a handback naming the
+  // failure instead of none. Absent when the read succeeded.
+  readFailure?: WorkerResult['readFailure'];
+  // The final attempt's worker stopped and its read succeeded but returned an
+  // empty message (issue #109): the emptiness is named, not lost. Absent for a
+  // non-stop end (dead, timeout, …), which keeps nothing either way.
+  handbackEmpty?: boolean;
   // The red phase index the tree this attempt hands back has sealed (D13),
   // when it sealed one. Journal/settle material like `handback`: the receipt
   // records it, so an attempt later seeded from that tree re-enters the phase
@@ -133,6 +141,11 @@ export interface RunNodeResult {
   // run at all, named as the plan's or the environment's fault (D19). Rides
   // the verdict's journal line as `detail`; the Verdict contract is untouched.
   verdictDetail?: string;
+  // The step the loop itself already knows picks the work up (issue #106):
+  // `pleach audit` when only the audit could not adjudicate a green build, the
+  // surprise's own next step (D23). The verdict's account prefers it to one it
+  // would have to infer from the status.
+  nextStep?: string;
 }
 
 const REAUDIT_BUDGET = 2;
@@ -173,6 +186,8 @@ export async function runNode(
       gates,
       ...(smokeStdout !== undefined ? { smokeStdout } : {}),
       ...(handback !== undefined ? { handback } : {}),
+      ...(readFailure !== undefined ? { readFailure } : {}),
+      ...(handbackEmpty !== undefined ? { handbackEmpty } : {}),
       ...(redSealedAt !== undefined ? { redSealedAt } : {}),
       ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
       ...(result.stagedFiles === undefined && lastStaged !== undefined
@@ -253,6 +268,10 @@ export async function runNode(
   // never the auditor's, which is egress the loop parses rather than work a
   // worker produced.
   let handback: string | undefined;
+  // Whether the read of the final message failed (issue #109), and whether the
+  // message read back empty on a completed stop — both carried like `handback`.
+  let readFailure: WorkerResult['readFailure'];
+  let handbackEmpty: boolean | undefined;
   // Where the attempt in flight stands on its ladder — the lane a surprise
   // names when it settles the node (D23).
   let lane: SeamLane = 'isolate';
@@ -266,6 +285,8 @@ export async function runNode(
       lastStaged = undefined;
       smokeStdout = undefined;
       handback = undefined;
+      readFailure = undefined;
+      handbackEmpty = undefined;
       providerErrorWaits = 0;
       providerErrorDetail = undefined;
 
@@ -388,6 +409,7 @@ export async function runNode(
           }
         }
         if (worker !== null) opts.onSpawn?.();
+        await journalWorkerSpawned(deps, node.id, worker);
         try {
           result = await runWork(node, worker, deps.exec, cwd, {
             timeoutMs,
@@ -407,6 +429,7 @@ export async function runNode(
           });
         } catch (err) {
           await worker?.kill();
+          await journalWorkerKilled(deps, node.id, worker);
           if (err instanceof GateCannotRunError) {
             return handBack(
               settleCannotRun(
@@ -430,7 +453,19 @@ export async function runNode(
           throw err;
         }
         await worker?.kill();
+        await journalWorkerKilled(deps, node.id, worker);
         handback = result.finalMessage;
+        readFailure = result.readFailure;
+        // A completed stop whose read succeeded but returned nothing is named
+        // (issue #109), never treated as a worker that said nothing. A non-stop
+        // end keeps nothing either way, so it does not set this; nor does a
+        // {command} node, whose "handback" is its command output and which ran
+        // no worker at all.
+        handbackEmpty =
+          !('command' in node.work) &&
+          result.reason === 'stop' &&
+          result.finalMessage === '' &&
+          result.readFailure === undefined;
 
         // Only a provider error re-runs within the attempt. Every other end —
         // stop, or a named failure the non-stop block below settles — leaves
@@ -748,6 +783,9 @@ export async function runNode(
         if (ladder.kind === 'unadjudicated') {
           const base = baseVerdict(node, attempts);
           return handBack({
+            // The build's gates are green; only the audit has no answer, so
+            // the auditor's turn is what to spend again, never the build.
+            ...(ladder.aborted ? {} : { nextStep: `pleach audit <plan.json> ${node.id}` }),
             verdict: {
               ...base,
               // An auditor the run's own signal cut off is an abort, not a
@@ -791,6 +829,8 @@ export async function runNode(
         gates,
         ...(smokeStdout !== undefined ? { smokeStdout } : {}),
         ...(handback !== undefined ? { handback } : {}),
+        ...(readFailure !== undefined ? { readFailure } : {}),
+        ...(handbackEmpty !== undefined ? { handbackEmpty } : {}),
         ...(redSealedAt !== undefined ? { redSealedAt } : {}),
         ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
       };
@@ -806,6 +846,7 @@ export async function runNode(
       verdict: failedVerdict(node, attempts, { gate: { ran: gate, exitCode: -1 } }),
       gateOutputTail: outputTail(message),
       verdictDetail: `${message} — next: ${surpriseNextStep(node, lane, iso !== null)}`,
+      nextStep: surpriseNextStep(node, lane, iso !== null),
     });
   } finally {
     // Safety net: any tree still held by a thrown/early path is disposed.
@@ -912,12 +953,14 @@ async function runAudit(
       model: audit.model,
       cwd,
     });
+    await journalWorkerSpawned(deps, node.id, worker);
     let res: WorkerResult;
     try {
       await worker.send(buildAuditPrompt(audit.command));
       res = await worker.wait({ timeoutMs, signal: wait.signal, idleMs: wait.idleMs });
     } finally {
       await worker.kill();
+      await journalWorkerKilled(deps, node.id, worker);
     }
 
     // A non-stop auditor produced no verdict to read — it died, timed out, or
@@ -957,6 +1000,31 @@ async function runAudit(
     return { kind: 'pass', result: parsed };
   }
   return { kind: 'parse-exhausted' };
+}
+
+// ── session bookkeeping (#115) ─────────────────────────────────────────────
+//
+// The loop names every session it spawns and kills so `pleach clean` can reap
+// what a crash left alive. A worker without a `session` (a runner that cannot
+// name one, e.g. direct-cli) is nothing to record — the journal lines only ever
+// carry a session the runner itself supplied.
+
+async function journalWorkerSpawned(
+  deps: ConductorDeps,
+  nodeId: string,
+  worker: Worker | null,
+): Promise<void> {
+  if (worker === null || worker.session === undefined) return;
+  await deps.journal.append({ event: 'worker-spawned', node: nodeId, session: worker.session });
+}
+
+async function journalWorkerKilled(
+  deps: ConductorDeps,
+  nodeId: string,
+  worker: Worker | null,
+): Promise<void> {
+  if (worker === null || worker.session === undefined) return;
+  await deps.journal.append({ event: 'worker-killed', node: nodeId, session: worker.session });
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

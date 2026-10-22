@@ -7,6 +7,16 @@ a failing test before its fix.
 The short version: **work is never silently lost, and a verdict is never invented.**
 A node that cannot finish keeps its tree on `quarantine/<id>` and writes a receipt.
 
+## Every non-progress verdict names a reason and a next step
+
+A verdict that settled away from `done` — `failed`, `dead`, `timeout`, `rejected`,
+`aborted` or `blocked` — carries a non-empty `reason` and a non-empty `nextStep` on its
+journal line, both derived from what the loop observed: the phase that stalled, the runner's
+last status, the tail of the worker's output, the claim that could not be evaluated. When the
+facts are thin they say what is known (the status, the attempts, "the runner reported no
+reason"), never `?` and never null. The `blocked` event's `reason` is never empty for the
+same rule: a worker that ended without a recorded prompt is accounted for, not left blank.
+
 ## Secrets are redacted before they reach disk
 
 Agent- and gate-produced text reaches pleach's records in three places: the run
@@ -182,9 +192,9 @@ error or an idle worker settles the way the runner contract classifies it.
 
 Anything else a seam throws mid-node settles the node `failed` under the gate `seam:<lane>`,
 with the seam's text as the output tail and the attempt counted. The tree is kept on
-`quarantine/<id>` and the receipt is written. The verdict's `detail` names the next step:
-`pleach audit plan.json <node>` when only the audit threw, otherwise a re-run, which resumes
-from the quarantine.
+`quarantine/<id>` and the receipt is written. The verdict's `nextStep` names the concrete
+action: `pleach audit plan.json <node>` when only the audit threw, otherwise a re-run, which
+resumes from the quarantine.
 
 ## A lost journal is reported
 
@@ -195,6 +205,14 @@ time anyone runs. Right after `run-end`, the run's lines from its `run-start` th
 `run-end` are copied to `<git-dir>/pleach/receipts/runs/<runId>.journal.jsonl`, and the
 `run-end` line names that file as `journalCopy`. The record can be rebuilt from what is kept
 beside the receipts.
+
+## A worker's handback is kept, or its absence is named
+
+The worker's final message carries its dated Tried line, and the close keeps it beside the
+receipt. When the runner cannot read that message (`umbel read` fails), the close keeps a handback
+that says so, with the runner's exit code and output. The journal records `handback-read-failed`,
+and the verdict's `detail` names the missing handback. A message that read back empty is kept as a
+note saying it was empty. pleach never puts other words in the worker's place.
 
 ## A worker that writes BLOCKED.md has finished
 
@@ -208,6 +226,22 @@ provider that died or a run that halted keeps its own verdict.
 The node settles `blocked` at once, with the file's text as the verdict's `blockedReason` and
 the tree kept on `quarantine/<id>`, `BLOCKED.md` included. There is no retry, because a retry
 would only ask the worker to explain again.
+
+## A killed run's sessions are reaped
+
+Every worker the loop spawns is journaled as `worker-spawned { node, session }` and, when the loop
+kills it, `worker-killed { node, session }`. A run that dies mid-flight leaves the spawn without the
+kill, and that session keeps burning a subscription seat and a tmux pane.
+
+`pleach clean` reads the journal, and for each session it spawned and never killed it asks the runner
+to reap it: umbel checks the session, then kills it. It prints `killed worker session <name> (<node>)`
+or `worker session <name> already gone (<node>)`, and journals `worker-reaped` so the next clean does
+not ask again. A runner that cannot name its sessions (for example `direct-cli`) is told so, and
+clean continues with the rest.
+
+The order is unchanged: stale locks first; while any live lock exists a run may be in flight, so
+clean touches nothing else and exits 3. `--dry-run` lists the locks, sessions and worktrees it would
+act on, and changes nothing.
 
 ## Two operational facts
 

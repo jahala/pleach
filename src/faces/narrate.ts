@@ -42,12 +42,17 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       return `⚠ ${s(e.node)} NEEDS YOU — worker blocked: ${s(e.reason)}`;
     case 'verdict': {
       if (e.status === 'done') return null; // 'closed' narrates the publish
-      // `detail` is why the node settled where no gate says it (D17, D19): a
-      // gate that could not run names whose fault it is, and an operator who
-      // reads only stderr must see that, not just that the node failed.
+      // A non-progress verdict carries a computed reason and a next step
+      // (issue #106); `detail` is the older journal-only spelling of the same
+      // cause, still read for lines written before the account existed.
       const head = `✗ ${s(e.node)}: ${s(e.status)} after ${n(e.attempts)} attempt(s)`;
-      const why = typeof e.detail === 'string' ? e.detail.trim() : '';
-      return why === '' ? head : `${head}\n${why}`;
+      const reason = typeof e.reason === 'string' ? e.reason.trim() : '';
+      const why = reason !== '' ? reason : typeof e.detail === 'string' ? e.detail.trim() : '';
+      const next = typeof e.nextStep === 'string' ? e.nextStep.trim() : '';
+      const lines = [head];
+      if (why !== '') lines.push(why);
+      if (next !== '') lines.push(`next: ${next}`);
+      return lines.join('\n');
     }
     case 'closed': {
       // degraded[] rides the close line — "no coverage is not coverage" must
@@ -65,6 +70,8 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       return `${s(e.node)}: ledger declined to close — branch published, not verified`;
     case 'quarantined':
       return `${s(e.node)}: unfinished or failed work kept on ${s(e.branch)} for inspection`;
+    case 'handback-read-failed':
+      return `${s(e.node)}: could not read the worker's final message (read exited ${n(e.exitCode)}) — keeping a note in its place`;
     case 'quarantine-failed':
       return `${s(e.node)}: could not preserve failed work (${s(e.detail)})`;
     case 'rebuild-required':

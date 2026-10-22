@@ -7,6 +7,8 @@ Entries carry the defect-ledger id where one exists (`D8`, `D21`, ...); the ledg
 ## [Unreleased]
 
 ### Added
+- `pleach clean` reaps the worker sessions a killed run left alive: the journal names every session the loop spawned and killed, and clean ends each one spawned and never killed, through the runner. `--dry-run` lists what it would do (D43).
+- Every verdict that is not `done` carries a `reason` and a `nextStep` on its journal line, and the run log prints both (D41).
 - Secret redaction: everything pleach writes from agents or gates goes through `plotplot redact` first. `run`, `land` and `audit` refuse to start without `plotplot` (install: `cargo install --locked --git https://github.com/jahala/plotplot`); `--no-redact` opts out explicitly and is recorded on every run and receipt (D37).
 - Named casts in `pleach.config.ts`: a node names a cast (provider, model and environment) as its provider, so one plan can reach two endpoints of one CLI, such as Claude by subscription and DeepSeek through Claude Code. `validate` and `run` refuse a provider name that is neither the runner's nor a cast's, and `run` refuses a cast whose variable is unset before it starts (D36).
 - `--provider-backoff-ms` and `--settle-ms` (or `$PLEACH_SETTLE_MS`) on `pleach run` (D34, D35).
@@ -14,6 +16,9 @@ Entries carry the defect-ledger id where one exists (`D8`, `D21`, ...); the ledg
 - `pleach audit-wrap -- <check>` turns any check into the `tend-audit-result` block an audit command must print (D33).
 
 ### Fixed
+- A close keeps a handback even when the runner could not read the worker's final message: it names the failure, and the journal says `handback-read-failed`. An empty final message is named too (D42).
+- The plan schema's canonical text is v1.1.6. Five edits had gone in under v1.1.5; a test now fails when the text changes without its version line. Receipts minted under v1.1.5 fail `pleach receipt`'s version check (D44).
+- A node that fails before its tree is usable no longer reports a catastrophic isolate failure (fixed by D22; pinned by regression tests, D45).
 - A commit you add on top of a blocked node's `quarantine/<id>` is kept when the next run resumes it (D38).
 - `pleach audit` re-audits again once the plan's audit command has changed (D39).
 - A worker whose provider needs a person to sign in settles blocked at once, or moves to `--fallback-provider`, instead of retrying into the sign-in screen (D40).

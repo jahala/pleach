@@ -521,6 +521,48 @@ checkpoint but have different lifetimes and trust domains.**
   refusal; the node re-casts once on a usable `--fallback-provider` (as a dead attempt does, D17), and
   otherwise settles blocked at once with umbel's message and the next step, its tree quarantined. Tests:
   `test/unit/classify.test.ts`, `test/loop/spawn-needs-signin.test.ts`, `test/unit/umbel-seam.test.ts`.
+- **D41 ⚠ [field] A non-progress verdict carried no reason and no next step.** jahala/pleach#106
+  (plotplot#53, the umbrella's `contracts/delivery.md`): a worker idle for twenty minutes ended `blocked`
+  with `blockedReason: null`, the run log said "worker blocked: ?", and an ordinary failed gate's verdict
+  said nothing about why. **Fix:** every `verdict` journal line whose status is not `done` carries a
+  non-empty `reason` and `nextStep`, computed by `core/account.ts` from what the loop observed (the failing
+  gate and its output, the loop's detail, the blocking prompt, the runner's last pane). The loop hands over
+  a next step it already knows (`pleach audit` for an audit that gave no readable answer over a green
+  build, a seam surprise's step); a next step never names a quarantine, which the settle may not make. The
+  `blocked` event's reason is never empty. Journal-only: the `Verdict` schema is unchanged. Tests:
+  `test/unit/account.test.ts`, `test/loop/verdict-account.test.ts`,
+  `test/integration/verdict-account.test.ts` (mirrors the umbrella's `contracts/test/verdict.test.sh`,
+  which passes against this change).
+- **D42 ⚠ [field] A close kept no handback when the runner could not read the final message.**
+  jahala/pleach#109 (jahala/umbel#67 and #77's loops, 2026-09-15): a failed `umbel read` became an empty
+  message, and an empty message kept nothing, so a close lost its Tried line silently. **Fix:** the umbel
+  adapter carries `readFailure` (exit code, output tail); the loop journals `handback-read-failed`, keeps
+  a handback that names the failure, and adds the cause to the verdict's `detail`. A stop whose message
+  read back empty keeps a handback that says so. A close with no worker stop still keeps none and clears
+  the node's current handback. Tests: `test/unit/umbel-seam.test.ts`, `test/loop/handback-kept.test.ts`,
+  `test/loop/resume-quarantine.test.ts`.
+- **D43 ⚠ [field] `pleach clean` left a killed run's worker sessions alive.** jahala/pleach#115 (53
+  listings of leftover `pl-` sessions across 8 sessions, 11 hand-written kill loops). **Fix:** the loop
+  journals `worker-spawned` and `worker-killed` with the runner's session name; `pleach clean` reaps every
+  session spawned and never killed through the runner's optional `reap` (umbel: `status --json`, then
+  `kill`; a session umbel records as dead is reported gone), journals `worker-reaped`, and still touches
+  nothing while a live lock exists. `--dry-run` lists without changing. `core/reap.ts` decides which
+  sessions are unreaped. Tests: `test/unit/reap.test.ts`, `test/loop/worker-session.test.ts`,
+  `test/e2e/clean-sessions.test.ts`, `test/integration/umbel-seam.test.ts`.
+- **D44 ◦ [field] The canonical plan schema text changed under an unchanged version.** jahala/pleach#123:
+  five edits went into `docs/contract/plan-schema.md` under the v1.1.5 title, so "v1.1.5" named two
+  texts. **Fix:** the text is v1.1.6, with `CHANGES.md` listing all five edits; a guard fails when the doc
+  differs from its content at the commit that last changed the version line unless the version line
+  changed too, and fails on a shallow clone rather than passing vacuously (CI checks out full history).
+  Receipts minted under v1.1.5 fail `pleach receipt`'s version fence, as designed. Tests:
+  `test/unit/plan-version.test.ts`.
+- **D45 ◦ [field] A node that failed before its tree was usable reported a catastrophic isolate
+  failure.** jahala/pleach#100 (plotplot's first conducted node, 2026-09-11). Not reproducible on master:
+  D22 resolves the repo root absolutely, and the settle preserves a tree only when isolate provisioned one.
+  Pinned as regressions: a node that never isolated settles failed with the isolate gate's reason and no
+  `quarantine-failed`; a linked-worktree root, relative or absolute, with a gate that cannot run settles
+  failed with the gate's reason and its tree quarantined. Tests: `test/loop/no-tree-settle.test.ts`,
+  `test/e2e/no-tree-settle.test.ts`.
 
 ### Verified-sound (attacks refuted — do not relitigate)
 

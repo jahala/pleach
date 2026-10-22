@@ -171,6 +171,12 @@ export interface WorkerResult {
   // absent otherwise — never fabricated. Journal-only diagnostics.
   paneTail?: string;
   processExit?: number;
+  // The runner could not read the worker's final message at a stop (issue
+  // #109): the `umbel read` verb exited non-zero, so `finalMessage` stays '' —
+  // the message is never invented and nothing else stands in for it. Carries
+  // the exit code and the tail of the runner's own output, capped. Journal and
+  // settle material only.
+  readFailure?: { exitCode: number; outputTail: string };
   telemetry: { tokens?: number; contextPct?: number; compacted?: boolean };
 }
 
@@ -185,6 +191,11 @@ export interface Worker {
   // the attempt clock still bounds the wait.
   wait(opts?: { timeoutMs?: number; signal?: AbortSignal; idleMs?: number }): Promise<WorkerResult>;
   kill(): Promise<void>;
+  // The runner's own name for the session, when it has one (umbel sets it to
+  // `pl-…`; a runner without a nameable session leaves it out). The loop
+  // journals it as `worker-spawned`/`worker-killed` so `pleach clean` can reap
+  // what a crash left alive (issue #115).
+  session?: string;
 }
 
 export interface RunnerSeam {
@@ -198,6 +209,11 @@ export interface RunnerSeam {
   // (plus the config's cast names) to validatePlan so a typo is refused before
   // any spawn. Absent means the runner accepts any provider name (scripted).
   providers?: readonly string[];
+  // Reap a session this runner spawned (issue #115): 'killed' when the reap
+  // ended a live session, 'gone' when the session no longer exists. Runners
+  // that cannot name or kill a session leave this out, and `pleach clean` then
+  // says so rather than guessing.
+  reap?(session: string): Promise<'killed' | 'gone'>;
 }
 
 export interface LedgerSeam {

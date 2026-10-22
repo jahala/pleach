@@ -1,7 +1,7 @@
 # pleach roadmap: the open issues as work packages
 
-**You are here (2026-10-21).** v1.0.0 is released. The audit fixes (D24–D27) and the first P1 batch
-(D28 #98, D29 #147, D30 #148) the second batch (D31 #114, D32 #131, D33 #149) the third (D34 #151, D35 #127, D36 #146 with #126) and the fourth (D37 #107, D38 #152, D39 #154, D40 #128) are merged, and CI runs the umbel suites. Every open issue carries a
+**You are here (2026-10-22).** v1.0.0 is released. The audit fixes (D24–D27) and the first P1 batch
+(D28 #98, D29 #147, D30 #148) the second batch (D31 #114, D32 #131, D33 #149) the third (D34 #151, D35 #127, D36 #146 with #126) the fourth (D37 #107, D38 #152, D39 #154, D40 #128) and the fifth (D41 #106, D42 #109, D43 #115, D44 #123, D45 #100) are merged, and CI runs the umbel suites. Every open issue carries a
 priority label: P1 loses work or blocks a run, P2 costs time or misleads, P3 is polish. This page groups
 the open issues into work packages that share code and need one design, in the order to build them.
 Each package becomes a tend2 loop when work starts, with a ledger item for each defect.
@@ -10,11 +10,11 @@ Each package becomes a tend2 loop when work starts, with a ledger item for each 
 
 | # | Package | Issues | Why this position |
 |---|---|---|---|
-| 1 | Nothing unjudged, nothing unrecorded | #125 #109 (then #129); #131, #127 done (D32, D35) | Work that no gate judged, or that the record lost, can reach a verified branch. This is the prime invariant. |
-| 2 | The operator's seat | #63 #86 #71 #115 #87; #114 done (D31) | The largest field pain: 806 `tail` polls across 25 sessions, and sessions killed by hand. |
+| 1 | Nothing unjudged, nothing unrecorded | #125 (then #129); #131, #127, #109 done (D32, D35, D42) | Work that no gate judged, or that the record lost, can reach a verified branch. This is the prime invariant. |
+| 2 | The operator's seat | #63 #86 #71 #87; #114, #115 done (D31, D43) | The largest field pain: 806 `tail` polls across 25 sessions, and sessions killed by hand. |
 | 3 | Casting and the config | #149, #146, #126, #128 done (D33, D36, D40) | Found dogfooding on cfanalytics: one plan cannot reach two endpoints of one CLI, and an ordinary audit command costs a whole build before it fails. |
 | 4 | Landing that finishes the job | #124 #116 #85 #130; #116's replay design was tried and rejected (see the issue) | One small honesty fix first. Then land stops handing conflicts to a person. |
-| 5 | Contract v1.2, one round with tend2 | #123 #106 #113 #104 #90 | Schema changes batched into one conversation once tend2 is public. The receipt version fence needs a decision first. |
+| 5 | Contract v1.2, one round with tend2 | #113 #104 #90; #123, #106 done (D44, D41) | Schema changes batched into one conversation once tend2 is public. The receipt version fence is an open decision for the owner. |
 | 6 | Umbrella fit | #108 #112 | Small, and they need plotplot's contracts. |
 | — | Blocked or parked | #111 (umbel#92) · #117 (an experiment outside this repo) · #70 (needs a design); #107 done (D37) | See below. |
 
@@ -28,7 +28,7 @@ Each package becomes a tend2 loop when work starts, with a ledger item for each 
 - **#127:** umbel reports `stop` while the worker's own background command is still writing, and the gate
   judges a half-written tree. Done in D35: the tree settles before a gate.
 - **#125:** a phased node keeps only the last phase's closing message.
-- **#109:** a failed `umbel read` silently becomes an empty handback.
+- **#109:** a failed `umbel read` silently becomes an empty handback. Done in D42: the close keeps a handback naming the failure.
 - **#129** (later): gates re-run on a tree that has not changed since the last run.
 
 **The unifying design is a tree fingerprint at the attempt boundary** (a `git write-tree` over the
@@ -46,7 +46,7 @@ committed tree, so this closes the other end. #125 and #109 change the same phas
 - **#63:** events for each gate and each audit check, with the output tail.
 - **#86:** `run-start` names the already-verified nodes.
 - **#71:** sessions named by plan and node.
-- **#115:** `clean` kills the run's leftover sessions.
+- **#115:** `clean` kills the run's leftover sessions. Done in D43: the journal names each session, and `clean` reaps those never killed.
 - **#87:** the build's commit recorded beside its version.
 
 **Design once: the journal is the only source of truth for run state.** Define the event vocabulary
@@ -82,13 +82,15 @@ store.
 
 ## 5. Contract v1.2, one round with tend2
 
-**First, decide the receipt version fence.** Today a contract version bump makes every older receipt
-fail `pleach receipt`. Proposal: verify each receipt against the contract version it names, and refuse
-only versions this build does not know.
+**The receipt version fence is open.** D44 moved the contract to v1.1.6 with the fence as it stands, so
+every receipt minted under v1.1.5 now fails `pleach receipt`, although nothing it derives from changed.
+Proposal: verify each receipt against the contract version it names, and refuse only versions this
+build does not know. Accepting older receipts is a backward-compatibility change, so it waits on the
+owner's approval.
 
 Then batch the changes into one round:
-- **#123:** a test that fails when the contract text changes without a version bump.
-- **#106:** a `reason` and `nextStep` on every verdict that doesn't close.
+- **#123:** a test that fails when the contract text changes without a version bump. Done in D44 (v1.1.6).
+- **#106:** a `reason` and `nextStep` on every verdict that doesn't close. Done in D41, journal-only.
 - **#113:** a red phase that already exists.
 - **#104:** document the green-only proof shape.
 - **#90:** effort in the cast.
@@ -116,5 +118,3 @@ Then batch the changes into one round:
 - **#87:** the version now reads 1.0.0 from `package.json`. The build commit is still missing.
 - **#104:** the schema already allows a green-only phase, and `docs/dogfood/make-plan.ts` emits it. Only
   the docs are missing.
-- **#100:** reproduced during D27. A node that fails at `isolate` keeps nothing, correctly, but its
-  verdict carries no reason. That is #106's gap.

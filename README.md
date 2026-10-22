@@ -68,7 +68,8 @@ pleach wait <plan.json>         Block until the run ends; --node / --timeout sha
 pleach validate <plan.json>     Parse and validate; print the topo order
 pleach schema                   Emit the plan contract as JSON Schema
 pleach receipt <node>           Verify a settled node's close receipt
-pleach clean                    Sweep a killed run's stale locks and orphaned worktrees
+pleach clean                    Sweep a killed run's stale locks, orphaned worktrees and the
+                                worker sessions its journal names (--dry-run lists without changing)
 ```
 
 `pleach --help` carries every flag, default and exit code.
@@ -95,6 +96,7 @@ tree on `quarantine/<id>` and writes a receipt.
 | A seam throws mid-node | Settles under `seam:<lane>`; the verdict names the next step |
 | The journal loses lines | Reported as `journal-gap` at the next run; each run keeps its own copy |
 | A worker or gate prints a secret | Redacted (`[REDACTED]`) before it reaches the journal, the log or a receipt |
+| A killed run leaves sessions behind | `pleach clean` kills the sessions its journal names, sweeps their worktrees, and clears stale locks; `--dry-run` lists them without changing |
 
 Full detail, one section each: [`docs/guarantees.md`](docs/guarantees.md).
 

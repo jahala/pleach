@@ -112,3 +112,22 @@
   `canonicalJson` drops undefined, so every receipt already on disk hashes exactly as it did and
   still verifies. `deriveStatus` does not read it: where a tree left off changes what an attempt
   runs next, never what a close's facts imply.
+
+- **v1.1.6 (2026-10-22)** — the version catches up with the text. Five edits went into this file
+  under an unchanged v1.1.5 title (issue #123), so a reader pinning "plan schema v1.1.5" meant one of
+  two texts:
+  - the informative "Seam interfaces" block: `Worker.wait`'s opts gained `idleMs?: number`
+    (ledger D16), and `WorkerResult.reason` gained `file`, `pattern` and `provider-error`;
+  - "Self-integral audits" is marked tend2-ratified (2026-08-17), no longer a draft;
+  - the self-integral section gained one sentence: the audit command emits the audit egress fence
+    itself. That sentence still says "pending ratification": v1.1.6 publishes it, and tend2 has
+    not ratified it yet;
+  - the "Shared law" paragraph names tend2's `docs/bridge/working-together.md` as its explanatory
+    home and no longer cites a private deliberation archive.
+
+  The "Seam prose, not schema" entry above says the `idleMs` change needed no version bump. That was
+  wrong, and history stays as written: this entry corrects it. The version line now moves with any
+  change to the canonical text, the seam block included. `test/unit/plan-version.test.ts` fails when
+  this file differs from its content at the commit that last changed the version line, unless the
+  version line changed too. Receipts minted under v1.1.5 fail `pleach receipt`'s version fence, as
+  the fence is designed to. tend2 must re-vendor this text.
