@@ -41,6 +41,11 @@ import { type SettleOutcome, settleWorkingTree } from './settle.ts';
 export interface ResumedFrom {
   sha: string;
   stat?: string;
+  // The branch tip moved past the sha its close recorded (a conductor's commit
+  // on top of the quarantined tree), so the resume stands on the tip and the
+  // close records that it moved. Absent when the tip is exactly what was
+  // recorded.
+  moved?: boolean;
   // The red phase index that tree already carries a seal for (D13), when the
   // close that kept it recorded one. The resumed attempt re-enters the phase
   // ladder after it: a tree holding the failing test cannot demonstrate it

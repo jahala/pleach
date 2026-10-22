@@ -60,7 +60,12 @@ export interface ReceiptFacts {
   // INSIDE the envelope, because what was judged is a fact of the close and not
   // a ref settled after the freeze; `canonicalJson` drops undefined, so a
   // receipt that built its own tree hashes exactly as it did before the field.
-  base?: { kind: 'quarantine'; sha: string };
+  // `sha` is the tip actually stood on; `moved` (present only when true) marks
+  // a resume whose tip had moved PAST the sha its receipt recorded — a
+  // conductor's commit on top of the quarantined tree, kept rather than
+  // rebuilt, so a resumed close that carried that fix stays distinguishable
+  // from one that stood on the tree exactly as it was quarantined.
+  base?: { kind: 'quarantine'; sha: string; moved?: boolean };
   // How far the tree this close held got through a phased work list (D13): the
   // index of the red phase whose seal is IN that tree's history. A later
   // attempt standing on that tree — a resumed quarantine, a re-adjudication

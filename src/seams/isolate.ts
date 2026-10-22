@@ -684,6 +684,17 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     return r.output.trim() || null;
   }
 
+  // Is `ancestor` an ancestor of (or equal to) `descendant` (D17)? Exit 0 is
+  // "is", 1 is "is not", and anything else is git failing — a recorded
+  // quarantine sha the branch has since moved past and left unreachable, or a
+  // broken repository. Both are "not an ancestor" to the caller: the resume
+  // must not stand on a tip it cannot prove descends from what the close
+  // recorded.
+  async function isAncestor(cwd: string, ancestor: string, descendant: string): Promise<boolean> {
+    const r = await git(exec, cwd, 'merge-base', '--is-ancestor', ancestor, descendant);
+    return r.exitCode === 0;
+  }
+
   // ── land ─────────────────────────────────────────────────────────────────
 
   async function landStack(
@@ -802,6 +813,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     refSha,
     commitMessageOf,
     commitStat,
+    isAncestor,
     landStack,
   };
 }
