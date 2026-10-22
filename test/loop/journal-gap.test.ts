@@ -37,6 +37,7 @@ function receiptFor(node: string): Receipt {
     telemetry: {},
     durationMs: 1,
     pleachVersion: '0.0.1-test',
+    redaction: 'plotplot',
   });
 }
 

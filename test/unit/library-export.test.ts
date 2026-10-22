@@ -47,6 +47,7 @@ describe('library export — package root', () => {
     expect(deps.isolate).toBeDefined();
     expect(deps.lock).toBeDefined();
     expect(deps.journal).toBeDefined();
+    expect(deps.redact).toBeDefined();
     expect(deps.runner).toBeDefined();
     expect(deps.ledger).toBeDefined();
   });

@@ -1,7 +1,7 @@
 # pleach roadmap: the open issues as work packages
 
 **You are here (2026-10-21).** v1.0.0 is released. The audit fixes (D24–D27) and the first P1 batch
-(D28 #98, D29 #147, D30 #148) the second batch (D31 #114, D32 #131, D33 #149) and the third (D34 #151, D35 #127, D36 #146 with #126) are merged, and CI runs the umbel suites. Every open issue carries a
+(D28 #98, D29 #147, D30 #148) the second batch (D31 #114, D32 #131, D33 #149) the third (D34 #151, D35 #127, D36 #146 with #126) and the fourth (D37 #107, D38 #152, D39 #154, D40 #128) are merged, and CI runs the umbel suites. Every open issue carries a
 priority label: P1 loses work or blocks a run, P2 costs time or misleads, P3 is polish. This page groups
 the open issues into work packages that share code and need one design, in the order to build them.
 Each package becomes a tend2 loop when work starts, with a ledger item for each defect.
@@ -12,11 +12,11 @@ Each package becomes a tend2 loop when work starts, with a ledger item for each 
 |---|---|---|---|
 | 1 | Nothing unjudged, nothing unrecorded | #125 #109 (then #129); #131, #127 done (D32, D35) | Work that no gate judged, or that the record lost, can reach a verified branch. This is the prime invariant. |
 | 2 | The operator's seat | #63 #86 #71 #115 #87; #114 done (D31) | The largest field pain: 806 `tail` polls across 25 sessions, and sessions killed by hand. |
-| 3 | Casting and the config | #128; #149, #146, #126 done (D33, D36) | Found dogfooding on cfanalytics: one plan cannot reach two endpoints of one CLI, and an ordinary audit command costs a whole build before it fails. |
-| 4 | Landing that finishes the job | #124 #116 #85 #130 | One small honesty fix first. Then land stops handing conflicts to a person. |
+| 3 | Casting and the config | #149, #146, #126, #128 done (D33, D36, D40) | Found dogfooding on cfanalytics: one plan cannot reach two endpoints of one CLI, and an ordinary audit command costs a whole build before it fails. |
+| 4 | Landing that finishes the job | #124 #116 #85 #130; #116's replay design was tried and rejected (see the issue) | One small honesty fix first. Then land stops handing conflicts to a person. |
 | 5 | Contract v1.2, one round with tend2 | #123 #106 #113 #104 #90 | Schema changes batched into one conversation once tend2 is public. The receipt version fence needs a decision first. |
 | 6 | Umbrella fit | #108 #112 | Small, and they need plotplot's contracts. |
-| — | Needs a decision, blocked or parked | #107 (P1, unblocked, needs a decision) · #111 (umbel#92) · #117 (an experiment outside this repo) · #70 (needs a design) | See below. |
+| — | Blocked or parked | #111 (umbel#92) · #117 (an experiment outside this repo) · #70 (needs a design); #107 done (D37) | See below. |
 
 ## 1. Nothing unjudged, nothing unrecorded
 
@@ -75,7 +75,7 @@ store.
 
 - **#124 (S):** a land-gate refusal names the command but drops the output tail it already journals.
 - **#116 (L):** on a conflict with a sibling, rebase the node onto the landed stack in a fresh worktree,
-  re-gate it there, and land on green. Journal it as `land-rebase`.
+  re-gate it there, and land on green. Journal it as `land-rebase`. Tried 2026-10-22 and rejected: a cherry-pick shares the merge's base, so it rarely resolves anything, and where it did apply it dropped a sibling's verified line. The way forward is to rebuild the conflicting node on the landed tip; see the issue.
 - **#85:** `run --only`. `land --sinks` already shipped (D18).
 - **#130:** "published" and "landed" are local-only. Say so, and report how many verified branches exist
   on no remote.
@@ -104,7 +104,7 @@ Then batch the changes into one round:
 
 - **#107 (P1), redaction.** plotplot#52 has shipped `plotplot redact` (stdin to stdout, fails closed).
   Wiring it in makes the plotplot binary a dependency of a tool that otherwise needs only git and a runner,
-  and someone must decide what a run does when the binary is missing. That is the owner's call.
+  and someone must decide what a run does when the binary is missing. That is the owner's call. Done in D37: `plotplot redact`, fail closed, explicit `--no-redact`.
 - **#111:** a read-only auditor needs umbel#92.
 - **#117:** the typed-judge audit is a calibration experiment run elsewhere; no code yet.
 - **#70:** re-reading the plan mid-run conflicts with a run's plan being fixed. Design it after package 2,

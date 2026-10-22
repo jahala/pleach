@@ -165,6 +165,7 @@ describe('receipts in the ladder (§D)', () => {
       telemetry: {},
       durationMs: 1,
       pleachVersion: '0.0.1-test',
+      redaction: 'plotplot',
     });
     const h = makeHarness({
       closed: new Map([['x', 'sha-old']]),
@@ -210,6 +211,7 @@ describe('receipts in the ladder (§D)', () => {
       telemetry: {},
       durationMs: 1,
       pleachVersion: '0.0.1-test',
+      redaction: 'plotplot',
     });
     const h = makeHarness({
       closed: new Map([
@@ -255,6 +257,7 @@ describe('receipts in the ladder (§D)', () => {
       telemetry: {},
       durationMs: 1,
       pleachVersion: '0.0.1-test',
+      redaction: 'plotplot',
     });
     const nodes = [
       {

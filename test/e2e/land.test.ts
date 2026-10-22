@@ -70,10 +70,10 @@ describe('pleach land — e2e over command plans', () => {
     const planPath = join(repo, 'plan.json');
     await writeFile(planPath, JSON.stringify(GOOD_PLAN));
 
-    const run = await pleach(['run', planPath, '--repo-root', repo], repo);
+    const run = await pleach(['run', '--no-redact', planPath, '--repo-root', repo], repo);
     expect(run.code).toBe(0);
 
-    const land = await pleach(['land', planPath, '--repo-root', repo], repo);
+    const land = await pleach(['land', '--no-redact', planPath, '--repo-root', repo], repo);
     expect(land.code).toBe(0);
     const out = JSON.parse(land.stdout.trim()) as { branch: string; sha: string; landed: string[] };
     expect(out.landed).toEqual(['app']);
@@ -88,7 +88,7 @@ describe('pleach land — e2e over command plans', () => {
     const planPath = join(repo, 'plan.json');
     await writeFile(planPath, JSON.stringify(GOOD_PLAN));
 
-    const r = await pleach(['run', planPath, '--repo-root', repo, '--land'], repo);
+    const r = await pleach(['run', '--no-redact', planPath, '--repo-root', repo, '--land'], repo);
     expect(r.code).toBe(0);
     const out = JSON.parse(r.stdout.trim()) as {
       closed: string[];
@@ -103,12 +103,12 @@ describe('pleach land — e2e over command plans', () => {
     const planPath = join(repo, 'plan.json');
     await writeFile(planPath, JSON.stringify(BROKEN_PLAN));
 
-    const run = await pleach(['run', planPath, '--repo-root', repo, '--land'], repo);
+    const run = await pleach(['run', '--no-redact', planPath, '--repo-root', repo, '--land'], repo);
     expect(run.code).toBe(1);
     const out = JSON.parse(run.stdout.trim()) as { land?: unknown };
     expect(out.land).toBeUndefined();
 
-    const land = await pleach(['land', planPath, '--repo-root', repo], repo);
+    const land = await pleach(['land', '--no-redact', planPath, '--repo-root', repo], repo);
     expect(land.code).toBe(1);
     expect(land.stderr).toContain('broken');
 

@@ -127,7 +127,15 @@ describe('pleach audit — re-adjudicating a quarantined node (D17)', () => {
   // The run that loses a green build to a relay defect: lib closes, app is
   // quarantined on unparseable egress, redsmoke on its own red smoke.
   async function runWithGarbageRelay(): Promise<Summary> {
-    const r = await pleach(repo, ['run', planPath, '--config', CONFIG, '--repo-root', repo]);
+    const r = await pleach(repo, [
+      'run',
+      '--no-redact',
+      planPath,
+      '--config',
+      CONFIG,
+      '--repo-root',
+      repo,
+    ]);
     expect(r.code).toBe(1);
     return JSON.parse(r.stdout.trim()) as Summary;
   }
@@ -187,7 +195,7 @@ describe('pleach audit — re-adjudicating a quarantined node (D17)', () => {
     const redBefore = await readReceipt(repo, 'redsmoke');
     const onVerified = await pleach(
       repo,
-      ['audit', planPath, 'lib', '--config', CONFIG, '--repo-root', repo],
+      ['audit', '--no-redact', planPath, 'lib', '--config', CONFIG, '--repo-root', repo],
       'pass',
     );
     expect(onVerified.code).toBe(1);
@@ -196,7 +204,7 @@ describe('pleach audit — re-adjudicating a quarantined node (D17)', () => {
 
     const onRedSmoke = await pleach(
       repo,
-      ['audit', planPath, 'redsmoke', '--config', CONFIG, '--repo-root', repo],
+      ['audit', '--no-redact', planPath, 'redsmoke', '--config', CONFIG, '--repo-root', repo],
       'pass',
     );
     expect(onRedSmoke.code).toBe(1);
@@ -209,7 +217,7 @@ describe('pleach audit — re-adjudicating a quarantined node (D17)', () => {
     // second build.
     const audit = await pleach(
       repo,
-      ['audit', planPath, 'app', '--config', CONFIG, '--repo-root', repo],
+      ['audit', '--no-redact', planPath, 'app', '--config', CONFIG, '--repo-root', repo],
       'pass',
     );
     expect(audit.code).toBe(0);
@@ -258,7 +266,7 @@ describe('pleach audit — re-adjudicating a quarantined node (D17)', () => {
 
     const audit = await pleach(
       repo,
-      ['audit', planPath, 'app', '--config', CONFIG, '--repo-root', repo],
+      ['audit', '--no-redact', planPath, 'app', '--config', CONFIG, '--repo-root', repo],
       'fail',
     );
     expect(audit.code).toBe(1);

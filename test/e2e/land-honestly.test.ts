@@ -131,12 +131,16 @@ describe('pleach land — the map gate and the land lock, through the real CLI',
     await gitIn(repo, 'commit', '-m', 'two claims, stamped on two files');
     await writeFile(planPath, JSON.stringify(STAMP_PLAN));
 
-    const run = await pleach(['run', planPath, '--repo-root', repo, '--journal', journal], repo);
+    const run = await pleach(
+      ['run', '--no-redact', planPath, '--repo-root', repo, '--journal', journal],
+      repo,
+    );
     expect(run.code).toBe(0);
 
     const before = await gitIn(repo, 'rev-parse', 'HEAD');
     const gateArgs = [
       'land',
+      '--no-redact',
       planPath,
       '--repo-root',
       repo,
@@ -259,13 +263,17 @@ describe('pleach land — the map gate and the land lock, through the real CLI',
           ],
         }),
       );
-      const run = await pleach(['run', planPath, '--repo-root', repo, '--journal', journal], repo);
+      const run = await pleach(
+        ['run', '--no-redact', planPath, '--repo-root', repo, '--journal', journal],
+        repo,
+      );
       expect(run.code).toBe(0);
 
       const before = await gitIn(repo, 'rev-parse', 'HEAD');
       const refused = await pleach(
         [
           'land',
+          '--no-redact',
           planPath,
           '--repo-root',
           repo,
@@ -295,7 +303,10 @@ describe('pleach land — the map gate and the land lock, through the real CLI',
   // ledger: D18 — a settled node lands while the run is still gating others.
   test('pleach land --sinks lands one verified node while another process holds the run lock', async () => {
     await writeFile(planPath, JSON.stringify(TWO_NODE_PLAN));
-    const run = await pleach(['run', planPath, '--repo-root', repo, '--journal', journal], repo);
+    const run = await pleach(
+      ['run', '--no-redact', planPath, '--repo-root', repo, '--journal', journal],
+      repo,
+    );
     expect(run.code).toBe(0);
 
     // A live run's lock, held by a real other process for the whole landing.
@@ -314,7 +325,17 @@ describe('pleach land — the map gate and the land lock, through the real CLI',
     expect(runLock).toHaveLength(1);
 
     const land = await pleach(
-      ['land', planPath, '--repo-root', repo, '--journal', journal, '--sinks', 'settled'],
+      [
+        'land',
+        '--no-redact',
+        planPath,
+        '--repo-root',
+        repo,
+        '--journal',
+        journal,
+        '--sinks',
+        'settled',
+      ],
       repo,
     );
 
@@ -343,7 +364,18 @@ describe('pleach land — the map gate and the land lock, through the real CLI',
     await writeFile(planPath, JSON.stringify(TWO_NODE_PLAN));
 
     const out = await pleach(
-      ['run', planPath, '--repo-root', repo, '--journal', journal, '--land', '--sinks', 'settled'],
+      [
+        'run',
+        '--no-redact',
+        planPath,
+        '--repo-root',
+        repo,
+        '--journal',
+        journal,
+        '--land',
+        '--sinks',
+        'settled',
+      ],
       repo,
     );
 

@@ -73,7 +73,13 @@ describe('examples e2e — runnable without umbel or API keys', () => {
   });
 
   test('command-dag: closes verified nodes, quarantines the failure, skips its dependent — no runner', async () => {
-    const r = await pleach(['run', join(EXAMPLES, 'command-dag/plan.json'), '--repo-root', repo]);
+    const r = await pleach([
+      'run',
+      '--no-redact',
+      join(EXAMPLES, 'command-dag/plan.json'),
+      '--repo-root',
+      repo,
+    ]);
     const summary = JSON.parse(r.stdout.trim()) as Summary;
 
     expect(summary.closed.sort()).toEqual(['check', 'lib']);
@@ -91,6 +97,7 @@ describe('examples e2e — runnable without umbel or API keys', () => {
   test('command-dag with --quiet: stderr carries no narration', async () => {
     const r = await pleach([
       'run',
+      '--no-redact',
       join(EXAMPLES, 'command-dag/plan.json'),
       '--repo-root',
       repo,
@@ -105,6 +112,7 @@ describe('examples e2e — runnable without umbel or API keys', () => {
     const r = await pleach(
       [
         'run',
+        '--no-redact',
         join(EXAMPLES, 'scripted-agent/plan.json'),
         '--config',
         join(EXAMPLES, 'scripted-agent/pleach.config.ts'),

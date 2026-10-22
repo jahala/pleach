@@ -95,12 +95,18 @@ function failedFacts(): MintFacts {
     telemetry: {},
     durationMs: 1000,
     pleachVersion: '0.0.1-test',
+    redaction: 'plotplot',
   };
 }
 
 /** The seams the CLI wires for a run: the journal lands in the git dir. */
 function cliDeps(): ConductorDeps {
-  return buildDeps({ repoRoot: repo, runner: directCliRunner(), ledger: gitLedger({ repo }) });
+  return buildDeps({
+    repoRoot: repo,
+    redaction: 'off',
+    runner: directCliRunner(),
+    ledger: gitLedger({ repo }),
+  });
 }
 
 async function journalEvents(): Promise<Record<string, unknown>[]> {

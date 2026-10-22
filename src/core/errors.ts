@@ -140,10 +140,16 @@ export class AuditParseError extends Error {
 export class WorkerSpawnError extends Error {
   readonly name = 'WorkerSpawnError';
   readonly detail: string;
+  // The spawn's own exit code. The loop reads it to name a refusal: umbel exits
+  // 126 when the provider's CLI needs a person to sign in (issue #128), and a
+  // retry meets the same screen. Every non-zero spawn carries its code here
+  // instead of burying it in the message.
+  readonly exitCode: number;
 
-  constructor(detail: string) {
+  constructor(detail: string, exitCode: number) {
     super(`worker spawn failed: ${detail}`);
     this.detail = detail;
+    this.exitCode = exitCode;
   }
 }
 
@@ -333,5 +339,36 @@ export class GitDirUnrecognizedError extends Error {
   constructor(path: string) {
     super(`unrecognized .git file at ${path} — expected a "gitdir: <path>" pointer`);
     this.path = path;
+  }
+}
+
+// A redaction run failed: the `plotplot redact` process could not be spawned,
+// or it exited non-zero. Fail closed — the caller never falls back to writing
+// the input unredacted; it halts the run or refuses it at the face.
+export class RedactError extends Error {
+  readonly name = 'RedactError';
+  readonly bin: string;
+  readonly detail: string;
+
+  constructor(bin: string, detail: string) {
+    super(`redaction failed ('${bin} redact'): ${detail}`);
+    this.bin = bin;
+    this.detail = detail;
+  }
+}
+
+// Redaction is required (no `--no-redact`) and the redactor cannot run: the
+// binary is missing or its probe failed. Thrown by the face before the lock is
+// taken, so the run refuses (exit 2) naming the install instead of writing
+// unredacted text silently.
+export class RedactionUnavailableError extends Error {
+  readonly name = 'RedactionUnavailableError';
+  readonly bin: string;
+  readonly detail: string;
+
+  constructor(bin: string, detail: string) {
+    super(`redaction is required but '${bin} redact' failed: ${detail}`);
+    this.bin = bin;
+    this.detail = detail;
   }
 }

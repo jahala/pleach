@@ -169,6 +169,15 @@ A reason the contract does not name falls to terminal and is journaled as `seam-
 text. Any other surprise from a seam settles the node failed with its tree kept (see the `verdict` row
 of [`docs/journal.md`](journal.md)).
 
+A **spawn** is different from a wait. A `spawnWorker` that cannot start its session throws
+`WorkerSpawnError`, carrying the spawn's exit code. One the runner refuses because the provider's CLI
+needs a person to sign in exits **126** (`contracts/runner.md`: "a spawn that needs a person is
+blocked, and says so by its exit code"). pleach settles that node `blocked` at once with umbel's
+message and "sign in to `<provider>` once, outside the conductor, then re-run" as the next step, the
+tree kept in quarantine — it is never retried on that provider, because a retry meets the same
+sign-in screen. `--fallback-provider` re-casts it once, audit diversity re-checked, exactly as it
+re-casts a `dead` attempt. Any other non-zero spawn keeps today's behaviour: the node settles failed.
+
 **Runner post-condition (verified from `src/loop/run-node.ts:191–194`).** When `wait()`
 returns `reason: 'stop'`, the runner is expected to have populated the working tree with
 the agent's output. It does NOT need to stage or commit anything. pleach calls

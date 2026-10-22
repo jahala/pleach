@@ -7,6 +7,30 @@ a failing test before its fix.
 The short version: **work is never silently lost, and a verdict is never invented.**
 A node that cannot finish keeps its tree on `quarantine/<id>` and writes a receipt.
 
+## Secrets are redacted before they reach disk
+
+Agent- and gate-produced text reaches pleach's records in three places: the run
+journal, the run log, and the artifacts kept beside a receipt (a worker's handback,
+a findings log, the tree's friction journal). A secret in any of it — a worker that
+echoes a `.env` value, a gate that prints a token — must never reach disk.
+
+pleach redacts all of it through `plotplot redact` (the one shared implementation
+the plotplot stem ships) before a single byte is written. Every journal line's string
+values are redacted before the line is serialised, and the handback and friction
+journal are redacted before they are hashed and kept; a findings log is redacted
+before its hash is sealed onto the gate record, so the sealed hash and the kept file
+always agree.
+
+Redaction is fail-closed. `pleach run`, `pleach land` and `pleach audit` prove the
+redactor works before they take the lock; a missing `plotplot` refuses the run (exit
+2) naming the install — `cargo install --locked --git https://github.com/jahala/plotplot`
+— never a silent write of unredacted text.
+
+`--no-redact` is the explicit opt-out for a machine without plotplot. It is recorded
+on the `run-start` line and in every receipt's facts (`redaction: 'off'`), so a run
+that wrote without redaction is always visible. `--plotplot-bin PATH` (or
+`$PLEACH_PLOTPLOT_BIN`) selects the binary.
+
 ## Landing
 
 Landing is deterministic and fail-closed. It refuses unless every plan node is
@@ -47,6 +71,12 @@ receipt of every close before it is still on file. It refuses a node whose lates
 is not a quarantine with a green smoke, because an audit verdict over an unproven build
 proves nothing.
 
+A re-audit is one question answered once: after a re-audit closes, asking `pleach audit`
+again for the same `accept.audit.command` is refused (the command is unchanged). Change the
+command and the re-audit is a different audit, so it runs. Every audit close records the
+command it ran; a close from before that record existed has no command to compare, and the
+next re-audit is allowed once — the close it writes then records the command.
+
 ## A provider outage is paid once
 
 An attempt that comes back `dead` never got a working session, which is an outage rather
@@ -62,6 +92,17 @@ A provider error is different: the session worked, then the provider or the netw
 attempt, on the same tree, with the provider's words in the prompt: 15 s, then doubling, five
 waits in all (`--provider-backoff-ms` sets the first). Only when the waits are spent does the
 error cost an attempt, and the verdict's `detail` names the cause.
+
+## A spawn that needs a person settles blocked
+
+The runner refuses a worker whose provider CLI opens on its sign-in screen. umbel exits 126
+(`contracts/runner.md` pins it as the code and class of the wait reason `input`), and pleach
+settles the node `blocked` at once with umbel's message and "sign in to `<provider>` once,
+outside the conductor, then re-run" as the next step. The tree is kept on `quarantine/<id>`.
+It is never retried on that provider, because a retry meets the same sign-in screen.
+
+`--fallback-provider` re-casts the refusal once, audit diversity re-checked, exactly as it
+re-casts a `dead` attempt; only when no usable fallback exists does the node settle blocked.
 
 ## A worker's background work is waited for
 
@@ -104,6 +145,13 @@ that has gone quiet, and the node settles blocked with its tree kept the same wa
 A pending node whose `quarantine/<id>` still resolves is isolated from it. The quarantine is
 the checkout base and its dependencies merge onto it as they always do. The worker's first
 prompt names the sha it is resuming and what the tree holds.
+
+A commit on top of the quarantine is kept. When the branch tip descends from the sha the
+close recorded (`git merge-base --is-ancestor`), the resume stands on that tip — a
+conductor's fix on the quarantined tree is part of the work, and the close records
+`facts.base.moved` so it stays distinguishable. A branch that was reset to an unrelated
+commit, or moved elsewhere, is ignored exactly as if it did not descend: the node builds from
+its dependencies, and the journal says why.
 
 Nothing about that tree is trusted. It was never gated, so the whole ladder runs over it,
 from the marker scan through smoke and the cross-provider audit. The close records

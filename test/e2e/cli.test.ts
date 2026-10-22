@@ -168,6 +168,7 @@ describe.skipIf(!fullStack)('pleach run — full stack e2e', () => {
     const r = await pleach(
       [
         'run',
+        '--no-redact',
         join(repo, 'plan-e2e.json'),
         '--repo-root',
         repo,

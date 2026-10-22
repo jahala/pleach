@@ -244,6 +244,7 @@ describe('a finished node whose touched set names non-delivery', () => {
     const escapee = join(outside, 'stray-note.md');
     const deps = buildDeps({
       repoRoot: repo,
+      redaction: 'off',
       ledger,
       runner: writingRunner(async (cwd) => {
         await mkdir(join(cwd, 'src'), { recursive: true });
@@ -304,6 +305,7 @@ describe('a finished node whose touched set names non-delivery', () => {
 
     const deps = buildDeps({
       repoRoot: repo,
+      redaction: 'off',
       ledger,
       runner: writingRunner(async (cwd) => {
         await writeFile(join(cwd, 'keep.log'), 'changed by the worker\n');

@@ -15,6 +15,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { createUmbelSeam } from '../../src/adapters/umbel.ts';
+import { WorkerSpawnError } from '../../src/core/errors.ts';
 import type { ExecFn } from '../../src/loop/deps.ts';
 
 // A real ExecFn that records every argv and returns a spawn-shaped success.
@@ -291,5 +292,30 @@ describe('createUmbelSeam.spawnWorker — env passes by name only', () => {
     const call = spawnCall(calls);
     expect(call.argv.filter((a) => a === 'ANTHROPIC_AUTH_TOKEN')).toHaveLength(1);
     expect(call.env?.ANTHROPIC_AUTH_TOKEN).toBe('cast-value');
+  });
+});
+
+// ── a spawn that needs a person (issue #128) ────────────────────────────────
+// umbel refuses a worker whose CLI opens on its sign-in screen by exiting 126
+// (umbel#105; contracts/runner.md). The adapter carries that exit code on the
+// WorkerSpawnError it throws, so the loop can name the refusal and settle the
+// node blocked instead of retrying into the same screen.
+describe('createUmbelSeam.spawnWorker — a spawn refused for a sign-in', () => {
+  test('a spawn that exits 126 yields a WorkerSpawnError carrying exitCode 126', async () => {
+    const exec: ExecFn = async () => {
+      const output = 'umbel: claude needs you to sign in before it can work\n';
+      return { exitCode: 126, output, stdout: output };
+    };
+    const seam = createUmbelSeam(exec, { bin: 'umbel' });
+
+    let caught: unknown;
+    try {
+      await seam.spawnWorker({ provider: 'claude', cwd: '/tmp' });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(WorkerSpawnError);
+    expect((caught as WorkerSpawnError).exitCode).toBe(126);
   });
 });

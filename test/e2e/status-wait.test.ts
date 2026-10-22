@@ -48,7 +48,7 @@ async function pleach(args: string[], cwd: string): Promise<RunResult> {
 }
 
 function spawnRun(repo: string, planPath: string) {
-  return Bun.spawn(['bun', MAIN, 'run', planPath, '--repo-root', repo], {
+  return Bun.spawn(['bun', MAIN, 'run', '--no-redact', planPath, '--repo-root', repo], {
     stdin: 'ignore',
     stdout: 'pipe',
     stderr: 'pipe',
@@ -148,7 +148,7 @@ describe('pleach status / wait — e2e', () => {
   }, 60_000);
 
   test('status on a finished run prints the same node statuses as its run-end', async () => {
-    const r = await pleach(['run', planPath, '--repo-root', repo], repo);
+    const r = await pleach(['run', '--no-redact', planPath, '--repo-root', repo], repo);
     expect(r.code).toBe(0);
     const summary = JSON.parse(r.stdout.trim()) as { closed: string[] };
     expect(summary.closed.sort()).toEqual(['a', 'b', 'c']);
@@ -166,9 +166,9 @@ describe('pleach status / wait — e2e', () => {
 
   // ledger: D31 — a resumed run whose nodes were all verified before is all green.
   test('wait after a resumed run with every node already verified exits 0, each node verified', async () => {
-    const first = await pleach(['run', planPath, '--repo-root', repo], repo);
+    const first = await pleach(['run', '--no-redact', planPath, '--repo-root', repo], repo);
     expect(first.code).toBe(0);
-    const again = await pleach(['run', planPath, '--repo-root', repo], repo);
+    const again = await pleach(['run', '--no-redact', planPath, '--repo-root', repo], repo);
     expect(again.code).toBe(0);
 
     const w = await pleach(['wait', planPath, '--repo-root', repo], repo);

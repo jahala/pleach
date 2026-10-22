@@ -37,6 +37,7 @@ test('pleach run with a relative --repo-root, run from the parent directory, clo
         'bun',
         PLEACH_MAIN,
         'run',
+        '--no-redact',
         planPath,
         '--repo-root',
         basename(repo),

@@ -13,6 +13,7 @@ import {
   type Receipt,
   sha256Hex,
 } from '../core/receipt.ts';
+import type { Redaction } from '../core/redact.ts';
 import { DEFAULT_WORKER_PROVIDER, validatePlan } from '../core/validate.ts';
 import type { ArtifactKind, ConductorDeps, Isolation, RunSummary } from './deps.ts';
 import { outputTail, type ResumedFrom, type RunNodeResult, runNode } from './run-node.ts';
@@ -64,6 +65,12 @@ export interface RunPlanOpts {
   // (issue #146) — handed to validatePlan so a typo refuses the run before any
   // spawn. Absent (e.g. a scripted runner) → no provider name is refused.
   providers?: readonly string[];
+  // Which redaction this run wrote under (issue #107): `plotplot`, or `off`
+  // when the operator passed `--no-redact`. Recorded on the run-start line and
+  // in every receipt's facts, so a run that wrote without redaction is always
+  // visible. The face refuses to start before this when the redactor is
+  // missing; the loop just records and composes the injected redactor.
+  redaction?: Redaction;
 }
 
 export const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes (binding prose).
@@ -93,6 +100,7 @@ export async function runPlan(
       fresh: opts.fresh === true,
       ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       ...(opts.idleMs !== undefined ? { idleMs: opts.idleMs } : {}),
+      redaction: opts.redaction ?? 'plotplot',
       ...(opts.providerBackoffMs !== undefined
         ? { providerBackoffMs: opts.providerBackoffMs }
         : {}),
@@ -115,6 +123,7 @@ interface ResolvedOpts {
   providerBackoffMs?: number;
   settleMs?: number;
   fallbackProvider?: string;
+  redaction: Redaction;
 }
 
 async function runUnderLock(
@@ -131,6 +140,7 @@ async function runUnderLock(
     source: plan.source,
     nodes: plan.nodes.length,
     runId,
+    redaction: opts.redaction,
   });
   await journalGapsOrJournal(deps);
 
@@ -253,14 +263,31 @@ async function runUnderLock(
     // tree, refuses the seed; a node with no receipt at all keeps it, the
     // quarantine being then the only account of the work there is.
     const receipt = await deps.receipts.read(node.id);
-    if (receipt !== null && receipt.refs?.quarantineSha !== sha) {
-      await deps.journal.append({
-        event: 'resume-refused',
-        node: node.id,
-        sha,
-        detail: "the node's latest close kept a different tree — the quarantine is superseded",
-      });
-      return undefined;
+    const recorded = receipt?.refs?.quarantineSha;
+    // A conductor's commit ON TOP of the quarantined tree is the one exception
+    // to "the receipt must name this very tree": the tip descends from the
+    // recorded sha, so it IS that work, plus the fix. Standing on the tip keeps
+    // the fix; rebuilding from nothing would meet the tree the fix already
+    // resolved. A tip that does NOT descend from it — the branch reset to an
+    // unrelated commit, or moved elsewhere — is refused exactly as today, and
+    // the journal says why.
+    let moved = false;
+    if (receipt !== null && recorded !== sha) {
+      const kept =
+        recorded !== undefined && (await deps.isolate.isAncestor(opts.repoRoot, recorded, sha));
+      if (!kept) {
+        await deps.journal.append({
+          event: 'resume-refused',
+          node: node.id,
+          sha,
+          detail:
+            recorded === undefined
+              ? "the node's latest close kept a different tree — the quarantine is superseded"
+              : 'the quarantine branch moved to a commit that does not descend from the tree its close recorded — not resumed',
+        });
+        return undefined;
+      }
+      moved = true;
     }
     // How far through a phased list that tree got (D13), from the same receipt
     // that vouched for it. What a quarantine HOLDS is trusted by no gate, but
@@ -283,9 +310,15 @@ async function runUnderLock(
       return undefined;
     }
     const stat = await deps.isolate.commitStat(opts.repoRoot, sha);
-    await deps.journal.append({ event: 'resumed-from-quarantine', node: node.id, sha });
+    await deps.journal.append({
+      event: 'resumed-from-quarantine',
+      node: node.id,
+      sha,
+      ...(moved ? { moved: true } : {}),
+    });
     return {
       sha,
+      ...(moved ? { moved: true } : {}),
       ...(stat !== null ? { stat } : {}),
       ...(redSealedAt !== undefined ? { redSealedAt } : {}),
     };
@@ -369,19 +402,27 @@ async function runUnderLock(
     // The tree's own record (D14): no gate produced it, so nothing sealed it —
     // it is read here, the last moment the worktree exists, and hashed over
     // the bytes kept. Collection has already set the directory aside, so what
-    // is kept is exactly what no commit carries.
+    // is kept is exactly what no commit carries. The bytes are redacted (issue
+    // #107) before they are hashed and written, so the friction journal can
+    // never leak a secret the weeder/tend2 recorded.
     const friction = await keepOrJournal(node, 'friction', 'friction', receipt.sha256, async () => {
       const text = iso === undefined ? null : await deps.isolate.readFriction(iso.cwd);
-      return text === null ? null : { bytes: text, sha256: sha256Hex(text) };
+      if (text === null) return null;
+      const bytes = await deps.redact.redact(text);
+      return { bytes, sha256: sha256Hex(bytes) };
     });
     // What the worker said when it handed the work back (D17) — the message
     // whose dated Tried line the garden's law asks for, which until now
     // survived only in the provider's own transcript. Kept verbatim and read
     // by nobody: agents produce, code decides. A worker that said nothing
-    // hands back nothing to keep.
+    // hands back nothing to keep. Redacted (issue #107) before it is hashed
+    // and written — a secret the worker echoed in its handback never reaches
+    // the receipt store.
     const handback = await keepOrJournal(node, 'handback', 'handback', receipt.sha256, async () => {
       const text = outcome.handback;
-      return text === undefined || text === '' ? null : { bytes: text, sha256: sha256Hex(text) };
+      if (text === undefined || text === '') return null;
+      const bytes = await deps.redact.redact(text);
+      return { bytes, sha256: sha256Hex(bytes) };
     });
     if (sarif === undefined && friction === undefined && handback === undefined) return undefined;
     return {
@@ -457,7 +498,7 @@ async function runUnderLock(
         throw new GateFailedError('marker', lateMarkers.join('\n'), -1); // N/A: marker scan has no exit code
       }
       const receipt = mintReceipt(
-        buildFacts(plan, node, outcome, durationMs, opts.pleachVersion, resumed),
+        buildFacts(plan, node, outcome, durationMs, opts.pleachVersion, resumed, opts.redaction),
       );
       const { sha } = await deps.isolate.commitBranch(
         iso.cwd,
@@ -559,7 +600,7 @@ async function runUnderLock(
       }
       await deps.ledger.emitVerdict(verdict, plan.source);
       const receipt = mintReceipt(
-        buildFacts(plan, node, outcome, durationMs, opts.pleachVersion, resumed),
+        buildFacts(plan, node, outcome, durationMs, opts.pleachVersion, resumed, opts.redaction),
       );
       // A failed strict gate wrote the log that says why — exactly the log the
       // calibration folds want, so the quarantine path keeps it too.
@@ -993,6 +1034,7 @@ function buildFacts(
   durationMs: number,
   pleachVersion: string,
   resumed: ResumedFrom | undefined,
+  redaction: Redaction,
 ): MintFacts {
   const { verdict } = outcome;
   return {
@@ -1006,16 +1048,27 @@ function buildFacts(
     ...(outcome.audit !== undefined ? { audit: outcome.audit } : {}),
     // What this close stood on when it did not build its own tree (D17) —
     // sealed inside the envelope, so a resumed close is distinguishable from a
-    // fresh one for as long as the receipt exists.
-    ...(resumed !== undefined ? { base: { kind: 'quarantine' as const, sha: resumed.sha } } : {}),
+    // fresh one for as long as the receipt exists. `moved` marks a resume whose
+    // tip had moved past the recorded sha (a conductor's commit on top).
+    ...(resumed !== undefined
+      ? {
+          base: {
+            kind: 'quarantine' as const,
+            sha: resumed.sha,
+            ...(resumed.moved ? { moved: true } : {}),
+          },
+        }
+      : {}),
     // Where the phase ladder left off in the tree this close held (D13) — the
     // one thing a later attempt seeded from that tree needs from this one.
     ...(outcome.redSealedAt !== undefined ? { redSealedAt: outcome.redSealedAt } : {}),
     acceptance: acceptanceOf(node),
+    ...(node.accept.audit !== undefined ? { auditCommand: node.accept.audit.command } : {}),
     degraded: computeDegraded(node),
     stagedFiles: outcome.stagedFiles?.length ?? 0,
     telemetry: verdict.telemetry,
     durationMs,
     pleachVersion,
+    redaction,
   };
 }

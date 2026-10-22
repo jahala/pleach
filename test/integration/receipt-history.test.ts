@@ -60,6 +60,7 @@ function makeFacts(over: Partial<MintFacts> = {}): MintFacts {
     telemetry: {},
     durationMs: 1000,
     pleachVersion: '0.0.1-test',
+    redaction: 'plotplot',
     ...over,
   };
 }

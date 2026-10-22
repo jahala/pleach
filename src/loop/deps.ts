@@ -127,6 +127,12 @@ export interface IsolateSeam {
   // what the interrupted attempt was holding when its tree was quarantined
   // (D17) — the worker is about to continue inside that work.
   commitStat(cwd: string, ref: string): Promise<string | null>;
+  // Is `ancestor` an ancestor of (or equal to) `descendant` (D17)? The resume
+  // asks it to tell a conductor's commit on top of a quarantined tree (kept)
+  // from a branch rewritten or moved elsewhere (refused). False when it is not
+  // an ancestor, including when the ancestor commit no longer resolves — a
+  // moved branch is not to be trusted either way.
+  isAncestor(cwd: string, ancestor: string, descendant: string): Promise<boolean>;
   // Land verified refs onto the branch checked out in repoRoot (ledger B3).
   // Builds the merges in a throwaway detached worktree; the checkout is only
   // ever touched by a final `merge --ff-only`, so a conflict (LandConflictError),
@@ -199,6 +205,14 @@ export interface LedgerSeam {
   // out-of-band verification). The SHA is the durable resume base (ledger B1).
   readClosed(source: string): Promise<Map<string, string | null>>;
   emitVerdict(v: Verdict, source: string): Promise<{ closed: boolean }>;
+}
+
+// The redaction port: text in, text with every secret replaced by
+// `[REDACTED]` out. The seam (src/seams/redact.ts) spawns `plotplot redact`;
+// the test harness replaces a fixed fake-secret pattern. Fail closed — a
+// redactor that cannot run throws, it never returns the input untouched.
+export interface Redactor {
+  redact(text: string): Promise<string>;
 }
 
 export interface LockHandle {
@@ -305,6 +319,11 @@ export interface ConductorDeps {
   lock: LockSeam;
   journal: JournalSeam;
   receipts: ReceiptStore;
+  // The redactor, injected like every other seam. The loop calls it on the
+  // agent- and gate-produced text it keeps (the handback, the friction journal)
+  // so the bytes written beside a receipt are redacted before they reach disk;
+  // the journal seam holds its own redactor for the lines it serialises.
+  redact: Redactor;
   // The conductor's own clock: sleep for `ms`. The provider-error backoff
   // (#151) and the settle wait (#127) use it; injected so tests never wait a
   // wall clock, and raced against the run's abort signal by its callers. The

@@ -40,7 +40,7 @@ describe('quarantine — e2e', () => {
     const planPath = join(repo, 'plan.json');
     await writeFile(planPath, JSON.stringify(PLAN));
 
-    const proc = Bun.spawn(['bun', MAIN, 'run', planPath, '--repo-root', repo], {
+    const proc = Bun.spawn(['bun', MAIN, 'run', '--no-redact', planPath, '--repo-root', repo], {
       stdin: 'ignore',
       stdout: 'pipe',
       stderr: 'pipe',

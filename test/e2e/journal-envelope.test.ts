@@ -197,7 +197,7 @@ describe('the run journal a real run writes — the friction profile envelope', 
 
   function runCli(planPath: string) {
     return Bun.spawn(
-      ['bun', MAIN, 'run', planPath, '--repo-root', repo, '--runner', 'direct-cli'],
+      ['bun', MAIN, 'run', '--no-redact', planPath, '--repo-root', repo, '--runner', 'direct-cli'],
       {
         stdin: 'ignore',
         stdout: 'pipe',

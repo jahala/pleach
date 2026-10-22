@@ -131,7 +131,7 @@ describe('pleach stop — the drain marker, through the real lock seam', () => {
   test('B4: run while a live run holds the lock → exit 3, nothing built, the holder untouched', async () => {
     holder = await startHolder(repo, SOURCE);
 
-    const run = await pleach(['run', planPath, '--repo-root', repo], repo);
+    const run = await pleach(['run', '--no-redact', planPath, '--repo-root', repo], repo);
     expect(run.code).toBe(3);
     expect(run.stderr).toMatch(/run lock held by pid \d+/);
     const branch = Bun.spawnSync([

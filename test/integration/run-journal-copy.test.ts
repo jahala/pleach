@@ -81,6 +81,7 @@ test('two runs back to back leave two copies, each exactly its own run-start to 
   for (const plan of plans) {
     const deps = buildDeps({
       repoRoot: repo,
+      redaction: 'off',
       runner: writingRunner(),
       ledger: gitLedger({ repo }),
     });
@@ -145,7 +146,12 @@ test('a journal lost mid-run leaves no copy, a journal-copy-failed line after ru
       };
     },
   };
-  const deps = buildDeps({ repoRoot: repo, runner: losing, ledger: gitLedger({ repo }) });
+  const deps = buildDeps({
+    repoRoot: repo,
+    redaction: 'off',
+    runner: losing,
+    ledger: gitLedger({ repo }),
+  });
 
   const summary = await runPlan(planFor('first'), deps, {
     repoRoot: repo,

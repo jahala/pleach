@@ -287,6 +287,97 @@ describe('a re-run resumes from the quarantined tree (D17)', () => {
   });
 });
 
+// ledger: D38 — a conductor's commit on top of the quarantine is resumed from.
+// The interrupted close's own account: it kept the tree at RECORDED, and the
+// branch has since moved. What the branch moved TO decides whether the resume
+// stands on it (a conductor's commit on top) or refuses it (a rewrite elsewhere).
+const RECORDED = '56ef'.repeat(10);
+const TIP = '78ab'.repeat(10);
+const UNRELATED = '90cd'.repeat(10);
+
+function interruptedReceipt(): Receipt {
+  return mintReceipt({
+    node: 'x',
+    source: SOURCE,
+    status: 'aborted',
+    attempts: 1,
+    provider: 'claude',
+    gates: [],
+    acceptance: { smoke: SMOKE, audit: AUDIT.command },
+    degraded: [],
+    stagedFiles: 1,
+    telemetry: {},
+    durationMs: 1,
+    pleachVersion: '0.0.1-test',
+    redaction: 'plotplot',
+  });
+}
+
+describe("a conductor's commit on top of the quarantine is kept (D17)", () => {
+  test('the resume stands on the tip and records that it moved', async () => {
+    const h = harnessFor(
+      { refs: { 'quarantine/x': TIP } },
+      {
+        receiptsSeed: {
+          x: {
+            ...interruptedReceipt(),
+            refs: { quarantineBranch: 'quarantine/x', quarantineSha: RECORDED },
+          },
+        },
+        isAncestor: (ancestor, descendant) => ancestor === RECORDED && descendant === TIP,
+      },
+    );
+    const seen = bases(h);
+
+    const summary = await runOne(h, {});
+
+    expect(summary.closed).toEqual(['x']);
+    // The checkout base is the TIP the conductor left, not the sha the receipt
+    // recorded — the fix on top of the quarantined tree is part of the work.
+    expect(seen).toEqual([[TIP]]);
+    // The journal names the tip actually used, and that it moved past the
+    // recorded sha, so a conductor-amended resume stays distinguishable.
+    expect(resumeLines(h)).toHaveLength(1);
+    expect(resumeLines(h)[0]).toMatchObject({ node: 'x', sha: TIP, moved: true });
+    // Sealed the same way: the base is the tip, marked moved.
+    const receipt = receiptOf(h, 'x');
+    expect(receipt.facts.base).toEqual({ kind: 'quarantine', sha: TIP, moved: true });
+    expect(rehash(receipt)).toBe(true);
+    // And the first prompt names the tip the worker is actually standing in.
+    expect(prompts(h, 'x')[0]).toContain(`resuming work interrupted at ${TIP}`);
+  });
+
+  test('a quarantine branch reset to an unrelated commit is refused, with the reason journaled', async () => {
+    const h = harnessFor(
+      { refs: { 'quarantine/x': UNRELATED } },
+      {
+        receiptsSeed: {
+          x: {
+            ...interruptedReceipt(),
+            refs: { quarantineBranch: 'quarantine/x', quarantineSha: RECORDED },
+          },
+        },
+        isAncestor: () => false,
+      },
+    );
+    const seen = bases(h);
+
+    const summary = await runOne(h, {});
+
+    // The unrelated tip is not the recorded work, so the seed is refused and
+    // the node builds from its dependencies as a first run does.
+    expect(summary.closed).toEqual(['x']);
+    expect(seen).toEqual([['HEAD']]);
+    expect(resumeLines(h)).toEqual([]);
+    expect(receiptOf(h, 'x').facts.base).toBeUndefined();
+    // The refusal says why: the branch moved somewhere the close's tree does
+    // not descend into.
+    expect(refusedLines(h)).toHaveLength(1);
+    expect(refusedLines(h)[0]).toMatchObject({ node: 'x', sha: UNRELATED });
+    expect(refusedLines(h)[0].detail).toContain('does not descend');
+  });
+});
+
 describe('opting out leaves the first run’s behaviour (D17)', () => {
   test('--fresh re-isolates from the dependencies alone', async () => {
     const h = harnessFor({ refs: { 'quarantine/x': QSHA } });
@@ -332,6 +423,7 @@ describe('opting out leaves the first run’s behaviour (D17)', () => {
       telemetry: {},
       durationMs: 1,
       pleachVersion: '0.0.1-test',
+      redaction: 'plotplot',
     });
     const h = harnessFor(
       { refs: { 'quarantine/x': QSHA } },
@@ -371,6 +463,7 @@ describe('opting out leaves the first run’s behaviour (D17)', () => {
       telemetry: {},
       durationMs: 1,
       pleachVersion: '0.0.1-test',
+      redaction: 'plotplot',
     });
     const h = harnessFor(
       { refs: { 'quarantine/x': QSHA } },

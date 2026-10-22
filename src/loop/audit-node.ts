@@ -13,6 +13,7 @@ import {
   mintReceipt,
   sha256Hex,
 } from '../core/receipt.ts';
+import type { Redaction } from '../core/redact.ts';
 import { DEFAULT_WORKER_PROVIDER, validatePlan } from '../core/validate.ts';
 import type { ConductorDeps, Isolation } from './deps.ts';
 import { execGateWithRetry, runAuditLadder } from './run-node.ts';
@@ -57,6 +58,9 @@ export interface AuditNodeOpts {
   // its tree kept, rather than leaving a worktree behind.
   signal?: AbortSignal;
   pleachVersion?: string;
+  // Which redaction this close wrote under (issue #107), recorded in the
+  // receipt's facts exactly as a run records it.
+  redaction?: Redaction;
 }
 
 export interface AuditNodeResult {
@@ -147,6 +151,7 @@ async function auditUnderLock(
     gates: [],
     startedAt,
     pleachVersion: opts.pleachVersion ?? '0.0.0-dev',
+    redaction: opts.redaction ?? 'plotplot',
   };
   try {
     return await adjudicate(settle, opts, timeoutMs);
@@ -243,6 +248,7 @@ interface Settle {
   records?: AuditRecord[];
   startedAt: number;
   pleachVersion: string;
+  redaction: Redaction;
 }
 
 // A pass: commit-before-emit (B2). node/<id> and its SHA exist before the
@@ -359,12 +365,28 @@ async function seedFrom(
   // no smoke recorded is no such claim.
   const smoke = receipt.facts.gates.find((g) => g.gate === 'smoke');
   if (smoke === undefined || smoke.exitCode !== 0) {
-    throw new AuditRefusedError(
-      node.id,
-      receipt.facts.base !== undefined
-        ? 'its latest close was itself a re-audit, which runs no smoke of its own — re-run the node'
-        : 'its latest close records no green smoke — an audit verdict over an unproven build proves nothing',
-    );
+    if (receipt.facts.base === undefined) {
+      throw new AuditRefusedError(
+        node.id,
+        'its latest close records no green smoke — an audit verdict over an unproven build proves nothing',
+      );
+    }
+    // Its latest close was itself a re-audit, which runs no smoke of its own.
+    // The only thing that changes the question is the audit command: re-asking
+    // the same one forever is the loop the refusal exists to stop, but a
+    // changed command is a different audit and is allowed through.
+    const current = node.accept.audit?.command;
+    const recorded = receipt.facts.auditCommand;
+    if (recorded !== undefined && recorded === current) {
+      throw new AuditRefusedError(
+        node.id,
+        `its latest close was a re-audit of the same audit command (${current}) — change the plan's accept.audit.command to re-audit it again`,
+      );
+    }
+    // recorded === undefined: the previous re-audit predates command recording,
+    // so there is nothing to compare against — allow the re-audit once, and the
+    // close it writes records the command for the next comparison. recorded !==
+    // current: a genuinely different audit, allowed.
   }
   // The other half of SEC4a: an auditor was already admitted to this exact
   // tree, which is what audit records mean — the gate-integrity check passed on
@@ -506,12 +528,14 @@ function auditFacts(settle: Settle, verdict: Verdict, durationMs: number): MintF
     base: settle.base,
     ...(settle.redSealedAt !== undefined ? { redSealedAt: settle.redSealedAt } : {}),
     acceptance: acceptanceOf(node),
+    ...(node.accept.audit !== undefined ? { auditCommand: node.accept.audit.command } : {}),
     degraded: computeDegraded(node),
     // The delivery is the build's; this close staged nothing of its own.
     stagedFiles: 0,
     telemetry: verdict.telemetry,
     durationMs,
     pleachVersion: settle.pleachVersion,
+    redaction: settle.redaction,
   };
 }
 

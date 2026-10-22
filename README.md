@@ -36,6 +36,12 @@ bun add -d github:jahala/pleach
 The default runner also wants `tmux` and an `umbel` binary. `--runner direct-cli` needs neither,
 only the `claude` and `codex` CLIs.
 
+Redacting secrets from agent and gate output needs a `plotplot` binary
+(`cargo install --locked --git https://github.com/jahala/plotplot`). `pleach run` / `land` /
+`audit` refuse to start without it; pass `--no-redact` to opt out explicitly — that choice is
+recorded on the run's `run-start` line and in every receipt. See
+[`docs/guarantees.md`](docs/guarantees.md#secrets-are-redacted-before-they-reach-disk).
+
 ## The gate ladder
 
 Every node goes through the same fixed sequence. The agent touches only one step of it.
@@ -53,7 +59,8 @@ work. Only a node that clears all of it publishes a branch.
 ```
 pleach run <plan.json>          Execute a plan (--land to land a fully-verified close)
 pleach land <plan.json>         Merge a verified plan's sinks onto the checked-out branch
-pleach audit <plan.json> <node> Re-run only the audit on a quarantined node
+pleach audit <plan.json> <node> Re-run only the audit on a quarantined node; a further re-audit
+                                 needs a changed accept.audit.command
 pleach audit-wrap -- <command>  Wrap any check so it prints the block an audit command must print
 pleach stop <plan.json>         Drain a running plan (--now aborts in-flight nodes)
 pleach status <plan.json>       Print the latest run's state (JSON on stdout, table on stderr)
@@ -75,6 +82,7 @@ tree on `quarantine/<id>` and writes a receipt.
 |---|---|
 | The auditor's relay is unreadable, or it dies | Quarantines with gates green; `pleach audit` re-adjudicates without rebuilding |
 | A provider is down | `--fallback-provider` re-casts on another vendor; an outage is never paid twice |
+| The provider needs a person to sign in | Spawn exit 126 settles `blocked`, never retried on that provider; sign in once outside the conductor, then re-run |
 | The network or the provider errors | Waits and retries inside the same attempt; a short outage costs no attempts |
 | A worker's background job is still writing | Gates wait until the tree is still; one that never settles fails the attempt, naming the paths |
 | The plan holds a bare shell operator | Refused at `validate`, before a worker costs anything |
@@ -86,6 +94,7 @@ tree on `quarantine/<id>` and writes a receipt.
 | A git hook changes the commit | The node fails; nothing a gate did not judge is published |
 | A seam throws mid-node | Settles under `seam:<lane>`; the verdict names the next step |
 | The journal loses lines | Reported as `journal-gap` at the next run; each run keeps its own copy |
+| A worker or gate prints a secret | Redacted (`[REDACTED]`) before it reaches the journal, the log or a receipt |
 
 Full detail, one section each: [`docs/guarantees.md`](docs/guarantees.md).
 

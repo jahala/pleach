@@ -15,6 +15,7 @@
 // Hashing is stdlib computation (no I/O, deterministic) — core stays pure.
 import { createHash } from 'node:crypto';
 import type { Verdict } from './plan.ts';
+import type { Redaction } from './redact.ts';
 
 // Pinned to the canonical doc's header (docs/contract/plan-schema.md); the
 // unit test asserts the pin. The fence makes an old receipt fail derivation
@@ -60,7 +61,12 @@ export interface ReceiptFacts {
   // INSIDE the envelope, because what was judged is a fact of the close and not
   // a ref settled after the freeze; `canonicalJson` drops undefined, so a
   // receipt that built its own tree hashes exactly as it did before the field.
-  base?: { kind: 'quarantine'; sha: string };
+  // `sha` is the tip actually stood on; `moved` (present only when true) marks
+  // a resume whose tip had moved PAST the sha its receipt recorded — a
+  // conductor's commit on top of the quarantined tree, kept rather than
+  // rebuilt, so a resumed close that carried that fix stays distinguishable
+  // from one that stood on the tree exactly as it was quarantined.
+  base?: { kind: 'quarantine'; sha: string; moved?: boolean };
   // How far the tree this close held got through a phased work list (D13): the
   // index of the red phase whose seal is IN that tree's history. A later
   // attempt standing on that tree — a resumed quarantine, a re-adjudication
@@ -75,12 +81,24 @@ export interface ReceiptFacts {
   // The node's acceptance AS RUN — the evolution-invalidation record. A later
   // run whose plan carries different strings must not skip-trust this close.
   acceptance: { smoke?: string; audit?: string };
+  // The audit command this close actually ran, recorded so a later `pleach
+  // audit` can tell "the same question re-asked" (refused) from "a changed
+  // audit" (allowed) when the latest close was itself a re-audit (D17). Absent
+  // for a node with no audit and for a receipt minted before the field existed
+  // — 'unknown', which a re-audit may cross once. `canonicalJson` drops
+  // undefined, so a receipt without it hashes exactly as it did before the
+  // field existed.
+  auditCommand?: string;
   degraded: string[]; // every check the plan never configured
   stagedFiles: number;
   telemetry: Verdict['telemetry'];
   durationMs: number;
   contractVersion: string;
   pleachVersion: string;
+  // Whether this close's text was redacted before it reached disk, and by
+  // whom (`plotplot`) or not at all (`off` — an explicit `--no-redact`). Sealed
+  // INSIDE the envelope: a close that redacted nothing must say so forever.
+  redaction: Redaction;
 }
 
 // Mint stamps contractVersion itself — callers cannot mint under a foreign fence.

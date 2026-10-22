@@ -189,6 +189,7 @@ describe.skipIf(!binPresent)('runPlan over the umbel runner — a wedged worker 
 
     const deps = buildDeps({
       repoRoot: repo,
+      redaction: 'off',
       runner: makeSeam(),
       ledger: gitLedger({ repo }),
       journal: join(stateDir, 'journal.jsonl'),
