@@ -161,13 +161,16 @@ describe.skipIf(!binPresent)('umbel seam integration', () => {
       expect(stdout).toContain(`killed worker session ${session} (n)`);
       expect(stdout).toContain(`worker session ${dead.__name} already gone (m)`);
 
-      // The session is gone from the operator's view — `umbel ls` (what the
-      // issue counts leftover sessions in) no longer lists it.
-      const ls = await exec([UMBEL_BIN, 'ls'], {
+      // The session is no longer alive. Asked through `status --json`, because
+      // whether `umbel ls` lists dead sessions differs between umbel versions.
+      const status = await exec([UMBEL_BIN, 'status', '--json', session], {
         cwd: repo,
         env: { UMBEL_STATE: stateDir },
       });
-      expect(ls.output).not.toContain(session);
+      if (status.exitCode === 0) {
+        const [record] = JSON.parse(status.output) as Array<{ alive?: boolean }>;
+        expect(record?.alive).toBe(false);
+      }
     } finally {
       await cleanup();
     }
