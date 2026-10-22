@@ -369,7 +369,7 @@ async function seedFrom(
     // The only thing that changes the question is the audit command: re-asking
     // the same one forever is the loop the refusal exists to stop, but a
     // changed command is a different audit and is allowed through.
-    const current = (node.accept.audit as NonNullable<Node['accept']['audit']>).command;
+    const current = node.accept.audit?.command;
     const recorded = receipt.facts.auditCommand;
     if (recorded !== undefined && recorded === current) {
       throw new AuditRefusedError(
