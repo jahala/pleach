@@ -11,6 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The plan-schema version guard (test/unit/plan-version.test.ts) reads
+          # git history to find the commit that last changed the version line; a
+          # shallow clone would make that comparison pass vacuously.
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: bun install --frozen-lockfile

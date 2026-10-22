@@ -28,7 +28,7 @@ of control flow, stop: that's the exact hole this system exists to close.
 
 Authoritative context (read before substantial work):
 - `docs/plan.md` — the build plan and work breakdown.
-- `docs/contract/plan-schema.md` — the canonical `@agent-contract/plan` text, v1.1.5 (this repo is its home).
+- `docs/contract/plan-schema.md` — the canonical `@agent-contract/plan` text, v1.1.6 (this repo is its home).
 - `docs/ledger.md` — the verified defect ledger this design answers. Every ledger ID maps to a required test.
 
 ## Non-negotiables
@@ -94,11 +94,14 @@ core/      plan.ts  validate.ts  classify.ts  errors.ts    ← pure, total
 
 ## The contract
 
-This repo is the **canonical home** of `@agent-contract/plan`, at v1.1.5. The schema text lives in
+This repo is the **canonical home** of `@agent-contract/plan`, at v1.1.6. The schema text lives in
 `docs/contract/plan-schema.md`; `src/core/plan.ts` must match it byte-for-byte inside the fenced block
 (drift test enforces; same pattern tend uses). tend and umbel vendor from the doc. Changing the schema =
 changing the doc + the source + the drift test in ONE commit, with a version note — and a heads-up
-recorded in `docs/contract/CHANGES.md` for the other two repos.
+recorded in `docs/contract/CHANGES.md` for the other two repos. Any change to the canonical text —
+the seam block included — moves the version line in the doc's title with it: `test/unit/plan-version.test.ts`
+guards this by failing when the doc differs from its content at the commit that last changed the version
+line, unless the version line changed too.
 
 ## Error taxonomy (the classify ladder — `core/classify.ts`)
 

@@ -1,8 +1,11 @@
-# `@agent-contract/plan` v1.1.5 — canonical text
+# `@agent-contract/plan` v1.1.6 — canonical text
 
 This repo is the contract's home. `src/core/plan.ts` must match the fenced block below byte-for-byte
 (drift-tested). tend and umbel vendor from this file. Schema changes happen here first — doc + source +
-drift test in one commit, with an entry in [`CHANGES.md`](CHANGES.md).
+drift test in one commit, with an entry in [`CHANGES.md`](CHANGES.md). The version line in the title
+above moves with any change to this text, seam block included: `test/unit/plan-version.test.ts` fails
+when this file differs from its content at the commit that last changed the version line unless the
+version line changed too.
 
 Provenance: v0.3 §1 of `tend-umbel-build-spec.md` (ratified) + the v1.1 verification deltas
 (`docs/ledger.md`): id charset (SEC3), `setup` (C3), `policy.timeoutMs` (D1), `Verdict.status +=

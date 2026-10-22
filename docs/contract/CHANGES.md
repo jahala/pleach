@@ -112,3 +112,14 @@
   `canonicalJson` drops undefined, so every receipt already on disk hashes exactly as it did and
   still verifies. `deriveStatus` does not read it: where a tree left off changes what an attempt
   runs next, never what a close's facts imply.
+
+- **v1.1.6 (2026-10-22)** — the `Worker.wait` opts' `idleMs?: number` in the informative "Seam
+  interfaces" block, the text change that went in under v1.1.5 without a version bump (issue #123).
+  That decision was wrong: the canonical text changed, so a reader pinning "plan schema v1.1.5" now
+  means one of two texts. The version number is the only thing a consumer can pin cheaply, so it now
+  moves with any change to the canonical text, seam block included: `test/unit/plan-version.test.ts`
+  fails when `docs/contract/plan-schema.md` differs from its content at the commit that last changed
+  the version line, unless the version line changed too. This entry corrects the "Seam prose, not
+  schema" entry below — history stays as written, but its "no version bump" was wrong. Receipts minted
+  under v1.1.5 now fail `pleach receipt`'s version fence, exactly as the fence is designed to, and
+  tend2 must re-vendor this text.
