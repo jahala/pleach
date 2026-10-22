@@ -6,7 +6,7 @@ import { describe, expect, test } from 'bun:test';
 import { type AccountFacts, account } from '../../src/core/account.ts';
 
 function facts(over: Partial<AccountFacts> & { status: AccountFacts['status'] }): AccountFacts {
-  return { node: 'n', attempts: 1, provider: 'claude', ...over };
+  return { attempts: 1, provider: 'claude', ...over };
 }
 
 describe('account — every non-progress status yields two non-empty strings', () => {
@@ -36,7 +36,7 @@ describe('account — failed', () => {
     expect(a.reason).toContain('false');
     expect(a.reason).toContain('1');
     expect(a.reason).toContain('boom');
-    expect(a.nextStep).toContain('quarantine/n');
+    expect(a.nextStep).toContain('re-run the plan');
   });
 
   test('a gate that could not run names whose fault it is, and the next step fixes it', () => {
@@ -92,7 +92,7 @@ describe('account — blocked', () => {
   test('a blocked node with no recorded reason says what was observed', () => {
     const a = account(facts({ status: 'blocked', attempts: 1 }));
     expect(a.reason).toContain('no reason');
-    expect(a.nextStep).toContain('quarantine/n');
+    expect(a.nextStep).toContain('re-run the plan');
   });
 });
 
@@ -112,7 +112,7 @@ describe('account — the other terminal statuses', () => {
   test('aborted says the node did not lose and points at a resume', () => {
     const a = account(facts({ status: 'aborted', attempts: 1 }));
     expect(a.reason).toContain('did not lose');
-    expect(a.nextStep).toContain('quarantine/n');
+    expect(a.nextStep).toContain('re-run the plan');
   });
 
   test('rejected has a reason and a next step even with thin facts', () => {

@@ -10,7 +10,6 @@ import type { Verdict } from './plan.ts';
 // reason").
 
 export interface AccountFacts {
-  node: string;
   status: Exclude<Verdict['status'], 'done'>;
   attempts: number;
   provider: string;
@@ -100,23 +99,25 @@ function buildNextStep(f: AccountFacts): string {
       if (present(f.blockedReason) && /sign in/i.test(f.blockedReason)) {
         return `sign in to ${f.provider} once, outside the conductor, then re-run`;
       }
-      return `resolve what the reason names, then re-run — the node resumes from quarantine/${f.node}`;
+      return 'resolve what the reason names, then re-run the plan';
     }
     case 'dead':
       return `re-cast the node on another provider (--fallback-provider), or re-run once ${f.provider} is back`;
     case 'timeout':
       return 're-run with a longer --timeout-ms, or split the node';
     case 'aborted':
-      return `re-run — the node resumes from quarantine/${f.node}`;
+      return 're-run the plan';
     case 'rejected':
-      return `re-run — the node resumes from quarantine/${f.node}`;
+      return 'fix what the reason names, then re-run the plan';
     case 'failed': {
       if (present(f.detail) && /cannot run/.test(f.detail)) {
         return /the plan's/.test(f.detail)
           ? 'fix the plan — no attempt can run the gate'
           : 'fix the environment — no attempt can run the gate';
       }
-      return `re-run — the node resumes from quarantine/${f.node}`;
+      // Never name quarantine/<id> here: the account is written before the
+      // settle, and a node whose tree changed nothing has no quarantine.
+      return 'fix what the failing gate reports, then re-run the plan';
     }
   }
 }

@@ -50,7 +50,7 @@ describe('the journal verdict line carries reason and nextStep (issue #106)', ()
     const verdict = verdictLine(h, 'n');
     expect(verdict.status).toBe('failed');
     expect(nonEmpty(verdict.reason)).toContain('false');
-    expect(nonEmpty(verdict.nextStep)).toContain('quarantine/n');
+    expect(nonEmpty(verdict.nextStep)).toContain('re-run the plan');
   });
 
   test('a blocked node whose blockedReason is absent still says what was observed', async () => {
@@ -73,7 +73,7 @@ describe('the journal verdict line carries reason and nextStep (issue #106)', ()
     // No blockedReason on the line — the reason the issue saw as `?`.
     expect(verdict.blockedReason).toBeUndefined();
     expect(nonEmpty(verdict.reason)).toContain('no reason');
-    expect(nonEmpty(verdict.nextStep)).toContain('quarantine/n');
+    expect(nonEmpty(verdict.nextStep)).toContain('re-run the plan');
 
     // The `blocked` event's reason is never empty either.
     const blocked = h.journal.find((e) => e.event === 'blocked' && e.node === 'n');

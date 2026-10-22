@@ -499,7 +499,6 @@ async function journalVerdict(
     verdict.status === 'done'
       ? undefined
       : account({
-          node: node.id,
           status: verdict.status,
           attempts: verdict.attempts,
           provider: node.worker.provider ?? DEFAULT_WORKER_PROVIDER,

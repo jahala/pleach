@@ -88,5 +88,5 @@ test('a node whose smoke gate is `false` settles failed with a non-empty reason 
 
   expect(typeof verdict?.nextStep).toBe('string');
   expect((verdict?.nextStep as string).length).toBeGreaterThan(0);
-  expect(verdict?.nextStep as string).toContain('quarantine/verdict.c1');
+  expect(verdict?.nextStep as string).toContain('re-run the plan');
 }, 60_000);
