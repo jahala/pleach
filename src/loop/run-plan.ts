@@ -555,6 +555,7 @@ async function runUnderLock(
               ? { blockedReason: verdict.evidence.blockedReason }
               : {}),
             ...(outcome.verdictDetail !== undefined ? { detail: outcome.verdictDetail } : {}),
+            ...(outcome.nextStep !== undefined ? { nextStep: outcome.nextStep } : {}),
             ...(outcome.runnerDetail?.paneTail !== undefined
               ? { paneTail: outcome.runnerDetail.paneTail }
               : {}),

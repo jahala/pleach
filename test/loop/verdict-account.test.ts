@@ -81,6 +81,31 @@ describe('the journal verdict line carries reason and nextStep (issue #106)', ()
     expect(nonEmpty(blocked?.reason)).toContain('no reason');
   });
 
+  test('an audit with no readable answer over a green build points at a re-audit', async () => {
+    const h = makeHarness({
+      changedByNode: { n: ['src/n.ts'] },
+      waitScript: () => Promise.resolve({ ...stop(), finalMessage: 'no fence at all' }),
+    });
+    const p = plan({
+      nodes: [
+        makeNode({
+          id: 'n',
+          work: { prompt: 'build n' },
+          accept: { audit: { command: 'bash audit.sh', provider: 'codex' } },
+          policy: { maxAttempts: 1, onDead: 'fail', reauditWhen: ['compacted'] },
+        }),
+      ],
+    });
+
+    await runPlan(p, h.deps, { repoRoot: REPO });
+
+    const verdict = verdictLine(h, 'n');
+    expect(verdict.status).toBe('failed');
+    expect(nonEmpty(verdict.reason)).toContain('egress unparseable');
+    // The build is green; spend the auditor's turn again, never the build.
+    expect(verdict.nextStep).toBe('pleach audit <plan.json> n');
+  });
+
   test('a done verdict carries neither field', async () => {
     const h = makeHarness();
     const p = plan({ nodes: [makeNode({ id: 'n' })] });

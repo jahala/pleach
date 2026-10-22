@@ -133,6 +133,11 @@ export interface RunNodeResult {
   // run at all, named as the plan's or the environment's fault (D19). Rides
   // the verdict's journal line as `detail`; the Verdict contract is untouched.
   verdictDetail?: string;
+  // The step the loop itself already knows picks the work up (issue #106):
+  // `pleach audit` when only the audit could not adjudicate a green build, the
+  // surprise's own next step (D23). The verdict's account prefers it to one it
+  // would have to infer from the status.
+  nextStep?: string;
 }
 
 const REAUDIT_BUDGET = 2;
@@ -748,6 +753,9 @@ export async function runNode(
         if (ladder.kind === 'unadjudicated') {
           const base = baseVerdict(node, attempts);
           return handBack({
+            // The build's gates are green; only the audit has no answer, so
+            // the auditor's turn is what to spend again, never the build.
+            ...(ladder.aborted ? {} : { nextStep: `pleach audit <plan.json> ${node.id}` }),
             verdict: {
               ...base,
               // An auditor the run's own signal cut off is an abort, not a
@@ -806,6 +814,7 @@ export async function runNode(
       verdict: failedVerdict(node, attempts, { gate: { ran: gate, exitCode: -1 } }),
       gateOutputTail: outputTail(message),
       verdictDetail: `${message} — next: ${surpriseNextStep(node, lane, iso !== null)}`,
+      nextStep: surpriseNextStep(node, lane, iso !== null),
     });
   } finally {
     // Safety net: any tree still held by a thrown/early path is disposed.

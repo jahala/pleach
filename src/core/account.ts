@@ -26,6 +26,9 @@ export interface AccountFacts {
   // What the runner saw at an abnormal end, when it could see anything.
   paneTail?: string;
   processExit?: number;
+  // The step the loop already named when it settled the node (the audit's
+  // re-adjudication, a surprise's next step). Taken as given when present.
+  nextStep?: string;
 }
 
 export interface Account {
@@ -89,6 +92,7 @@ function buildReason(f: AccountFacts): string {
 }
 
 function buildNextStep(f: AccountFacts): string {
+  if (present(f.nextStep)) return f.nextStep.trim();
   switch (f.status) {
     case 'blocked': {
       // A spawn the provider refused for a sign-in (issue #128) already names
@@ -96,7 +100,7 @@ function buildNextStep(f: AccountFacts): string {
       if (present(f.blockedReason) && /sign in/i.test(f.blockedReason)) {
         return `sign in to ${f.provider} once, outside the conductor, then re-run`;
       }
-      return `fix the permission mode / allowlist, then re-run — the node resumes from quarantine/${f.node}`;
+      return `resolve what the reason names, then re-run — the node resumes from quarantine/${f.node}`;
     }
     case 'dead':
       return `re-cast the node on another provider (--fallback-provider), or re-run once ${f.provider} is back`;
@@ -112,9 +116,6 @@ function buildNextStep(f: AccountFacts): string {
           ? 'fix the plan — no attempt can run the gate'
           : 'fix the environment — no attempt can run the gate';
       }
-      // Only the audit lane threw over a green tree (D23): re-adjudicate, never
-      // rebuild — the build and the smoke already passed.
-      if (f.gate?.ran.startsWith('seam:audit')) return `pleach audit <plan.json> ${f.node}`;
       return `re-run — the node resumes from quarantine/${f.node}`;
     }
   }

@@ -58,10 +58,10 @@ describe('account — failed', () => {
         status: 'failed',
         gate: { ran: 'seam:audit', exitCode: -1 },
         detail: 'wait exploded — next: pleach audit <plan.json> n',
+        nextStep: 'pleach audit <plan.json> n',
       }),
     );
-    expect(a.nextStep).toContain('pleach audit');
-    expect(a.nextStep).toContain('n');
+    expect(a.nextStep).toBe('pleach audit <plan.json> n');
   });
 
   test('thin facts still say what is known', () => {
@@ -75,7 +75,7 @@ describe('account — blocked', () => {
   test('a recorded blockedReason rides the verdict verbatim', () => {
     const a = account(facts({ status: 'blocked', blockedReason: 'need a key' }));
     expect(a.reason).toBe('need a key');
-    expect(a.nextStep).toContain('permission');
+    expect(a.nextStep).toContain('resolve what the reason names');
   });
 
   test('a spawn refused for a sign-in names the sign-in as the next step', () => {
