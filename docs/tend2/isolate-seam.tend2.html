@@ -104,7 +104,7 @@ Every node builds in a disposable worktree off its verified dependencies. The sc
 
 - [x] (code) A relative `--repo-root` that is not `.`, run from another cwd, closes a node: the face resolves the root once, so the isolate and clean seams' `git -C <root>` with `cwd: <root>` never resolve a relative path twice (D22, jahala/pleach#102) · test/e2e/repo-root-relative.test.ts @1eb86bc · by cli
 - [x] (code) Eight nodes isolating at once in a fresh repository all get a tree: the seam runs `git worktree` add, remove and list one at a time, so none reads another's half-written admin dir · test/integration/isolate-concurrent.test.ts @ff07847 · by cli
-- [ ] (code) Through the real CLI, a linked-worktree root passed relative or absolute, with a gate that cannot run, settles failed with the gate's reason, keeps its tree on `quarantine/<id>`, and journals no `quarantine-failed` · test/e2e/no-tree-settle.test.ts
+- [x] (code) Through the real CLI, a linked-worktree root passed relative or absolute, with a gate that cannot run, settles failed with the gate's reason, keeps its tree on `quarantine/<id>`, and journals no `quarantine-failed` · test/e2e/no-tree-settle.test.ts @84e4cf7 · by cli
 
 ## For #developer #operator
 
