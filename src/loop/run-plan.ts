@@ -1012,6 +1012,7 @@ function buildFacts(
     // one thing a later attempt seeded from that tree needs from this one.
     ...(outcome.redSealedAt !== undefined ? { redSealedAt: outcome.redSealedAt } : {}),
     acceptance: acceptanceOf(node),
+    ...(node.accept.audit !== undefined ? { auditCommand: node.accept.audit.command } : {}),
     degraded: computeDegraded(node),
     stagedFiles: outcome.stagedFiles?.length ?? 0,
     telemetry: verdict.telemetry,

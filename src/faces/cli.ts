@@ -191,7 +191,9 @@ quarantined tree is checked out again with its dependencies merged as a run
 merges them, setup provisions it, and only the audit runs. A pass publishes
 node/<id> and closes; anything else writes a new quarantine receipt. It refuses
 (exit 1) a node whose latest close is not a quarantine with a green smoke: an
-audit verdict over an unproven build proves nothing.
+audit verdict over an unproven build proves nothing. A re-audit is one question
+answered once — re-auditing the same \`accept.audit.command\` again is refused;
+change the command and the re-audit runs.
 
 Exit codes:
   0  every plan node closed (verified) — for \`wait\`, the run ended with every node closed
