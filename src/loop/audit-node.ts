@@ -1,3 +1,4 @@
+import { account } from '../core/account.ts';
 import {
   AuditRefusedError,
   GateFailedError,
@@ -491,6 +492,20 @@ async function journalVerdict(
   tail?: string,
 ): Promise<void> {
   const { node } = settle;
+  // Every non-progress verdict carries a reason and a next step (issue #106):
+  // a re-adjudication that refused the tree it judged is still a verdict about
+  // that tree, and the operator reads the journal, not the re-audit's process.
+  const accounting =
+    verdict.status === 'done'
+      ? undefined
+      : account({
+          node: node.id,
+          status: verdict.status,
+          attempts: verdict.attempts,
+          provider: node.worker.provider ?? DEFAULT_WORKER_PROVIDER,
+          ...(verdict.evidence.gate !== undefined ? { gate: verdict.evidence.gate } : {}),
+          ...(tail !== undefined ? { gateOutputTail: tail } : {}),
+        });
   await settle.deps.journal.append({
     event: 'verdict',
     node: node.id,
@@ -509,6 +524,9 @@ async function journalVerdict(
     // Which tree this verdict judged — a re-adjudication's verdict is about
     // work some earlier attempt produced, and the journal must say so.
     base: settle.base,
+    ...(accounting !== undefined
+      ? { reason: accounting.reason, nextStep: accounting.nextStep }
+      : {}),
   });
 }
 

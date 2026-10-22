@@ -59,6 +59,22 @@ describe('narrateEvent (W1 narration floor)', () => {
     expect(line).toBe('✗ api: failed after 2 attempt(s)');
   });
 
+  // issue #106: a non-progress verdict carries a computed reason and next step;
+  // the operator reading only stderr must see the next action, not just that
+  // the node failed.
+  test('verdict narrates its reason and next step when the line carries them', () => {
+    const line = narrateEvent({
+      event: 'verdict',
+      node: 'api',
+      status: 'failed',
+      attempts: 1,
+      reason: "'false' failed (exit 1)",
+      nextStep: 're-run — the node resumes from quarantine/api',
+    });
+    expect(line).toContain("'false' failed (exit 1)");
+    expect(line).toContain('next: re-run — the node resumes from quarantine/api');
+  });
+
   test('quarantined points at the evidence branch', () => {
     const line = narrateEvent({ event: 'quarantined', node: 'api', branch: 'quarantine/api' });
     expect(line).toContain('quarantine/api');

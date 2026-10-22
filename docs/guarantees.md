@@ -7,6 +7,16 @@ a failing test before its fix.
 The short version: **work is never silently lost, and a verdict is never invented.**
 A node that cannot finish keeps its tree on `quarantine/<id>` and writes a receipt.
 
+## Every non-progress verdict names a reason and a next step
+
+A verdict that settled away from `done` — `failed`, `dead`, `timeout`, `rejected`,
+`aborted` or `blocked` — carries a non-empty `reason` and a non-empty `nextStep` on its
+journal line, both derived from what the loop observed: the phase that stalled, the runner's
+last status, the tail of the worker's output, the claim that could not be evaluated. When the
+facts are thin they say what is known (the status, the attempts, "the runner reported no
+reason"), never `?` and never null. The `blocked` event's `reason` is never empty for the
+same rule: a worker that ended without a recorded prompt is accounted for, not left blank.
+
 ## Secrets are redacted before they reach disk
 
 Agent- and gate-produced text reaches pleach's records in three places: the run
@@ -182,9 +192,9 @@ error or an idle worker settles the way the runner contract classifies it.
 
 Anything else a seam throws mid-node settles the node `failed` under the gate `seam:<lane>`,
 with the seam's text as the output tail and the attempt counted. The tree is kept on
-`quarantine/<id>` and the receipt is written. The verdict's `detail` names the next step:
-`pleach audit plan.json <node>` when only the audit threw, otherwise a re-run, which resumes
-from the quarantine.
+`quarantine/<id>` and the receipt is written. The verdict's `nextStep` names the concrete
+action: `pleach audit plan.json <node>` when only the audit threw, otherwise a re-run, which
+resumes from the quarantine.
 
 ## A lost journal is reported
 
