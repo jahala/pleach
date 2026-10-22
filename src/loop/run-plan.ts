@@ -1,3 +1,4 @@
+import { account } from '../core/account.ts';
 import {
   GateFailedError,
   IsolateCatastrophicError,
@@ -535,6 +536,32 @@ async function runUnderLock(
     }
     const outcome = commit?.kind === 'refused' ? commit.outcome : ran;
     const { verdict, iso } = outcome;
+    // Every non-progress verdict carries a reason and a next step, computed
+    // from what the loop observed (issue #106): the operator reads the journal,
+    // not a disposed worktree or a dead session.
+    const accounting =
+      verdict.status === 'done'
+        ? undefined
+        : account({
+            status: verdict.status,
+            attempts: verdict.attempts,
+            provider: node.worker.provider ?? DEFAULT_WORKER_PROVIDER,
+            ...(verdict.evidence.gate !== undefined ? { gate: verdict.evidence.gate } : {}),
+            ...(outcome.gateOutputTail !== undefined
+              ? { gateOutputTail: outcome.gateOutputTail }
+              : {}),
+            ...(verdict.evidence.blockedReason !== undefined
+              ? { blockedReason: verdict.evidence.blockedReason }
+              : {}),
+            ...(outcome.verdictDetail !== undefined ? { detail: outcome.verdictDetail } : {}),
+            ...(outcome.nextStep !== undefined ? { nextStep: outcome.nextStep } : {}),
+            ...(outcome.runnerDetail?.paneTail !== undefined
+              ? { paneTail: outcome.runnerDetail.paneTail }
+              : {}),
+            ...(outcome.runnerDetail?.processExit !== undefined
+              ? { processExit: outcome.runnerDetail.processExit }
+              : {}),
+          });
     // Record the full diagnostic shape — a failed run must be explainable from
     // the journal alone (the worktrees and sessions are gone by then).
     await deps.journal.append({
@@ -576,6 +603,9 @@ async function runUnderLock(
       ...(outcome.runnerDetail?.processExit !== undefined
         ? { processExit: outcome.runnerDetail.processExit }
         : {}),
+      ...(accounting !== undefined
+        ? { reason: accounting.reason, nextStep: accounting.nextStep }
+        : {}),
     });
 
     if (commit === undefined || commit.kind === 'refused' || iso === undefined) {
@@ -588,7 +618,9 @@ async function runUnderLock(
         await deps.journal.append({
           event: 'blocked',
           node: node.id,
-          reason: verdict.evidence.blockedReason,
+          // Never empty (issue #106): when the runner recorded no blocking
+          // prompt, the computed account's reason says what was observed.
+          reason: verdict.evidence.blockedReason ?? accounting?.reason,
         });
       } else if (verdict.status === 'aborted') {
         // The run stopped holding this node; it did not lose (D16). Everything
