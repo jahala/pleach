@@ -1,3 +1,4 @@
+import { RedactError } from './errors.ts';
 // Secret redaction, the pure half. Agent- and gate-produced text reaches the
 // journal, the run log and the receipt's handback; a secret in any of it must
 // never reach disk. The I/O half (running `plotplot redact`) is a seam
@@ -16,20 +17,45 @@ export type Redaction = 'off' | 'plotplot';
 // replaces a fixed fake-secret pattern. Both honour this contract.
 export type RedactText = (text: string) => Promise<string>;
 
-// Every string under `value` passed through `redact`, arrays and objects
-// walked in place. Pure and total: the redactor is the only thing that can
-// fail, and it is injected.
-export async function redactStrings(value: unknown, redact: RedactText): Promise<unknown> {
-  if (typeof value === 'string') return redact(value);
-  if (Array.isArray(value)) {
-    const out: unknown[] = [];
-    for (const v of value) out.push(await redactStrings(v, redact));
-    return out;
+// The line that separates a value's strings in the one text the redactor sees.
+// Low-entropy and in no secret format, so a redactor leaves it alone.
+const BOUNDARY = '\n--- pleach redact boundary ---\n';
+
+function collect(value: unknown, into: string[]): void {
+  if (typeof value === 'string') into.push(value);
+  else if (Array.isArray(value)) for (const v of value) collect(v, into);
+  else if (value !== null && typeof value === 'object') {
+    for (const v of Object.values(value)) collect(v, into);
   }
+}
+
+function rebuild(value: unknown, next: () => string): unknown {
+  if (typeof value === 'string') return next();
+  if (Array.isArray(value)) return value.map((v) => rebuild(v, next));
   if (value !== null && typeof value === 'object') {
     const out: Record<string, unknown> = {};
-    for (const [key, v] of Object.entries(value)) out[key] = await redactStrings(v, redact);
+    for (const [key, v] of Object.entries(value)) out[key] = rebuild(v, next);
     return out;
   }
   return value;
+}
+
+// Every string under `value` passed through `redact`, in ONE call: the real
+// redactor is a process, and a journal line holds a dozen strings (D37). The
+// strings are joined with a boundary line and split back; a result that does
+// not split into as many strings fails closed, never writing what it could not
+// place. Pure and total apart from the injected redactor.
+export async function redactStrings(value: unknown, redact: RedactText): Promise<unknown> {
+  const strings: string[] = [];
+  collect(value, strings);
+  if (strings.length === 0) return value;
+  const parts = (await redact(strings.join(BOUNDARY))).split(BOUNDARY);
+  if (parts.length !== strings.length) {
+    throw new RedactError(
+      'redact',
+      `the redacted text came back as ${parts.length} part(s) for ${strings.length} string(s)`,
+    );
+  }
+  let k = 0;
+  return rebuild(value, () => parts[k++] as string);
 }
