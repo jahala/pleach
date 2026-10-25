@@ -21,14 +21,14 @@ import type { Redaction } from './redact.ts';
 // unit test asserts the pin. A receipt is minted under this version.
 export const CONTRACT_VERSION = '1.1.6';
 
-// The contract follows semantic versioning from v1.1.5, where receipts began:
-// a patch changes the contract's text and never how a receipt derives, so the
-// fence compares major.minor only. A change to `deriveCore` bumps the minor at
-// least, and a test pins `deriveCore` to the minor it belongs to. A receipt
-// from another minor fails derivation honestly ("wrong contract version"),
-// never mysteriously.
-function minorLine(version: string): string | undefined {
-  return /^(\d+\.\d+)\.\d+$/.exec(version)?.[1];
+// The contract follows semantic versioning from v1.1.5, where receipts began.
+// A minor or a patch stays compatible and never changes how a receipt
+// derives, so the fence compares the major only. A change to `deriveCore` is
+// an incompatible change and bumps the major; a test pins `deriveCore` to the
+// major it belongs to. A receipt from another major fails derivation honestly
+// ("wrong contract version"), never mysteriously.
+function majorOf(version: string): string | undefined {
+  return /^(\d+)\.\d+\.\d+$/.exec(version)?.[1];
 }
 
 export interface GateRecord {
@@ -183,11 +183,11 @@ export function receiptPrefix(sha256: string): string {
 // dual close); 'fail' and 'skip' both block, because "never adjudicated" must
 // gate exactly as hard as "checked and failed".
 export function deriveStatus(facts: ReceiptFacts): Derivation {
-  const line = minorLine(facts.contractVersion);
-  if (line === undefined || line !== minorLine(CONTRACT_VERSION)) {
+  const major = majorOf(facts.contractVersion);
+  if (major === undefined || major !== majorOf(CONTRACT_VERSION)) {
     return {
       ok: false,
-      reason: `contract version fence: receipt minted under v${facts.contractVersion}, this build derives v${minorLine(CONTRACT_VERSION)}.x receipts`,
+      reason: `contract version fence: receipt minted under v${facts.contractVersion}, this build derives v${majorOf(CONTRACT_VERSION)}.x receipts`,
     };
   }
   return { ok: true, status: deriveCore(facts) };

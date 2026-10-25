@@ -17,7 +17,7 @@ Entries carry the defect-ledger id where one exists (`D8`, `D21`, ...); the ledg
 
 ### Fixed
 - A close keeps a handback even when the runner could not read the worker's final message: it names the failure, and the journal says `handback-read-failed`. An empty final message is named too (D42).
-- The plan schema's canonical text is v1.1.6. Five edits had gone in under v1.1.5; a test now fails when the text changes without its version line (D44). `pleach receipt` still verifies receipts minted under v1.1.5: the contract follows semantic versioning, and the version check compares only major.minor (D46).
+- The plan schema's canonical text is v1.1.6. Five edits had gone in under v1.1.5; a test now fails when the text changes without its version line (D44). `pleach receipt` still verifies receipts minted under v1.1.5: the contract follows semantic versioning, and the version check compares only the major version (D46).
 - A node that fails before its tree is usable no longer reports a catastrophic isolate failure (fixed by D22; pinned by regression tests, D45).
 - A commit you add on top of a blocked node's `quarantine/<id>` is kept when the next run resumes it (D38).
 - `pleach audit` re-audits again once the plan's audit command has changed (D39).
