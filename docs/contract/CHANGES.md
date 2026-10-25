@@ -139,3 +139,18 @@
   cannot land under a patch. The v1.1.6 entry above says v1.1.5 receipts fail `pleach receipt`; that
   held for the few hours between the two changes and no longer does. `@agent-contract/plan` is
   untouched: no schema-block change and nothing for tend or umbel to re-vendor.
+
+- **Receipt, not schema (2026-10-25)** — the close receipt's `refs` gained `patchId?` (the verified
+  commit's stable patch-id, `git patch-id --stable` over its diff) and `closedAt?` (its committer
+  timestamp, the close time), both read from git at settle and bound by git (issue #105). A receipt
+  whose `diffRef` no longer resolves — a rebase or squash landing, the branch deleted and the dangling
+  commit pruned — is re-located on the landed history by patch-id instead of reading UNDERIVABLE:
+  `pleach receipt` searches commits newer than the close for the commit whose patch-id matches, and
+  exactly one whose message carries the receipt's trailer passes with `resolvedBy: 'patch-id'` and
+  `landedAs`; one without the trailer, none, or several is the new `orphaned` outcome, with the
+  candidate sha in the reason — never a guessed commit. Additive, and outside the contract:
+  `@agent-contract/plan` is untouched — no schema-block change, no version bump, drift guards
+  unaffected, nothing for tend or umbel to re-vendor. `refs` already sat outside the hashed envelope,
+  so every receipt already on disk still hashes and verifies; a receipt without `patchId` verifies
+  exactly as it did. `deriveStatus` does not read either field: where the work landed changes what a
+  verify can prove, never what a close's facts imply.

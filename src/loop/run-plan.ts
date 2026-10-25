@@ -17,6 +17,7 @@ import {
 import type { Redaction } from '../core/redact.ts';
 import { DEFAULT_WORKER_PROVIDER, validatePlan } from '../core/validate.ts';
 import type { ArtifactKind, ConductorDeps, Isolation, RunSummary } from './deps.ts';
+import { patchRefs } from './receipt-patch.ts';
 import { outputTail, type ResumedFrom, type RunNodeResult, runNode } from './run-node.ts';
 
 // ── run-plan: the scheduler ──────────────────────────────────────────────────
@@ -672,6 +673,9 @@ async function runUnderLock(
     // another node's resolution can therefore never see this node as closed
     // while its worktree still exists (ordering invariant under concurrency).
     const { sha, receipt } = commit;
+    // The refs that re-locate this close on the landed history (issue #105),
+    // read from git before the tree is disposed.
+    const patch = await patchRefs(deps.isolate, iso.cwd, sha);
     const closingVerdict: Verdict = {
       ...verdict,
       evidence: { ...verdict.evidence, diffRef: sha },
@@ -703,7 +707,7 @@ async function runUnderLock(
     // pinned hash must stay resolvable to its facts.
     await writeReceiptOrJournal(deps, node.id, {
       ...receipt,
-      refs: { diffRef: sha },
+      refs: { diffRef: sha, ...patch },
       ...(artifacts !== undefined ? { artifacts } : {}),
     });
 

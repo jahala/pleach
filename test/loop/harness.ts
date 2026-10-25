@@ -618,6 +618,19 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     async isAncestor(_cwd, ancestor, descendant): Promise<boolean> {
       return opts.isAncestor ? opts.isAncestor(ancestor, descendant) : ancestor === descendant;
     },
+    // The in-memory git models no diffs, so a commit has no patch-id and no
+    // timestamp to report (issue #105) — null is the honest answer, exactly as
+    // a ref that does not resolve. The landed-history search is empty for the
+    // same reason; the loop's patch-id path is proven against real git.
+    async commitPatchId(): Promise<string | null> {
+      return null;
+    },
+    async commitTime(): Promise<number | null> {
+      return null;
+    },
+    async commitsByPatchId(): Promise<{ sha: string; message: string }[]> {
+      return [];
+    },
     // What a commit this git made introduced: known for every commit it made,
     // and unknown — null, like a ref that does not resolve — for a sha a test
     // seeded into `refs` without a tree behind it.

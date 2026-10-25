@@ -17,6 +17,7 @@ import {
 import type { Redaction } from '../core/redact.ts';
 import { DEFAULT_WORKER_PROVIDER, validatePlan } from '../core/validate.ts';
 import type { ConductorDeps, Isolation } from './deps.ts';
+import { patchRefs } from './receipt-patch.ts';
 import { execGateWithRetry, runAuditLadder } from './run-node.ts';
 import {
   acceptanceOf,
@@ -299,7 +300,8 @@ async function publishClose(settle: Settle, result: AuditResult): Promise<AuditN
     return { node: node.id, status: 'quarantined' };
   }
 
-  await writeReceiptOrJournal(deps, node.id, { ...receipt, refs: { diffRef: sha } });
+  const patch = await patchRefs(deps.isolate, iso.cwd, sha);
+  await writeReceiptOrJournal(deps, node.id, { ...receipt, refs: { diffRef: sha, ...patch } });
 
   if (decision.closed) {
     await deps.journal.append({

@@ -7,10 +7,11 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import type { MintFacts, Receipt } from '../../src/core/receipt.ts';
+import type { LandedCandidate, MintFacts, Receipt } from '../../src/core/receipt.ts';
 import {
   CONTRACT_VERSION,
   canonicalJson,
+  chooseLanded,
   computeDegraded,
   deriveStatus,
   mintReceipt,
@@ -147,6 +148,51 @@ describe('deriveStatus', () => {
       expect(d.ok).toBe(false);
       if (!d.ok) expect(d.reason).toContain('contract version fence');
     }
+  });
+});
+
+describe('chooseLanded', () => {
+  const patchId = 'pid';
+  const sha256 = 'receipt-sha';
+  const withTrailer = (sha: string): LandedCandidate => ({
+    sha,
+    message: `work\n\nreceipt-sha256: ${sha256}`,
+  });
+  const withoutTrailer = (sha: string): LandedCandidate => ({ sha, message: 'work' });
+
+  test('a resolved ref reports where the work landed when exactly one commit carries the patch', () => {
+    const decision = chooseLanded(patchId, sha256, true, [withTrailer('landed')]);
+    expect(decision).toEqual({ outcome: 'pass', landedAs: 'landed' });
+  });
+
+  test('a resolved ref with no matching commit still passes, with no landing claimed', () => {
+    expect(chooseLanded(patchId, sha256, true, [])).toEqual({ outcome: 'pass' });
+    expect(chooseLanded(patchId, sha256, true, [withTrailer('a'), withTrailer('b')])).toEqual({
+      outcome: 'pass',
+    });
+  });
+
+  test('an unresolvable ref passes by patch-id only when the single match carries the trailer', () => {
+    const decision = chooseLanded(patchId, sha256, false, [withTrailer('landed')]);
+    expect(decision).toEqual({ outcome: 'pass', landedAs: 'landed', resolvedBy: 'patch-id' });
+  });
+
+  test('a single match without the trailer is orphaned, naming the candidate sha', () => {
+    const decision = chooseLanded(patchId, sha256, false, [withoutTrailer('cand')]);
+    expect(decision.outcome).toBe('orphaned');
+    if (decision.outcome === 'orphaned') expect(decision.detail).toContain('cand');
+  });
+
+  test('zero matches orphan the receipt, saying no single commit carries the work', () => {
+    const decision = chooseLanded(patchId, sha256, false, []);
+    expect(decision.outcome).toBe('orphaned');
+    if (decision.outcome === 'orphaned') expect(decision.detail).toContain('no commit');
+  });
+
+  test('several matches are ambiguous and orphan the receipt rather than guess', () => {
+    const decision = chooseLanded(patchId, sha256, false, [withTrailer('a'), withTrailer('b')]);
+    expect(decision.outcome).toBe('orphaned');
+    if (decision.outcome === 'orphaned') expect(decision.detail).toContain('refusing to guess');
   });
 });
 
