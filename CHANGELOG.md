@@ -7,6 +7,11 @@ Entries carry the defect-ledger id where one exists (`D8`, `D21`, ...); the ledg
 ## [Unreleased]
 
 ### Added
+- `pleach land` pins a conflicting node instead of leaving a hand merge: the next `pleach run` rebuilds it on the landed stack, its conflict resolved by its worker and judged by every gate (D48).
+- The journal says what a running node is doing: attempts, phases, the start and end of every gate, and each audit check. `pleach status` shows a running node's attempt, phase and gate (D47).
+- `pleach receipt` finds a receipt's work after a rebase or squash landing, by patch-id, or says the receipt is orphaned (D49).
+- `pleach run --only <ids>` runs a named subset of a plan and its unbuilt dependencies (D51).
+- The run and the landing say which verified work exists only on this machine (D50).
 - `pleach clean` reaps the worker sessions a killed run left alive: the journal names every session the loop spawned and killed, and clean ends each one spawned and never killed, through the runner. `--dry-run` lists what it would do (D43).
 - Every verdict that is not `done` carries a `reason` and a `nextStep` on its journal line, and the run log prints both (D41).
 - Secret redaction: everything pleach writes from agents or gates goes through `plotplot redact` first. `run`, `land` and `audit` refuse to start without `plotplot` (install: `cargo install --locked --git https://github.com/jahala/plotplot`); `--no-redact` opts out explicitly and is recorded on every run and receipt (D37).
@@ -33,6 +38,7 @@ Entries carry the defect-ledger id where one exists (`D8`, `D21`, ...); the ledg
 - The verified commit holds exactly the tree its gates judged. A git hook that changes the commit (a formatter rewriting a file, or a hook staging its own) now fails the node under the `commit` gate, keeps the tree on `quarantine/<id>` and publishes nothing. Before, the changed commit was published as verified. Hooks still run and may still refuse (D24).
 
 ### Changed
+- The run log says a node was verified on a local branch, where it said "published" (D50).
 - CI runs the suites that drive the real umbel binary, against a pinned umbel commit on every push and against umbel's default branch weekly. It installs with `--frozen-lockfile`. On CI the canary fails when it cannot resolve tend2, where it used to skip and report green (D25).
 - The architecture rules in ENGINEERING.md are a test. `pleach <unknown-verb>` names the verb as unknown even with no plan path after it (D26).
 

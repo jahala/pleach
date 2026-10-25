@@ -1,7 +1,7 @@
 # pleach roadmap: the open issues as work packages
 
-**You are here (2026-10-22).** v1.0.0 is released. The audit fixes (D24–D27) and the first P1 batch
-(D28 #98, D29 #147, D30 #148) the second batch (D31 #114, D32 #131, D33 #149) the third (D34 #151, D35 #127, D36 #146 with #126) the fourth (D37 #107, D38 #152, D39 #154, D40 #128) and the fifth (D41 #106, D42 #109, D43 #115, D44 #123, D45 #100) are merged, and CI runs the umbel suites. Every open issue carries a
+**You are here (2026-10-25).** v1.0.0 is released. The audit fixes (D24–D27) and the first P1 batch
+(D28 #98, D29 #147, D30 #148) the second batch (D31 #114, D32 #131, D33 #149) the third (D34 #151, D35 #127, D36 #146 with #126) the fourth (D37 #107, D38 #152, D39 #154, D40 #128) the fifth (D41 #106, D42 #109, D43 #115, D44 #123, D45 #100) and the sixth (D47 #63, D48 #116, D49 #105, D50 #130, D51 #85) are merged, and CI runs the umbel suites. Every open issue carries a
 priority label: P1 loses work or blocks a run, P2 costs time or misleads, P3 is polish. This page groups
 the open issues into work packages that share code and need one design, in the order to build them.
 Each package becomes a tend2 loop when work starts, with a ledger item for each defect.
@@ -11,10 +11,10 @@ Each package becomes a tend2 loop when work starts, with a ledger item for each 
 | # | Package | Issues | Why this position |
 |---|---|---|---|
 | 1 | Nothing unjudged, nothing unrecorded | #125 (then #129); #131, #127, #109 done (D32, D35, D42) | Work that no gate judged, or that the record lost, can reach a verified branch. This is the prime invariant. |
-| 2 | The operator's seat | #63 #86 #71 #87; #114, #115 done (D31, D43) | The largest field pain: 806 `tail` polls across 25 sessions, and sessions killed by hand. |
+| 2 | The operator's seat | #86 #71 #87; #114, #115, #63 done (D31, D43, D47) | The largest field pain: 806 `tail` polls across 25 sessions, and sessions killed by hand. |
 | 3 | Casting and the config | #149, #146, #126, #128 done (D33, D36, D40) | Found dogfooding on cfanalytics: one plan cannot reach two endpoints of one CLI, and an ordinary audit command costs a whole build before it fails. |
-| 4 | Landing that finishes the job | #124 #116 #85 #130; #116's replay design was tried and rejected (see the issue) | One small honesty fix first. Then land stops handing conflicts to a person. |
-| 5 | Contract v1.2, one round with tend2 | #113 #104 #90; #123, #106 done (D44, D41) | Schema changes batched into one conversation once tend2 is public. The receipt version fence is decided (D46). |
+| 4 | Landing that finishes the job | #124; #116, #85, #130 done (D48, D51, D50) | One small honesty fix left: the land gate's refusal hides its output. |
+| 5 | Contract v1.2, one round with tend2 | #104 (with #113) #90; #123, #106 done (D44, D41) | Schema changes batched into one conversation once tend2 is public. The receipt version fence is decided (D46). |
 | 6 | Umbrella fit | #108 #112 | Small, and they need plotplot's contracts. |
 | — | Blocked or parked | #111 (umbel#92) · #117 (an experiment outside this repo) · #70 (needs a design); #107 done (D37) | See below. |
 
@@ -43,7 +43,7 @@ committed tree, so this closes the other end. #125 and #109 change the same phas
 `loop/run-plan.ts` and `loop/run-node.ts` (what gets appended), `adapters/umbel.ts` (session names).
 
 - **#114 (P1):** `pleach status` and `pleach wait`. Done in D31.
-- **#63:** events for each gate and each audit check, with the output tail.
+- **#63:** events for each gate and each audit check, with the output tail. Done in D47.
 - **#86:** `run-start` names the already-verified nodes.
 - **#71:** sessions named by plan and node.
 - **#115:** `clean` kills the run's leftover sessions. Done in D43: the journal names each session, and `clean` reaps those never killed.
@@ -74,11 +74,12 @@ store.
 **Code:** `loop/land.ts`, `seams/isolate.ts` (`landStack`, `publish`), `core/errors.ts`.
 
 - **#124 (S):** a land-gate refusal names the command but drops the output tail it already journals.
-- **#116 (L):** on a conflict with a sibling, rebase the node onto the landed stack in a fresh worktree,
-  re-gate it there, and land on green. Journal it as `land-rebase`. Tried 2026-10-22 and rejected: a cherry-pick shares the merge's base, so it rarely resolves anything, and where it did apply it dropped a sibling's verified line. The way forward is to rebuild the conflicting node on the landed tip; see the issue.
-- **#85:** `run --only`. `land --sinks` already shipped (D18).
-- **#130:** "published" and "landed" are local-only. Say so, and report how many verified branches exist
-  on no remote.
+- **#116 (L):** a land conflict stops pleach and a person merges by hand. Done in D48: land pins the
+  composed stack, and the next run rebuilds the node on it under every gate. A replay of the node's
+  commits was tried first (2026-10-22) and rejected, because it could drop a sibling's verified line.
+- **#85:** `run --only`. Done in D51; `land --sinks` shipped earlier (D18).
+- **#130:** "published" and "landed" are local-only. Done in D50: the run and the landing name what no
+  remote holds.
 
 ## 5. Contract v1.2, one round with tend2
 
@@ -89,7 +90,8 @@ that rule.
 Then batch the changes into one round:
 - **#123:** a test that fails when the contract text changes without a version bump. Done in D44 (v1.1.6).
 - **#106:** a `reason` and `nextStep` on every verdict that doesn't close. Done in D41, journal-only.
-- **#113:** a red phase that already exists.
+- **#113:** a red phase that already exists. A plan can already leave the red phase out, so this joins
+  #104's docs; tend2's `emit-plan` always emitting a red is jahala/tend#283.
 - **#104:** document the green-only proof shape.
 - **#90:** effort in the cast.
 - The four amendments already drafted in `docs/contract/v1.2-proposal.md`.
@@ -112,7 +114,6 @@ Then batch the changes into one round:
 
 ## Partly done (issue text needs updating)
 
-- **#85:** `land --sinks` shipped (D18). `run --only` has not.
 - **#87:** the version now reads 1.0.0 from `package.json`. The build commit is still missing.
 - **#104:** the schema already allows a green-only phase, and `docs/dogfood/make-plan.ts` emits it. Only
   the docs are missing.
