@@ -146,9 +146,10 @@
   whose `diffRef` no longer resolves — a rebase or squash landing, the branch deleted and the dangling
   commit pruned — is re-located on the landed history by patch-id instead of reading UNDERIVABLE:
   `pleach receipt` searches commits newer than the close for the commit whose patch-id matches, and
-  exactly one whose message carries the receipt's trailer passes with `resolvedBy: 'patch-id'` and
-  `landedAs`; one without the trailer, none, or several is the new `orphaned` outcome, with the
-  candidate sha in the reason — never a guessed commit. Additive, and outside the contract:
+  exactly one passes with `resolvedBy: 'patch-id'`, `landedAs`, and `trailer` saying whether that
+  commit also carries the receipt's trailer; none or several is the new `orphaned` outcome, with the
+  reason, never a guessed commit (the umbrella's plotplot#54: resolve to the commit that carries the
+  patch, or report orphaned). Additive, and outside the contract:
   `@agent-contract/plan` is untouched — no schema-block change, no version bump, drift guards
   unaffected, nothing for tend or umbel to re-vendor. `refs` already sat outside the hashed envelope,
   so every receipt already on disk still hashes and verifies; a receipt without `patchId` verifies

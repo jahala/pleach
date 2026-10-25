@@ -256,10 +256,11 @@ So a verified close also records the commit's stable patch-id (`git patch-id
 id through a rebase) and its committer time, beside the ref and outside the
 hashed envelope. `pleach receipt` then resolves the work to the commit on the
 landed history that carries the patch, searching only commits newer than the
-close: exactly one commit whose message carries the receipt's trailer passes
-with `resolvedBy: 'patch-id'` and the landed sha; a commit that carries the
-patch but not the trailer (a squash, a rewritten message), no commit, or
-several, is ORPHANED with the reason — never a guessed commit. A receipt
+close. Exactly one commit carrying the patch passes with `resolvedBy:
+'patch-id'` and the landed sha, and `trailer` says whether that commit also
+carries the receipt's trailer (a squash or a rewritten message drops it). No
+commit, or several, is ORPHANED with the reason, never a guessed commit. A git
+error during the search is reported as an error, never as an orphan. A receipt
 written before this change has no patch-id and verifies exactly as it did.
 
 ## Two operational facts

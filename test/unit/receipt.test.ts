@@ -172,15 +172,26 @@ describe('chooseLanded', () => {
     });
   });
 
-  test('an unresolvable ref passes by patch-id only when the single match carries the trailer', () => {
+  test('an unresolvable ref passes by patch-id when exactly one commit carries the patch', () => {
     const decision = chooseLanded(patchId, sha256, false, [withTrailer('landed')]);
-    expect(decision).toEqual({ outcome: 'pass', landedAs: 'landed', resolvedBy: 'patch-id' });
+    expect(decision).toEqual({
+      outcome: 'pass',
+      landedAs: 'landed',
+      resolvedBy: 'patch-id',
+      trailer: true,
+    });
   });
 
-  test('a single match without the trailer is orphaned, naming the candidate sha', () => {
+  test('a single match without the trailer (a one-node squash) still resolves, saying so', () => {
+    // plotplot#54: verify resolves each receipt to the commit that carries its
+    // patch. The patch is the binding; the trailer is a fact reported beside it.
     const decision = chooseLanded(patchId, sha256, false, [withoutTrailer('cand')]);
-    expect(decision.outcome).toBe('orphaned');
-    if (decision.outcome === 'orphaned') expect(decision.detail).toContain('cand');
+    expect(decision).toEqual({
+      outcome: 'pass',
+      landedAs: 'cand',
+      resolvedBy: 'patch-id',
+      trailer: false,
+    });
   });
 
   test('zero matches orphan the receipt, saying no single commit carries the work', () => {

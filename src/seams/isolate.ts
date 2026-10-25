@@ -734,10 +734,16 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     patchId: string,
     sinceEpoch: number,
   ): Promise<{ sha: string; message: string }[]> {
+    // A git failure here is an error, never "no commit carries the work":
+    // reading it as zero matches would report a landed receipt as orphaned.
     const log = await git(exec, cwd, 'log', `--since=@${sinceEpoch}`, '-p', '--format=%H', 'HEAD');
-    if (log.exitCode !== 0) return [];
+    if (log.exitCode !== 0) {
+      throw new IsolateCatastrophicError('git log -p', `exited ${log.exitCode}: ${log.output}`);
+    }
     const id = await gitInput(exec, cwd, log.output, 'patch-id', '--stable');
-    if (id.exitCode !== 0) return [];
+    if (id.exitCode !== 0) {
+      throw new IsolateCatastrophicError('git patch-id', `exited ${id.exitCode}: ${id.output}`);
+    }
     const matches: string[] = [];
     for (const line of id.output.split('\n')) {
       const [pid, sha] = line.trim().split(/\s+/);

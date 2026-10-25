@@ -648,7 +648,13 @@ async function verbReceipt(nodeId: string, flags: Flags): Promise<number> {
   if (check.outcome === 'pass' && receipt !== undefined) {
     const landed =
       check.landedAs !== undefined
-        ? ` — landed as ${check.landedAs}${check.resolvedBy === 'patch-id' ? ' (resolved by patch-id)' : ''}`
+        ? ` — landed as ${check.landedAs}${
+            check.resolvedBy === 'patch-id'
+              ? check.trailer === false
+                ? " (resolved by patch-id; the commit lacks the receipt's trailer)"
+                : ' (resolved by patch-id)'
+              : ''
+          }`
         : '';
     process.stderr.write(
       `pleach: receipt PASS — ${nodeId} ${receipt.derived} (receipt-sha256 ${receiptPrefix(receipt.sha256)}…)${landed}\n`,
@@ -681,6 +687,9 @@ async function verbReceipt(nodeId: string, flags: Flags): Promise<number> {
         : {}),
       ...(check.outcome === 'pass' && check.resolvedBy !== undefined
         ? { resolvedBy: check.resolvedBy }
+        : {}),
+      ...(check.outcome === 'pass' && check.trailer !== undefined
+        ? { trailer: check.trailer }
         : {}),
       history: check.history,
       ...(check.outcome !== 'pass' ? { detail: check.detail } : {}),

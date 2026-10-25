@@ -238,7 +238,7 @@ export interface LandedCandidate {
 // seam; this maps the candidate list to the one honest outcome, and never
 // guesses when the mapping is ambiguous.
 export type LandedDecision =
-  | { outcome: 'pass'; landedAs?: string; resolvedBy?: 'patch-id' }
+  | { outcome: 'pass'; landedAs?: string; resolvedBy?: 'patch-id'; trailer?: boolean }
   | { outcome: 'orphaned'; detail: string };
 
 export function chooseLanded(
@@ -256,15 +256,17 @@ export function chooseLanded(
     if (candidates.length === 1) return { outcome: 'pass', landedAs: candidates[0].sha };
     return { outcome: 'pass' };
   }
-  // The ref no longer resolves: the patch-id is the only way to the work.
+  // The ref no longer resolves: the patch-id is the only way to the work. One
+  // commit carrying the patch is the commit (plotplot#54); whether it also
+  // carries the receipt's trailer is reported beside it, since a squash or a
+  // rewritten message drops the trailer and keeps the patch.
   if (candidates.length === 1) {
-    const only = candidates[0];
-    if (carriesTrailer(only)) {
-      return { outcome: 'pass', landedAs: only.sha, resolvedBy: 'patch-id' };
-    }
+    const only = candidates[0] as LandedCandidate;
     return {
-      outcome: 'orphaned',
-      detail: `the commit ${only.sha} carries the patch but not the receipt's trailer — a squash or a rewritten message`,
+      outcome: 'pass',
+      landedAs: only.sha,
+      resolvedBy: 'patch-id',
+      trailer: carriesTrailer(only),
     };
   }
   if (candidates.length === 0) {

@@ -212,6 +212,26 @@ test('a squash of two nodes orphans both receipts: no single commit carries the 
 });
 
 // ledger: #105
+test('a squash of one node resolves by patch-id to the squash commit, without the trailer', async () => {
+  await closeNode('a', 'a.txt', 'built a\n');
+
+  const target = await defaultBranch();
+  await gitIn(repo, 'checkout', target);
+  await gitIn(repo, 'merge', '--squash', 'node/a');
+  await gitIn(repo, 'commit', '-m', 'squash a');
+  await gitIn(repo, 'branch', '-D', 'node/a');
+  await pruneDangling();
+
+  const res = await pleachReceipt('a');
+  const json = JSON.parse(res.stdout.trim()) as Record<string, unknown>;
+  expect(json.outcome).toBe('pass');
+  expect(json.resolvedBy).toBe('patch-id');
+  expect(json.trailer).toBe(false);
+  expect(json.landedAs).toBe(await gitIn(repo, 'rev-parse', target));
+  expect(res.code).toBe(0);
+});
+
+// ledger: #105
 test('a receipt written before this change (no patchId) verifies exactly as before', async () => {
   const minted = mintReceipt(makeFacts());
   await writeFile(join(repo, 'pre.txt'), 'pre\n');

@@ -52,6 +52,9 @@ export type ReceiptCheck =
       // the patch-id lookup rather than its own ref (issue #105).
       landedAs?: string;
       resolvedBy?: 'patch-id';
+      // Whether the commit found by patch-id also carries the receipt's
+      // trailer; a squash or a rewritten message drops it (issue #105).
+      trailer?: boolean;
     }
   | { outcome: 'orphaned'; receipt: Receipt; detail: string; history: ReceiptHistoryEntry[] }
   | { outcome: 'tampered'; receipt: Receipt; detail: string; history: ReceiptHistoryEntry[] }
@@ -183,5 +186,6 @@ async function landedOutcome(
     history,
     ...(decision.landedAs !== undefined ? { landedAs: decision.landedAs } : {}),
     ...(decision.resolvedBy !== undefined ? { resolvedBy: decision.resolvedBy } : {}),
+    ...(decision.trailer !== undefined ? { trailer: decision.trailer } : {}),
   };
 }
