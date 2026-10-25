@@ -83,7 +83,7 @@ store.
 ## 5. Contract v1.2, one round with tend2
 
 **The receipt version fence is decided (D46).** The contract follows semantic versioning, and the
-fence compares major.minor only. A change to how a receipt derives needs a minor bump, and a test holds
+fence compares the major only. A change to how a receipt derives needs a major bump, and a test holds
 that rule.
 
 Then batch the changes into one round:

@@ -565,9 +565,11 @@ checkpoint but have different lifetimes and trust domains.**
 - **D46 ◦ [review] The contract version fence refused receipts whose rules had not changed.** Found
   while landing D44: the fence compared a receipt's contract version with the build's exactly, so v1.1.6,
   a text-only patch, made every v1.1.5 receipt fail `pleach receipt`. **Fix:** the contract follows
-  semantic versioning from v1.1.5, and the fence compares major.minor only, refusing a receipt from
-  another minor or with no readable version. A test pins `deriveCore` to its minor, so a change to how
-  receipts derive cannot land without a minor bump. Tests: `test/unit/receipt.test.ts`,
+  semantic versioning from v1.1.5, and the fence compares the major only, refusing a receipt from
+  another major or with no readable version. A test pins `deriveCore` to its major, so a change to how
+  receipts derive cannot land without a major bump. (First shipped comparing major.minor; corrected
+  2026-10-25, because a minor release stays compatible and the first schema addition would have
+  refused every older receipt.) Tests: `test/unit/receipt.test.ts`,
   `test/loop/receipt-verify.test.ts`.
 
 ### Verified-sound (attacks refuted — do not relitigate)

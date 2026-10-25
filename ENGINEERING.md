@@ -101,9 +101,9 @@ changing the doc + the source + the drift test in ONE commit, with a version not
 recorded in `docs/contract/CHANGES.md` for the other two repos. Any change to the canonical text —
 the seam block included — moves the version line in the doc's title with it: `test/unit/plan-version.test.ts`
 guards this by failing when the doc differs from its content at the commit that last changed the version
-line, unless the version line changed too. The version is semantic from v1.1.5: a patch never changes how a receipt
-derives, so the receipt fence compares major.minor only, and `test/unit/receipt.test.ts` pins `deriveCore`
-to its minor.
+line, unless the version line changed too. The version is semantic from v1.1.5: a minor or a patch never changes how a
+receipt derives, so the receipt fence compares the major only, and `test/unit/receipt.test.ts` pins
+`deriveCore` to its major.
 
 ## Error taxonomy (the classify ladder — `core/classify.ts`)
 

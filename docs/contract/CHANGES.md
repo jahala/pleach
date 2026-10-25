@@ -139,3 +139,10 @@
   cannot land under a patch. The v1.1.6 entry above says v1.1.5 receipts fail `pleach receipt`; that
   held for the few hours between the two changes and no longer does. `@agent-contract/plan` is
   untouched: no schema-block change and nothing for tend or umbel to re-vendor.
+
+- **Receipt, not schema (2026-10-25)** — the receipt version fence compares the major only. The entry
+  above had it compare major.minor, but under semantic versioning a minor release adds to the contract
+  and stays compatible, so the first schema addition (a v1.2) would have refused every v1.1 receipt
+  although nothing it derives by changed. A change to how a receipt derives is the incompatible kind
+  and bumps the major; `test/unit/receipt.test.ts` pins `deriveCore` to the major it belongs to.
+  `@agent-contract/plan` is untouched.
