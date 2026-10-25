@@ -180,9 +180,11 @@ Flags (clean):
 
 Landing: verified work is published as node/<id> branches; \`pleach land\` merges
 the plan's sinks onto the branch checked out in --repo-root. It refuses unless
-EVERY plan node is verified (with --sinks, unless every named one is), and a
-merge conflict or non-fast-forward aborts with the repo untouched — resolve
-those by hand (git merge node/<id>).
+EVERY plan node is verified (with --sinks, unless every named one is). A merge
+conflict aborts with the repo untouched and pins the conflicting sink at
+refs/pleach/rebuild/<id> — the next \`pleach run\` rebuilds it on the landed
+stack (a worker integrates the sibling's change, the gates judge it), then
+\`pleach land\` again. A non-fast-forward aborts with the repo untouched.
 
 Resuming is automatic: re-running a plan skips nodes already verified in the
 ledger (their node/<id> branch exists) — only unbuilt or previously-failed

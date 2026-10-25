@@ -195,17 +195,26 @@ export class LedgerError extends Error {
   }
 }
 
-// Landing hit a real merge conflict between sink branches (ledger B3). The
-// landing worktree was disposed; the user's checkout is untouched.
+// Landing hit a real merge conflict between sink branches (ledger B3, issue
+// #116). The landing worktree was disposed; the user's checkout is untouched.
+// `stackSha` is the stack's HEAD just before the abort — the target tip plus
+// every sink merged before this one — the commit the node must be rebuilt on.
+// The loop pins it under refs/pleach/rebuild/<id> so the next run rebuilds the
+// node on that stack instead of the operator merging by hand.
 export class LandConflictError extends Error {
   readonly name = 'LandConflictError';
   readonly ref: string;
   readonly files: string[];
+  readonly stackSha: string | null;
 
-  constructor(ref: string, files: string[]) {
-    super(`landing ${ref} conflicts in: ${files.join(', ')} — resolve manually (git merge ${ref})`);
+  constructor(ref: string, files: string[], stackSha: string | null = null) {
+    super(
+      `landing ${ref} conflicts in: ${files.join(', ')} — the node is pinned for a rebuild ` +
+        `on the landed stack (run 'pleach run <plan>', then land again)`,
+    );
     this.ref = ref;
     this.files = files;
+    this.stackSha = stackSha;
   }
 }
 

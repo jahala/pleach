@@ -81,6 +81,14 @@ export interface RunNodeOpts {
   // one. Every attempt that isolates lands inside that work, so the worker is
   // told where it came from before it writes over it. Absent for a fresh build.
   resumedFrom?: ResumedFrom;
+  // A node pinned by a land conflict (issue #116): `onto` is the stack commit
+  // its isolate checks out, surfaced in the first prompt so the worker knows it
+  // is integrating a sibling's landed change. Absent for a fresh build.
+  rebuildOnto?: string;
+  // The red phase index the rebuilt tree already sealed (its own verified
+  // branch carries the seal, issue #116). A phased node re-enters its work list
+  // after it, exactly as a quarantine resume does.
+  rebuildRedSealedAt?: number;
   // Called as a build worker spawns (D19) — the cast running this node's work,
   // never the auditor. The verdict line says whether the cast ever ran, and a
   // node that throws has no result to say it with, so the fact leaves here.
@@ -298,7 +306,7 @@ export async function runNode(
       if (iso === null) {
         // Every isolation of this node checks out the same baseRefs, so a
         // resumed node's fresh tree carries the quarantine's seal again.
-        redSealedAt = opts.resumedFrom?.redSealedAt;
+        redSealedAt = opts.resumedFrom?.redSealedAt ?? opts.rebuildRedSealedAt;
         isolated = true;
         try {
           iso = await deps.isolate.isolate(node, baseRefs);
@@ -316,9 +324,16 @@ export async function runNode(
       const cwd = iso.cwd;
 
       // On the very first attempt, surface merge-conflict files in the prompt.
+      // A rebuild (issue #116) explains the whole situation instead: the node
+      // was verified, its work now conflicts with what has landed since, and
+      // the tree is the landed stack with its own work merged on top.
       const firstPromptExtra =
-        attempts === 1 && iso.conflictFiles.length > 0
-          ? `Resolve merge conflicts in: ${iso.conflictFiles.join(', ')}`
+        attempts === 1
+          ? opts.rebuildOnto !== undefined
+            ? rebuildEvidence(opts.rebuildOnto, iso.conflictFiles)
+            : iso.conflictFiles.length > 0
+              ? `Resolve merge conflicts in: ${iso.conflictFiles.join(', ')}`
+              : undefined
           : undefined;
       const promptEvidence = mergeEvidence(
         evidence,
@@ -1406,6 +1421,24 @@ function resumeEvidence(resumed: ResumedFrom | undefined): string | undefined {
   if (resumed === undefined) return undefined;
   const from = `resuming work interrupted at ${resumed.sha}`;
   return resumed.stat === undefined ? from : `${from}:\n${resumed.stat}`;
+}
+
+// The first prompt of a rebuilt node (issue #116): this node was verified, but
+// its work conflicts with what has landed since, and the tree it stands in is
+// the landed stack with its own verified work merged on top — the markers name
+// where the two sides diverge. The worker integrates the sibling's change and
+// the whole ladder judges the result. Absent (undefined) for a fresh build.
+function rebuildEvidence(onto: string | undefined, files: string[]): string | undefined {
+  if (onto === undefined) return undefined;
+  const filesLine =
+    files.length > 0
+      ? `Conflict markers are in: ${files.join(', ')}.`
+      : 'The merge left no conflict markers.';
+  return (
+    'This node was verified, but its work conflicts with work that has landed since. ' +
+    `The tree is the landed stack (${onto}) with your verified work merged on top. ` +
+    `${filesLine} Resolve the markers so both sides' intent holds, then finish the task.`
+  );
 }
 
 // Why an attempt was left unspent when the run named no second cast (D17).

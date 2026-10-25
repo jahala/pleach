@@ -73,6 +73,8 @@ export const KINDS: Record<string, Kind> = {
   'receipt-write-failed': 'node.lifecycle',
   'acceptance-changed': 'node.lifecycle',
   'acceptance-cascade': 'node.lifecycle',
+  'land-rebuild': 'node.lifecycle',
+  'land-rebuild-done': 'node.lifecycle',
   'rebuild-required': 'node.lifecycle',
   'sha-mismatch': 'node.lifecycle',
   'dispose-failed': 'node.lifecycle',

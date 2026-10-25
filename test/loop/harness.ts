@@ -615,6 +615,16 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     async refSha(_cwd, ref): Promise<string | null> {
       return git.refs.get(ref) ?? null;
     },
+    // The rebuild pin (issue #116): set/delete a ref under refs/pleach/, like
+    // the real seam's `git update-ref`.
+    async setRef(_cwd, ref, sha): Promise<void> {
+      git.refs.set(ref, sha);
+      log.push('setRef', undefined, `${ref}:${sha}`);
+    },
+    async deleteRef(_cwd, ref): Promise<void> {
+      git.refs.delete(ref);
+      log.push('deleteRef', undefined, ref);
+    },
     async isAncestor(_cwd, ancestor, descendant): Promise<boolean> {
       return opts.isAncestor ? opts.isAncestor(ancestor, descendant) : ancestor === descendant;
     },
