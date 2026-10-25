@@ -11,7 +11,7 @@ describe('computeLocalOnly (issue #130)', () => {
   test('no remotes and no node branches → empty report, zero remotes', () => {
     const report = computeLocalOnly({
       nodeBranches: [],
-      reachableFromRemote: new Set(),
+      notOnRemote: new Set(),
       remotes: 0,
     });
     expect(report).toEqual({ nodeBranches: [], remotes: 0 });
@@ -23,7 +23,7 @@ describe('computeLocalOnly (issue #130)', () => {
         { name: 'node/b', sha: 'b' },
         { name: 'node/a', sha: 'a' },
       ],
-      reachableFromRemote: new Set(),
+      notOnRemote: new Set(['a', 'b']),
       remotes: 1,
     });
     expect(report).toEqual({ nodeBranches: ['node/a', 'node/b'], remotes: 1 });
@@ -35,7 +35,7 @@ describe('computeLocalOnly (issue #130)', () => {
         { name: 'node/a', sha: 'a' },
         { name: 'node/b', sha: 'b' },
       ],
-      reachableFromRemote: new Set(['a']),
+      notOnRemote: new Set(['b']),
       remotes: 1,
     });
     expect(report).toEqual({ nodeBranches: ['node/b'], remotes: 1 });
@@ -46,8 +46,10 @@ describe('computeLocalOnly (issue #130)', () => {
       name: `node/n${String(i).padStart(4, '0')}`,
       sha: `sha-${i}`,
     }));
-    const reachableFromRemote = new Set(['sha-250', 'sha-499']);
-    const report = computeLocalOnly({ nodeBranches, reachableFromRemote, remotes: 2 });
+    const notOnRemote = new Set(
+      nodeBranches.map((b) => b.sha).filter((sha) => sha !== 'sha-250' && sha !== 'sha-499'),
+    );
+    const report = computeLocalOnly({ nodeBranches, notOnRemote, remotes: 2 });
     expect(report.nodeBranches).toHaveLength(498);
     expect(report.nodeBranches).not.toContain('node/n0250');
     expect(report.nodeBranches).not.toContain('node/n0499');

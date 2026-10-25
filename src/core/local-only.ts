@@ -20,9 +20,10 @@ export interface LocalOnlyFacts {
   // Every node/* branch in the repository. pleach publishes node/* only for
   // verified work, so these are the verified branches.
   nodeBranches: readonly LocalOnlyNodeBranch[];
-  // The set of commit SHAs reachable from any remote-tracking ref. A node
-  // branch whose tip is in this set is on some remote.
-  reachableFromRemote: ReadonlySet<string>;
+  // The commits reachable from the node branches' tips and from no
+  // remote-tracking ref. A node branch whose tip is in this set is on no
+  // remote; one whose tip is not, some remote already holds.
+  notOnRemote: ReadonlySet<string>;
   // How many remotes the repository has configured.
   remotes: number;
 }
@@ -38,7 +39,7 @@ export interface LocalOnlyReport {
 // "no remote at all".
 export function computeLocalOnly(facts: LocalOnlyFacts): LocalOnlyReport {
   const nodeBranches = facts.nodeBranches
-    .filter((b) => !facts.reachableFromRemote.has(b.sha))
+    .filter((b) => facts.notOnRemote.has(b.sha))
     .map((b) => b.name)
     .sort();
   return { nodeBranches, remotes: facts.remotes };

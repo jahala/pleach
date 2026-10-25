@@ -792,8 +792,25 @@ async function runUnderLock(
   const journalCopy = deps.receipts.runJournalPath(runId);
   // issue #130: say what is true about the state this run leaves — which
   // verified node branches are on no remote, and how many remotes there are.
-  const localOnly = computeLocalOnly(await deps.isolate.localOnlyFacts(opts.repoRoot));
-  await deps.journal.append({ event: 'run-end', runId, ...summary, journalCopy, localOnly });
+  // The report is an account of the state, never part of the run: a git read
+  // that fails here is journaled after run-end and costs nothing else.
+  let localOnly: ReturnType<typeof computeLocalOnly> | undefined;
+  let localOnlyError: string | undefined;
+  try {
+    localOnly = computeLocalOnly(await deps.isolate.localOnlyFacts(opts.repoRoot));
+  } catch (err) {
+    localOnlyError = err instanceof Error ? err.message : String(err);
+  }
+  await deps.journal.append({
+    event: 'run-end',
+    runId,
+    ...summary,
+    journalCopy,
+    ...(localOnly !== undefined ? { localOnly } : {}),
+  });
+  if (localOnlyError !== undefined) {
+    await deps.journal.append({ event: 'local-only-check-failed', detail: localOnlyError });
+  }
   await copyRunJournalOrJournal(deps, runId, journalCopy);
   return summary;
 }

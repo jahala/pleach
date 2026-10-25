@@ -23,7 +23,7 @@ describe('run-end names what is local-only (issue #130)', () => {
           { name: 'node/a', sha: 'sha-a' },
           { name: 'node/b', sha: 'sha-b' },
         ],
-        reachableFromRemote: new Set(['sha-b']),
+        notOnRemote: new Set(['sha-a']),
         remotes: 1,
       },
     });
@@ -57,5 +57,36 @@ describe('landed names how far ahead of its upstream (issue #130)', () => {
 
     const landed = h.journal.find((e) => e.event === 'landed');
     expect(landed?.localOnly).toEqual({ aheadOfUpstream: null });
+  });
+});
+
+describe('a failed local-only read never costs the record (issue #130)', () => {
+  test('run-end is still written, followed by local-only-check-failed', async () => {
+    const h = makeHarness({ localOnlyThrows: new Error('git exploded (test)') });
+    const summary = await runPlan(plan([makeNode({ id: 'a' })]), h.deps, { repoRoot: REPO });
+
+    expect(summary.closed).toEqual(['a']);
+    const events = h.journal.map((e) => e.event);
+    const end = events.indexOf('run-end');
+    expect(end).toBeGreaterThan(-1);
+    expect(h.journal[end]?.localOnly).toBeUndefined();
+    const failed = h.journal.find((e) => e.event === 'local-only-check-failed');
+    expect(String(failed?.detail)).toContain('git exploded (test)');
+  });
+
+  test('landed is still written after the publish, followed by local-only-check-failed', async () => {
+    const h = makeHarness({
+      closed: new Map([['a', 'sha-a']]),
+      refs: { 'node/a': 'sha-a' },
+      localOnlyThrows: new Error('git exploded (test)'),
+    });
+    const result = await landPlan(plan([makeNode({ id: 'a' })]), h.deps, { repoRoot: REPO });
+
+    expect(result.landed).toEqual(['a']);
+    const landed = h.journal.find((e) => e.event === 'landed');
+    expect(landed).toBeDefined();
+    expect(landed?.localOnly).toBeUndefined();
+    const failed = h.journal.find((e) => e.event === 'local-only-check-failed');
+    expect(String(failed?.detail)).toContain('git exploded (test)');
   });
 });

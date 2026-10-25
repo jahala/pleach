@@ -302,6 +302,10 @@ export interface HarnessOpts {
   workerSession?: (ctx: SpawnCtx) => string;
   // The facts localOnlyFacts reports (issue #130). Default: no node branches,
   // nothing reachable from a remote, no remotes.
+  // A git read that fails where the local-only report is gathered (issue
+  // #130): the report is an account of the state, so its failure must never
+  // cost the run-end or landed line.
+  localOnlyThrows?: Error;
   localOnlyFacts?: LocalOnlyFacts;
   // The upstream facts branchUpstream reports (issue #130). Default: no upstream.
   branchUpstream?: BranchUpstream;
@@ -668,16 +672,18 @@ export function makeHarness(opts: HarnessOpts = {}): Harness {
     // from the real seam's git reads.
     async localOnlyFacts(_repoRoot): Promise<LocalOnlyFacts> {
       log.push('localOnlyFacts', undefined, _repoRoot);
+      if (opts.localOnlyThrows) throw opts.localOnlyThrows;
       return (
         opts.localOnlyFacts ?? {
           nodeBranches: [],
-          reachableFromRemote: new Set(),
+          notOnRemote: new Set(),
           remotes: 0,
         }
       );
     },
     async branchUpstream(_repoRoot, _branch): Promise<BranchUpstream> {
       log.push('branchUpstream', undefined, `${_branch}@${_repoRoot}`);
+      if (opts.localOnlyThrows) throw opts.localOnlyThrows;
       return opts.branchUpstream ?? { upstream: null, ahead: 0 };
     },
   };

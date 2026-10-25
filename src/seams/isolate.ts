@@ -797,9 +797,9 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
   // ── localOnly / branchUpstream (issue #130) ──────────────────────────────
 
   // The facts core/local-only.ts computes from, read over local git only (no
-  // network). The node/* branches (short name + tip SHA), the set of commits
-  // reachable from any remote-tracking ref (`git rev-list --remotes` — one
-  // call, however many branches), and the remote count. A node branch's tip
+  // network). The node/* branches (short name + tip SHA), the commits only
+  // they reach (`git rev-list <tips> --not --remotes`, one call), and the
+  // remote count. A node branch's tip
   // that is reachable from a remote ref is on that remote; one push of a
   // chain's newest node secures every earlier one, exactly as git sees it.
   async function localOnlyFacts(repoRoot: string): Promise<LocalOnlyFacts> {
@@ -824,14 +824,21 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
       nodeBranches.push({ name, sha });
     }
 
-    const reach = await git(exec, repoRoot, 'rev-list', '--remotes');
-    if (reach.exitCode !== 0) {
-      throw new IsolateCatastrophicError(
-        'git rev-list --remotes',
-        `exited ${reach.exitCode}: ${reach.output}`,
-      );
+    // Only what no remote holds: the commits reachable from the node tips and
+    // from no remote-tracking ref. Its size is the unpushed work, never the
+    // repository's history, however many commits the remotes carry.
+    let notOnRemote = new Set<string>();
+    if (nodeBranches.length > 0) {
+      const tips = [...new Set(nodeBranches.map((b) => b.sha))];
+      const reach = await git(exec, repoRoot, 'rev-list', ...tips, '--not', '--remotes');
+      if (reach.exitCode !== 0) {
+        throw new IsolateCatastrophicError(
+          'git rev-list --not --remotes',
+          `exited ${reach.exitCode}: ${reach.output}`,
+        );
+      }
+      notOnRemote = new Set(reach.output.split('\n').filter((l) => l !== ''));
     }
-    const reachableFromRemote = new Set(reach.output.split('\n').filter((l) => l !== ''));
 
     const remotes = await git(exec, repoRoot, 'remote');
     if (remotes.exitCode !== 0) {
@@ -842,7 +849,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     }
     const remoteNames = remotes.output.split('\n').filter((l) => l !== '');
 
-    return { nodeBranches, reachableFromRemote, remotes: remoteNames.length };
+    return { nodeBranches, notOnRemote, remotes: remoteNames.length };
   }
 
   // A branch's upstream and how many commits ahead of it the branch is. A

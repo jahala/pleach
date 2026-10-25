@@ -111,20 +111,31 @@ export async function landPlan(
       }
       throw err;
     }
+    // issue #130: how far ahead of its upstream the landing left the branch,
+    // or null when it has no upstream, so a landing on a laptop is never read
+    // as secured on a remote. The branch is already published here, so a git
+    // read that fails is journaled after `landed` and costs nothing else.
+    let localOnly: { aheadOfUpstream: number | null } | undefined;
+    let localOnlyError: string | undefined;
+    try {
+      localOnly = {
+        aheadOfUpstream: aheadOfUpstream(
+          await deps.isolate.branchUpstream(opts.repoRoot, landed.branch),
+        ),
+      };
+    } catch (err) {
+      localOnlyError = err instanceof Error ? err.message : String(err);
+    }
     await deps.journal.append({
       event: 'landed',
       branch: landed.branch,
       sha: landed.sha,
       nodes: sinks,
-      // issue #130: how far ahead of its upstream the landing left the branch,
-      // or null when it has no upstream — so a landed-on-a-laptop result is
-      // never read as secured on a remote.
-      localOnly: {
-        aheadOfUpstream: aheadOfUpstream(
-          await deps.isolate.branchUpstream(opts.repoRoot, landed.branch),
-        ),
-      },
+      ...(localOnly !== undefined ? { localOnly } : {}),
     });
+    if (localOnlyError !== undefined) {
+      await deps.journal.append({ event: 'local-only-check-failed', detail: localOnlyError });
+    }
     return { branch: landed.branch, sha: landed.sha, landed: sinks };
   } finally {
     await lock.release();
