@@ -69,6 +69,27 @@ A non-zero exit refuses the landing as `land-gate-refused`, with the command's o
 tail on stderr and the repository untouched. Both flags shape `pleach run --land` too:
 the landing a run performs is the same landing.
 
+## Work that exists only on this machine is named
+
+pleach never pushes — the conductor pushes. A verified `node/<id>` branch and a landed
+branch are local until someone pushes them, so pleach says which are on no remote. Work
+never sits stranded on the one laptop without a word.
+
+At `run-end` the journal line gains `localOnly: { nodeBranches: [...], remotes: N }`: the
+verified `node/*` branches whose tip no remote-tracking ref contains, and how many remotes
+the repository has. A run that leaves any of it on no remote prints one stderr line —
+`⚠ N verified node branch(es) exist only on this machine — push them to keep the work` —
+and a repository with no remote is told it has none.
+
+After `land` the `landed` line gains `localOnly: { aheadOfUpstream: N | null }`: how many
+commits the branch is ahead of its upstream, or `null` when it has no upstream. The stderr
+warning says the same. When everything is on a remote, pleach prints nothing — the state
+is secured, and silence is the good news.
+
+The answer is read from local git only (`git for-each-ref` against the refs and
+`git rev-list` against the remote-tracking refs), with no network call, so it is safe to
+read while a plan runs.
+
 ## An auditor's bad relay never costs the node
 
 When the auditor's reply carries no readable result, or the auditor dies, the node is

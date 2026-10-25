@@ -5,6 +5,7 @@ import {
   QuarantineBusyError,
   RebuildRequiredError,
 } from '../core/errors.ts';
+import { computeLocalOnly } from '../core/local-only.ts';
 import type { Node, Plan, Verdict } from '../core/plan.ts';
 import {
   computeDegraded,
@@ -789,7 +790,10 @@ async function runUnderLock(
   };
   // The run-end names the copy before the copy is made, so the copy holds it.
   const journalCopy = deps.receipts.runJournalPath(runId);
-  await deps.journal.append({ event: 'run-end', runId, ...summary, journalCopy });
+  // issue #130: say what is true about the state this run leaves — which
+  // verified node branches are on no remote, and how many remotes there are.
+  const localOnly = computeLocalOnly(await deps.isolate.localOnlyFacts(opts.repoRoot));
+  await deps.journal.append({ event: 'run-end', runId, ...summary, journalCopy, localOnly });
   await copyRunJournalOrJournal(deps, runId, journalCopy);
   return summary;
 }

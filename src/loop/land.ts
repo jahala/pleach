@@ -5,6 +5,7 @@ import {
   PlanInvalidError,
   RebuildRequiredError,
 } from '../core/errors.ts';
+import { aheadOfUpstream } from '../core/local-only.ts';
 import type { Plan } from '../core/plan.ts';
 import { sinkIds, validatePlan } from '../core/validate.ts';
 import type { ConductorDeps, LandStack } from './deps.ts';
@@ -115,6 +116,14 @@ export async function landPlan(
       branch: landed.branch,
       sha: landed.sha,
       nodes: sinks,
+      // issue #130: how far ahead of its upstream the landing left the branch,
+      // or null when it has no upstream — so a landed-on-a-laptop result is
+      // never read as secured on a remote.
+      localOnly: {
+        aheadOfUpstream: aheadOfUpstream(
+          await deps.isolate.branchUpstream(opts.repoRoot, landed.branch),
+        ),
+      },
     });
     return { branch: landed.branch, sha: landed.sha, landed: sinks };
   } finally {

@@ -10,6 +10,7 @@ import {
   LandConflictError,
   LandMergeRefusedError,
 } from '../core/errors.ts';
+import type { BranchUpstream, LocalOnlyFacts, LocalOnlyNodeBranch } from '../core/local-only.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, IsolateSeam, Isolation } from '../loop/deps.ts';
 import { resolveGitDir } from './gitdir.ts';
@@ -793,6 +794,76 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     }
   }
 
+  // ── localOnly / branchUpstream (issue #130) ──────────────────────────────
+
+  // The facts core/local-only.ts computes from, read over local git only (no
+  // network). The node/* branches (short name + tip SHA), the set of commits
+  // reachable from any remote-tracking ref (`git rev-list --remotes` — one
+  // call, however many branches), and the remote count. A node branch's tip
+  // that is reachable from a remote ref is on that remote; one push of a
+  // chain's newest node secures every earlier one, exactly as git sees it.
+  async function localOnlyFacts(repoRoot: string): Promise<LocalOnlyFacts> {
+    const nodeRefs = await git(
+      exec,
+      repoRoot,
+      'for-each-ref',
+      '--format=%(refname:short)%00%(objectname)',
+      'refs/heads/node/',
+    );
+    if (nodeRefs.exitCode !== 0) {
+      throw new IsolateCatastrophicError(
+        'git for-each-ref refs/heads/node/',
+        `exited ${nodeRefs.exitCode}: ${nodeRefs.output}`,
+      );
+    }
+    const nodeBranches: LocalOnlyNodeBranch[] = [];
+    for (const line of nodeRefs.output.split('\n')) {
+      if (line === '') continue;
+      const [name, sha] = line.split('\0');
+      if (name === undefined || sha === undefined || name === '' || sha === '') continue;
+      nodeBranches.push({ name, sha });
+    }
+
+    const reach = await git(exec, repoRoot, 'rev-list', '--remotes');
+    if (reach.exitCode !== 0) {
+      throw new IsolateCatastrophicError(
+        'git rev-list --remotes',
+        `exited ${reach.exitCode}: ${reach.output}`,
+      );
+    }
+    const reachableFromRemote = new Set(reach.output.split('\n').filter((l) => l !== ''));
+
+    const remotes = await git(exec, repoRoot, 'remote');
+    if (remotes.exitCode !== 0) {
+      throw new IsolateCatastrophicError(
+        'git remote',
+        `exited ${remotes.exitCode}: ${remotes.output}`,
+      );
+    }
+    const remoteNames = remotes.output.split('\n').filter((l) => l !== '');
+
+    return { nodeBranches, reachableFromRemote, remotes: remoteNames.length };
+  }
+
+  // A branch's upstream and how many commits ahead of it the branch is. A
+  // branch with no upstream is the honest `{ upstream: null, ahead: 0 }` — the
+  // pure function maps it to `null`, never a number invented for a branch that
+  // tracks nothing.
+  async function branchUpstream(repoRoot: string, branch: string): Promise<BranchUpstream> {
+    const upstream = await git(exec, repoRoot, 'rev-parse', '--abbrev-ref', `${branch}@{upstream}`);
+    if (upstream.exitCode !== 0) return { upstream: null, ahead: 0 };
+    const name = upstream.output.trim();
+    const count = await git(exec, repoRoot, 'rev-list', '--count', `${name}..${branch}`);
+    if (count.exitCode !== 0) {
+      throw new IsolateCatastrophicError(
+        'git rev-list --count',
+        `exited ${count.exitCode}: ${count.output}`,
+      );
+    }
+    const ahead = Number(count.output.trim());
+    return { upstream: name, ahead: Number.isFinite(ahead) ? ahead : 0 };
+  }
+
   return {
     isolate,
     scanMarkers,
@@ -815,5 +886,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     commitStat,
     isAncestor,
     landStack,
+    localOnlyFacts,
+    branchUpstream,
   };
 }
