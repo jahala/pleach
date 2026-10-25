@@ -140,6 +140,10 @@ Flags (run):
   --land                  After a fully-verified close, land the plan (see below); the run
                           summary gains a "land" object. A red run never lands. The landing
                           flags below shape that landing exactly as they shape \`pleach land\`.
+  --only a,b              Run only these named node ids and their unbuilt dependencies
+                          (comma-separated); nothing else is scheduled. Closed dependencies
+                          are used as bases. A named id not in the plan refuses (exit 2).
+                          With --land, the landing's sinks are the named ids (as --sinks).
   --quiet                 Suppress the per-event narration on stderr (one plain line per
                           node event; a worker blocked on you is shouted). The JSONL
                           journal records everything regardless.
@@ -170,6 +174,10 @@ Flags (status / wait):
   --node ID               (wait) wait for this node to settle instead of the whole run
   --timeout SECONDS       (wait) give up after this long and exit 124, naming the nodes still
                           pending or running
+
+A node outside a \`--only\` run's scope reads "out-of-scope" in \`pleach status\`
+and the wait table — it is not part of that run, so it never counts as skipped
+or failed.
 
 Flags (audit-wrap):
   --check ID              The check id the verdict block reports (default: the command text)
@@ -249,6 +257,7 @@ interface Flags {
   fresh: boolean;
   land: boolean;
   sinks?: string[];
+  only?: string[];
   landGates: string[];
   now: boolean;
   quiet: boolean;
@@ -391,6 +400,16 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
           .filter((id) => id.length > 0);
         if (ids.length === 0) throw new UsageError('--sinks requires at least one node id');
         flags.sinks = ids;
+        i += 1;
+        break;
+      }
+      case '--only': {
+        const ids = takeValue(arg, next)
+          .split(',')
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0);
+        if (ids.length === 0) throw new UsageError('--only requires at least one node id');
+        flags.only = ids;
         i += 1;
         break;
       }
@@ -619,6 +638,7 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     ...(flags.timeoutMs !== undefined ? { defaultTimeoutMs: flags.timeoutMs } : {}),
     ...(flags.fallbackProvider !== undefined ? { fallbackProvider: flags.fallbackProvider } : {}),
     ...(flags.fresh ? { fresh: true } : {}),
+    ...(flags.only !== undefined ? { only: flags.only } : {}),
     ...(providers !== undefined ? { providers } : {}),
   });
 
@@ -705,7 +725,13 @@ async function verbAudit(
 // reads and the other silently drops is a landing that says one thing and does
 // another, which is the failure D18 exists to end.
 function landOpts(flags: Flags): LandOpts {
-  return { repoRoot: flags.repoRoot, sinks: flags.sinks, landGates: flags.landGates };
+  // `run --only <ids> --land` lands the named ids as its sinks, exactly as
+  // `land --sinks <ids>` would (issue #85) — `--only` is the stronger subset.
+  return {
+    repoRoot: flags.repoRoot,
+    sinks: flags.only ?? flags.sinks,
+    landGates: flags.landGates,
+  };
 }
 
 async function verbLand(planPath: string, flags: Flags): Promise<number> {
@@ -822,13 +848,18 @@ function isTerminal(status: NodeStatus | undefined): boolean {
     status === 'failed' ||
     status === 'blocked' ||
     status === 'partial' ||
-    status === 'aborted'
+    status === 'aborted' ||
+    // A node outside a `--only` run's scope will never settle — waiting on it
+    // returns at once rather than blocking until a close that cannot come.
+    status === 'out-of-scope'
   );
 }
 
-// Closed in this run or verified before it: both are verified work.
+// Closed in this run or verified before it: both are verified work. An
+// out-of-scope node is neither — it is not part of the run at all, so it does
+// not weigh against a clean wait.
 const settledGreen = (status: NodeStatus | undefined): boolean =>
-  status === 'closed' || status === 'verified';
+  status === 'closed' || status === 'verified' || status === 'out-of-scope';
 
 function waitExitCode(state: RunState, node?: string): number {
   if (node !== undefined) return settledGreen(state.nodes[node]?.status) ? 0 : 1;
