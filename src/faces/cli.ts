@@ -795,6 +795,17 @@ function statusReport(state: RunState, level: RunLevel): StatusReport {
 
 function renderTable(plan: Plan, state: RunState, level: RunLevel): string {
   const ids = plan.nodes.map((n) => n.id);
+  // A running node's place on its ladder (issue #63): attempt, phase and gate
+  // read from the journal, so a watcher sees what the node is doing, not just
+  // that it is running.
+  const progressOf = (n: NodeRunState): string =>
+    [
+      n.attempt === undefined ? '' : `attempt ${n.attempt}`,
+      n.phase === undefined ? '' : `phase ${n.phase}`,
+      n.gate === undefined ? '' : `gate ${n.gate}`,
+    ]
+      .filter((part) => part !== '')
+      .join(' · ');
   const rows: string[][] = ids.map((id) => {
     const n = state.nodes[id] ?? { status: 'pending' as const };
     return [
@@ -802,11 +813,12 @@ function renderTable(plan: Plan, state: RunState, level: RunLevel): string {
       n.status,
       n.attempts === undefined ? '' : String(n.attempts),
       n.durationMs === undefined ? '' : String(n.durationMs),
+      n.status === 'running' ? progressOf(n) : '',
     ];
   });
-  const header = ['node', 'status', 'attempts', 'duration(ms)'];
+  const header = ['node', 'status', 'attempts', 'duration(ms)', 'progress'];
   const all = [header, ...rows];
-  const widths = [0, 1, 2, 3].map((c) => Math.max(...all.map((r) => (r[c] ?? '').length)));
+  const widths = [0, 1, 2, 3, 4].map((c) => Math.max(...all.map((r) => (r[c] ?? '').length)));
   const line = (r: string[]): string =>
     r
       .map((cell, c) => cell.padEnd(widths[c] ?? 0))

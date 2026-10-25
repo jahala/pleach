@@ -290,6 +290,36 @@ export async function runNode(
       providerErrorWaits = 0;
       providerErrorDetail = undefined;
 
+      // ── the journal says what this attempt is doing (issue #63) ────────────
+      // A watcher reads the journal as a stream: `attempt-start` marks where an
+      // attempt begins, and the gate/phase events below say where it is on its
+      // ladder. `provider` is resolved, never absent, exactly as the verdict's.
+      await deps.journal.append({
+        event: 'attempt-start',
+        node: node.id,
+        attempt: attempts,
+        provider: cast.provider ?? DEFAULT_WORKER_PROVIDER,
+      });
+      const journalGateStart = async (gate: string): Promise<void> => {
+        await deps.journal.append({ event: 'gate-start', node: node.id, attempt: attempts, gate });
+      };
+      const journalGateEnd = async (
+        gate: string,
+        exitCode: number,
+        durationMs: number,
+        output?: string,
+      ): Promise<void> => {
+        await deps.journal.append({
+          event: 'gate-end',
+          node: node.id,
+          attempt: attempts,
+          gate,
+          exitCode,
+          durationMs,
+          ...(exitCode !== 0 && output !== undefined ? { outputTail: outputTail(output) } : {}),
+        });
+      };
+
       // ── isolate (or reuse the tree for a retryable retry) ───────────────────
       // Whether THIS attempt built its tree: a retryable retry reuses the one
       // the last attempt worked in, and a worker already inside a resumed tree
@@ -328,12 +358,20 @@ export async function runNode(
       // ── setup ───────────────────────────────────────────────────────────────
       lane = 'setup';
       if (node.setup) {
+        await journalGateStart('setup');
+        const gateStartedAt = Date.now();
         const { output, exitCode } = await execGateWithRetry(deps, node.id, 'setup', node.setup, {
           cwd,
           timeoutMs,
         });
-        gates.push({ gate: 'setup', exitCode });
         const fault = gateFault(exitCode);
+        await journalGateEnd(
+          'setup',
+          exitCode,
+          Date.now() - gateStartedAt,
+          fault !== null || exitCode !== 0 ? output : undefined,
+        );
+        gates.push({ gate: 'setup', exitCode });
         if (fault !== null) {
           return handBack(settleCannotRun(node, attempts, node.setup, exitCode, fault, output));
         }
@@ -417,6 +455,18 @@ export async function runNode(
             signal: opts.signal,
             idleMs: opts.idleMs,
             redSealedAt,
+            attempt: attempts,
+            onPhaseStart: async (phase, index) => {
+              await deps.journal.append({
+                event: 'phase-start',
+                node: node.id,
+                attempt: attempts,
+                phase,
+                index,
+              });
+            },
+            onGateStart: journalGateStart,
+            onGateEnd: journalGateEnd,
             sealRed: async (red, exitCode, phaseIndex) => {
               await sealRedPhase(node, cwd, deps, red, exitCode);
               redSealedAt = phaseIndex;
@@ -635,6 +685,8 @@ export async function runNode(
       // node already settled before each red/green gate inside runWork; a
       // {command} node has no worker and nothing to wait for.
       if (!('command' in node.work) && !('phases' in node.work)) {
+        await journalGateStart('settle');
+        const gateStartedAt = Date.now();
         let settled: SettleOutcome;
         try {
           settled = await settleWorkingTree(
@@ -646,6 +698,7 @@ export async function runNode(
           );
         } catch (err) {
           if (err instanceof GateFailedError) {
+            await journalGateEnd('settle', err.exitCode, Date.now() - gateStartedAt, err.evidence);
             const decision = handleGate(node, attempts, maxAttempts, err);
             if (decision.settle) return handBack(decision.settle);
             evidence = decision.evidence;
@@ -656,13 +709,17 @@ export async function runNode(
         if (settled.kind === 'aborted') {
           return handBack({ verdict: abortedVerdict(node, attempts, 'settle:aborted') });
         }
+        await journalGateEnd('settle', 0, Date.now() - gateStartedAt);
       }
 
       lane = 'stage';
       // ── marker gate (ledger C1) ─────────────────────────────────────────────
+      await journalGateStart('marker');
+      const markerStartedAt = Date.now();
       const markers = await deps.isolate.scanMarkers(cwd);
       gates.push({ gate: 'marker', exitCode: markers.length > 0 ? -1 : 0 });
       if (markers.length > 0) {
+        await journalGateEnd('marker', -1, Date.now() - markerStartedAt, markerEvidence(markers));
         const settle = settleRetryable(node, attempts, maxAttempts, {
           gate: { ran: 'marker', exitCode: -1 },
         });
@@ -670,6 +727,7 @@ export async function runNode(
         evidence = markerEvidence(markers);
         continue;
       }
+      await journalGateEnd('marker', 0, Date.now() - markerStartedAt);
 
       // ── scoped staging (ledger C2 — nothing re-stages after this) ────────────
       const stagedFiles = await collectDelivery(deps, node, cwd, result);
@@ -685,12 +743,15 @@ export async function runNode(
       // bulk-deletion tripwire with its deterministic re-state escape. All
       // retryable with evidence; terminal failure quarantines like any gate.
       {
+        await journalGateStart('hygiene');
+        const hygieneStartedAt = Date.now();
         const hygiene = await scanHygiene(deps, node, cwd, stagedFiles, result.finalMessage);
         gates.push({
           gate: hygiene === null ? 'hygiene' : `hygiene:${hygiene.kind}`,
           exitCode: hygiene === null ? 0 : -1,
         });
         if (hygiene !== null) {
+          await journalGateEnd('hygiene', -1, Date.now() - hygieneStartedAt, hygiene.evidence);
           const settle = settleRetryable(
             node,
             attempts,
@@ -702,11 +763,14 @@ export async function runNode(
           evidence = hygiene.evidence;
           continue; // retryable — SAME tree; the worker can fix its diff
         }
+        await journalGateEnd('hygiene', 0, Date.now() - hygieneStartedAt);
       }
 
       // ── smoke ────────────────────────────────────────────────────────────────
       lane = 'smoke';
       if (node.accept.smoke) {
+        await journalGateStart('smoke');
+        const gateStartedAt = Date.now();
         const { output, stdout, exitCode } = await execGateWithRetry(
           deps,
           node.id,
@@ -730,6 +794,12 @@ export async function runNode(
           ...(keptStdout !== undefined ? { artifactSha: sha256Hex(keptStdout) } : {}),
         });
         const fault = gateFault(exitCode);
+        await journalGateEnd(
+          'smoke',
+          exitCode,
+          Date.now() - gateStartedAt,
+          fault !== null || exitCode !== 0 ? output : undefined,
+        );
         if (fault !== null) {
           return handBack(
             settleCannotRun(node, attempts, node.accept.smoke, exitCode, fault, output),
@@ -753,10 +823,18 @@ export async function runNode(
       let output: AuditResult | undefined;
       lane = 'audit';
       if (node.accept.audit) {
-        const ladder = await runAuditLadder(node, cwd, stagedFiles, deps, timeoutMs, {
-          signal: opts.signal,
-          idleMs: opts.idleMs,
-        });
+        const ladder = await runAuditLadder(
+          node,
+          cwd,
+          stagedFiles,
+          deps,
+          timeoutMs,
+          {
+            signal: opts.signal,
+            idleMs: opts.idleMs,
+          },
+          attempts,
+        );
         if (ladder.kind === 'tampered') {
           gates.push({ gate: 'audit-tamper', exitCode: -1 });
           const tamperMsg = `${node.accept.audit.command} (gate tampered: ${ladder.files.join(', ')})`;
@@ -880,9 +958,31 @@ export async function runAuditLadder(
   deps: ConductorDeps,
   timeoutMs: number,
   wait: { signal?: AbortSignal; idleMs?: number },
+  attempt: number,
 ): Promise<AuditLadderOutcome> {
   // node.accept.audit is defined by the caller's guard.
   const audit = node.accept.audit as NonNullable<Node['accept']['audit']>;
+
+  // The audit is a gate like any other (issue #63): the journal carries its
+  // start and end around the whole ladder, with the per-check verdicts beside.
+  await deps.journal.append({
+    event: 'gate-start',
+    node: node.id,
+    attempt,
+    gate: 'audit',
+  });
+  const gateStartedAt = Date.now();
+  const journalGateEnd = async (exitCode: number, output?: string): Promise<void> => {
+    await deps.journal.append({
+      event: 'gate-end',
+      node: node.id,
+      attempt,
+      gate: 'audit',
+      exitCode,
+      durationMs: Date.now() - gateStartedAt,
+      ...(exitCode !== 0 && output !== undefined ? { outputTail: outputTail(output) } : {}),
+    });
+  };
 
   // SEC4a — refuse to run a gate the builder rewrote. A repo-local audit
   // script the worker touched is not the plan's gate anymore. Checked against
@@ -895,11 +995,15 @@ export async function runAuditLadder(
   // refuses real tampering ("base is stale"). Undeclared commands keep the
   // strict rule.
   const tampered = audit.selfIntegrity ? [] : auditGateTampering(audit.command, stagedFiles);
-  if (tampered.length > 0) return { kind: 'tampered', files: tampered };
+  if (tampered.length > 0) {
+    await journalGateEnd(-1, `${audit.command} (gate tampered: ${tampered.join(', ')})`);
+    return { kind: 'tampered', files: tampered };
+  }
 
   const outcome = await runAudit(node, cwd, deps, timeoutMs, wait);
   // Never adjudicated — the receipt records skip, not fail (§D).
   if (outcome.kind === 'parse-exhausted') {
+    await journalGateEnd(-1);
     return {
       kind: 'unadjudicated',
       records: [neverAdjudicated('audit egress unparseable after reaudit budget')],
@@ -910,6 +1014,7 @@ export async function runAuditLadder(
   // The auditor died / timed out / was held at a prompt — it never returned a
   // verdict. Distinct from a fail verdict; the reason is recorded as such.
   if (outcome.kind === 'worker-fault') {
+    await journalGateEnd(-1);
     return {
       kind: 'unadjudicated',
       records: [neverAdjudicated(`auditor ${outcome.reason}`)],
@@ -917,12 +1022,27 @@ export async function runAuditLadder(
       aborted: outcome.reason === 'aborted',
     };
   }
+  // One audit-check per parsed verdict, as it happens (issue #63) — the same
+  // tri-state the receipt relays, on the journal's live channel.
+  for (const v of outcome.result.verdicts) {
+    await deps.journal.append({
+      event: 'audit-check',
+      node: node.id,
+      attempt,
+      check: v.check,
+      verdict: v.verdict,
+    });
+  }
   const records: AuditRecord[] = outcome.result.verdicts.map((v) => ({
     check: v.check,
     verdict: v.verdict,
     reasons: v.reasons,
   }));
-  if (outcome.kind === 'fail') return { kind: 'fail', evidence: outcome.evidence, records };
+  if (outcome.kind === 'fail') {
+    await journalGateEnd(-1, outcome.evidence);
+    return { kind: 'fail', evidence: outcome.evidence, records };
+  }
+  await journalGateEnd(0);
   return { kind: 'pass', result: outcome.result, records };
 }
 

@@ -32,6 +32,13 @@ export interface NodeRunState {
   status: NodeStatus;
   attempts?: number;
   durationMs?: number;
+  // A running node's place on its ladder (issue #63), from the journal:
+  // the attempt in flight, the phase it is in, and the gate in flight (the
+  // last `gate-start` without a matching `gate-end`). Absent once the node
+  // settles — the verdict's `attempts` is its own story.
+  attempt?: number;
+  phase?: string;
+  gate?: string;
 }
 
 export interface RunState {
@@ -117,6 +124,51 @@ export function foldRunState(
     switch (event) {
       case 'node-start':
         if (inPlan) nodes[node as string] = { status: 'running' };
+        break;
+      case 'attempt-start':
+        // A fresh attempt clears the phase and gate the previous attempt left.
+        if (inPlan && nodes[node as string]?.status === 'running') {
+          const attempt = asNumber(line.attempt);
+          if (attempt !== undefined) nodes[node as string] = { status: 'running', attempt };
+        }
+        break;
+      case 'phase-start':
+        if (inPlan && nodes[node as string]?.status === 'running') {
+          const phase = asString(line.phase);
+          if (phase !== undefined) {
+            const prev = nodes[node as string] as NodeRunState;
+            nodes[node as string] = {
+              status: 'running',
+              ...(prev.attempt !== undefined ? { attempt: prev.attempt } : {}),
+              phase,
+            };
+          }
+        }
+        break;
+      case 'gate-start':
+        if (inPlan && nodes[node as string]?.status === 'running') {
+          const gate = asString(line.gate);
+          if (gate !== undefined) {
+            const prev = nodes[node as string] as NodeRunState;
+            nodes[node as string] = {
+              status: 'running',
+              ...(prev.attempt !== undefined ? { attempt: prev.attempt } : {}),
+              ...(prev.phase !== undefined ? { phase: prev.phase } : {}),
+              gate,
+            };
+          }
+        }
+        break;
+      case 'gate-end':
+        // The gate finished; what remains is the attempt and phase it sat in.
+        if (inPlan && nodes[node as string]?.status === 'running') {
+          const prev = nodes[node as string] as NodeRunState;
+          nodes[node as string] = {
+            status: 'running',
+            ...(prev.attempt !== undefined ? { attempt: prev.attempt } : {}),
+            ...(prev.phase !== undefined ? { phase: prev.phase } : {}),
+          };
+        }
         break;
       case 'verdict':
         if (inPlan) {

@@ -199,10 +199,18 @@ async function adjudicate(
 
   // ── the audit ladder, and only it ──────────────────────────────────────────
   const audit = node.accept.audit as NonNullable<Node['accept']['audit']>;
-  const ladder = await runAuditLadder(node, iso.cwd, NOTHING_STAGED, deps, timeoutMs, {
-    signal: opts.signal,
-    idleMs: opts.idleMs,
-  });
+  const ladder = await runAuditLadder(
+    node,
+    iso.cwd,
+    NOTHING_STAGED,
+    deps,
+    timeoutMs,
+    {
+      signal: opts.signal,
+      idleMs: opts.idleMs,
+    },
+    1,
+  );
 
   if (ladder.kind === 'tampered') {
     // Unreachable while this caller stages nothing — recorded rather than
