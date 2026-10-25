@@ -678,6 +678,27 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     return r.output.trim() || null;
   }
 
+  // ── the rebuild pin (issue #116) ──────────────────────────────────────────
+  // The stack commit a land conflict refused against, kept alive under
+  // refs/pleach/ so the throwaway worktree can be disposed without losing it.
+  // Written through `update-ref` with no hook running, the way snapshot keeps a
+  // quarantine — a hook gates what publishes, never what pleach keeps.
+
+  async function setRef(cwd: string, ref: string, sha: string): Promise<void> {
+    await gitMust(exec, cwd, '-c', 'core.hooksPath=/dev/null', 'update-ref', ref, sha);
+  }
+
+  async function deleteRef(cwd: string, ref: string): Promise<void> {
+    const r = await git(exec, cwd, '-c', 'core.hooksPath=/dev/null', 'update-ref', '-d', ref);
+    // The pin is consumed exactly once; a ref that is already gone is an answer.
+    if (r.exitCode !== 0 && !/unable to resolve|does not exist|not exist/i.test(r.output)) {
+      throw new IsolateCatastrophicError(
+        'git update-ref -d',
+        `exited ${r.exitCode} in ${cwd}:\n${r.output}`,
+      );
+    }
+  }
+
   async function commitMessageOf(cwd: string, ref: string): Promise<string | null> {
     const r = await git(exec, cwd, 'show', '-s', '--format=%B', `${ref}^{commit}`);
     if (r.exitCode !== 0) return null;
@@ -821,6 +842,11 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
             .split('\n')
             .map((l) => l.trim())
             .filter(Boolean);
+          // The stack's HEAD before the abort: the target tip plus every sink
+          // merged before this one — the commit the node must rebuild on
+          // (issue #116). Read while the merge is still in progress, when HEAD
+          // is the pre-merge commit.
+          const stackSha = await gitMust(exec, worktreePath, 'rev-parse', 'HEAD');
           await git(exec, worktreePath, 'merge', '--abort');
           if (files.length === 0) {
             // No unmerged files: git refused the merge without a conflict. Most
@@ -829,7 +855,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
             // the cause either way (D28).
             throw new LandMergeRefusedError(ref, merge.output);
           }
-          throw new LandConflictError(ref, files);
+          throw new LandConflictError(ref, files, stackSha);
         }
       }
       // The stack is built and unpublished; the loop gates it in `cwd`, then
@@ -951,6 +977,8 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     commitBranch,
     snapshot,
     refSha,
+    setRef,
+    deleteRef,
     commitMessageOf,
     commitStat,
     isAncestor,

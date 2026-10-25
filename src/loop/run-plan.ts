@@ -7,6 +7,7 @@ import {
 } from '../core/errors.ts';
 import { computeLocalOnly } from '../core/local-only.ts';
 import type { Node, Plan, Verdict } from '../core/plan.ts';
+import { rebuildRef } from '../core/rebuild.ts';
 import {
   computeDegraded,
   type GateRecord,
@@ -159,7 +160,7 @@ async function runUnderLock(
   // so the start line stays the run's first line and the re-dispatch stays
   // inside the run's own journal copy (D21).
   const redispatch: Record<string, unknown>[] = [];
-  await applyAcceptanceEvolution(plan, deps, closed, redispatch);
+  const rebuildOnto = await applyAcceptanceEvolution(plan, deps, closed, redispatch, opts.repoRoot);
 
   // Nodes the ledger directly reported closed, captured before seedClosure
   // implies ancestors — surfaced as alreadyVerified (skipped, not re-run), and
@@ -327,8 +328,22 @@ async function runUnderLock(
   // Run one node to its terminal effect on closed/failed/partial/blocked/aborted.
   // Never rejects.
   async function runOne(node: Node): Promise<void> {
-    const resumed = await resumeFrom(node);
-    const baseRefs = baseRefsFor(node, baseRefForClosed, resumed?.sha);
+    const onto = rebuildOnto.get(node.id);
+    // A rebuild stands on the stack, never on a quarantine — the node was
+    // verified, and the pin names where it must rebuild from.
+    const resumed = onto === undefined ? await resumeFrom(node) : undefined;
+    // A phased node rebuilt on the stack re-enters its work list after the red
+    // phase its own verified branch already sealed (issue #116) — exactly a
+    // quarantine resume re-enters, and the same sealsRed check keeps it honest.
+    let rebuildRedSealedAt: number | undefined;
+    if (onto !== undefined) {
+      const receipt = await deps.receipts.read(node.id);
+      const redSealedAt = receipt?.facts.redSealedAt;
+      if (redSealedAt !== undefined && sealsRed(node, redSealedAt)) {
+        rebuildRedSealedAt = redSealedAt;
+      }
+    }
+    const baseRefs = baseRefsFor(node, baseRefForClosed, resumed?.sha, onto, opts.fresh);
     await deps.journal.append({ event: 'node-start', node: node.id });
     const startedAt = Date.now();
 
@@ -349,6 +364,8 @@ async function runUnderLock(
         ...(opts.settleMs !== undefined ? { settleMs: opts.settleMs } : {}),
         fallbackProvider: opts.fallbackProvider,
         resumedFrom: resumed,
+        ...(onto !== undefined ? { rebuildOnto: onto } : {}),
+        ...(rebuildRedSealedAt !== undefined ? { rebuildRedSealedAt } : {}),
         onSpawn: () => {
           spawned = true;
         },
@@ -371,7 +388,7 @@ async function runUnderLock(
       };
     }
 
-    await settle(node, outcome, startedAt, resumed, spawned);
+    await settle(node, outcome, startedAt, resumed, spawned, onto);
   }
 
   // A gate's findings log and the tree's own friction journal (D14), and the
@@ -498,6 +515,7 @@ async function runUnderLock(
     iso: Isolation,
     durationMs: number,
     resumed: ResumedFrom | undefined,
+    rebuildOnto: string | undefined,
   ): Promise<
     | { kind: 'committed'; sha: string; receipt: Receipt }
     | { kind: 'refused'; gate: string; outcome: RunNodeResult }
@@ -508,7 +526,16 @@ async function runUnderLock(
         throw new GateFailedError('marker', lateMarkers.join('\n'), -1); // N/A: marker scan has no exit code
       }
       const receipt = mintReceipt(
-        buildFacts(plan, node, outcome, durationMs, opts.pleachVersion, resumed, opts.redaction),
+        buildFacts(
+          plan,
+          node,
+          outcome,
+          durationMs,
+          opts.pleachVersion,
+          resumed,
+          opts.redaction,
+          rebuildOnto,
+        ),
       );
       const { sha } = await deps.isolate.commitBranch(
         iso.cwd,
@@ -531,6 +558,7 @@ async function runUnderLock(
     startedAt: number,
     resumed: ResumedFrom | undefined,
     spawned: boolean,
+    rebuildOnto: string | undefined,
   ): Promise<void> {
     const durationMs = Date.now() - startedAt;
     // A done tree is not verified until its commit lands. A refusal settles the
@@ -538,7 +566,7 @@ async function runUnderLock(
     // once, the tree kept, the receipt written — never as a done that vanished.
     const commit =
       ran.verdict.status === 'done' && ran.iso !== undefined
-        ? await commitVerified(node, ran, ran.iso, durationMs, resumed)
+        ? await commitVerified(node, ran, ran.iso, durationMs, resumed, rebuildOnto)
         : undefined;
     if (commit?.kind === 'refused') {
       await deps.journal.append({ event: 'gate-fail', node: node.id, gate: commit.gate });
@@ -646,7 +674,16 @@ async function runUnderLock(
       }
       await deps.ledger.emitVerdict(verdict, plan.source);
       const receipt = mintReceipt(
-        buildFacts(plan, node, outcome, durationMs, opts.pleachVersion, resumed, opts.redaction),
+        buildFacts(
+          plan,
+          node,
+          outcome,
+          durationMs,
+          opts.pleachVersion,
+          resumed,
+          opts.redaction,
+          rebuildOnto,
+        ),
       );
       // A failed strict gate wrote the log that says why — exactly the log the
       // calibration folds want, so the quarantine path keeps it too.
@@ -723,6 +760,13 @@ async function runUnderLock(
           ? { degraded: receipt.facts.degraded }
           : {}),
       });
+      // The rebuild pin is consumed exactly here (issue #116): the rebuilt node
+      // published verified work, so it is no longer a conflict the operator
+      // must resolve. Any other verdict keeps the ref for the next run.
+      if (rebuildOnto !== undefined) {
+        await deps.isolate.deleteRef(opts.repoRoot, rebuildRef(node.id));
+        await deps.journal.append({ event: 'land-rebuild-done', node: node.id });
+      }
     } else {
       // tend declined to verify-close this audit node: the branch IS published
       // (node/<id> committed, every conductor gate green) but tend won't flip the
@@ -831,12 +875,19 @@ async function runUnderLock(
 // into `lines` rather than written here, so the caller can place them right
 // after run-start (the start line stays the run's first line, and the
 // re-dispatch stays inside the run's own journal copy — D21).
+//
+// § land-rebuild (issue #116): a node pinned by a land conflict rebuilds on the
+// landed stack. Each plan node's rebuild ref is read; a ledger-closed node with
+// one is re-dispatched this run, and the stack it must rebuild on is returned
+// by node id. Only sinks are ever pinned, so no dependents need a cascade, but
+// the cascade below keeps that correct if one ever is.
 async function applyAcceptanceEvolution(
   plan: Plan,
   deps: ConductorDeps,
   closed: Map<string, string | null>,
   lines: Record<string, unknown>[],
-): Promise<void> {
+  repoRoot: string,
+): Promise<Map<string, string>> {
   const invalidated = new Set<string>();
   for (const node of plan.nodes) {
     if (!closed.has(node.id)) continue;
@@ -849,6 +900,16 @@ async function applyAcceptanceEvolution(
       invalidated.add(node.id);
       lines.push({ event: 'acceptance-changed', node: node.id, recorded, current });
     }
+  }
+  const rebuildOnto = new Map<string, string>();
+  for (const node of plan.nodes) {
+    if (!closed.has(node.id)) continue;
+    const stackSha = await deps.isolate.refSha(repoRoot, rebuildRef(node.id));
+    if (stackSha === null) continue;
+    closed.delete(node.id);
+    invalidated.add(node.id);
+    rebuildOnto.set(node.id, stackSha);
+    lines.push({ event: 'land-rebuild', node: node.id, onto: stackSha });
   }
   // Cascade: a closed dependent's verification embedded the OLD ancestor —
   // skip-trusting it would land stale work (only sinks land, so the
@@ -865,6 +926,7 @@ async function applyAcceptanceEvolution(
       lines.push({ event: 'acceptance-cascade', node: node.id, via });
     }
   }
+  return rebuildOnto;
 }
 
 // Every run leaves a copy of its own lines beside the receipts (D21): the
@@ -1085,14 +1147,23 @@ function sealsRed(node: Node, index: number): boolean {
 // it. The resolved ref of each closed need, in order; a node with no needs
 // isolates from repo HEAD. A resumed node (D17) checks out the quarantined tree
 // instead and merges the same dependencies onto it — the tree already descends
-// from HEAD, so there is nothing to put behind it.
+// from HEAD, so there is nothing to put behind it. A rebuilt node (issue #116)
+// checks out the stack commit and merges its needs; a worker node also merges
+// its own previous verified branch last (the markers are what the worker
+// integrates), while `--fresh` skips that own-branch merge.
 function baseRefsFor(
   node: Node,
   baseRefForClosed: Map<string, string>,
   resumeSha?: string,
+  rebuildOnto?: string,
+  fresh?: boolean,
 ): string[] {
   const merged = node.needs.map((d) => baseRefForClosed.get(d) ?? `node/${d}`);
   if (resumeSha !== undefined) return [resumeSha, ...merged];
+  if (rebuildOnto !== undefined) {
+    const mergeOwn = fresh !== true && !('command' in node.work);
+    return [rebuildOnto, ...merged, ...(mergeOwn ? [`node/${node.id}`] : [])];
+  }
   return merged.length === 0 ? [ROOT_BASE_REF] : merged;
 }
 
@@ -1195,6 +1266,7 @@ function buildFacts(
   pleachVersion: string,
   resumed: ResumedFrom | undefined,
   redaction: Redaction,
+  rebuildOnto: string | undefined,
 ): MintFacts {
   const { verdict } = outcome;
   return {
@@ -1210,6 +1282,7 @@ function buildFacts(
     // sealed inside the envelope, so a resumed close is distinguishable from a
     // fresh one for as long as the receipt exists. `moved` marks a resume whose
     // tip had moved past the recorded sha (a conductor's commit on top).
+    // A rebuild (issue #116) records the stack commit it stood on instead.
     ...(resumed !== undefined
       ? {
           base: {
@@ -1218,7 +1291,9 @@ function buildFacts(
             ...(resumed.moved ? { moved: true } : {}),
           },
         }
-      : {}),
+      : rebuildOnto !== undefined
+        ? { base: { kind: 'land-rebuild' as const, sha: rebuildOnto } }
+        : {}),
     // Where the phase ladder left off in the tree this close held (D13) — the
     // one thing a later attempt seeded from that tree needs from this one.
     ...(outcome.redSealedAt !== undefined ? { redSealedAt: outcome.redSealedAt } : {}),

@@ -117,6 +117,10 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       return `↻ ${s(e.node)}: acceptance changed since its close — re-dispatching (was verified against a different gate)`;
     case 'acceptance-cascade':
       return `↻ ${s(e.node)}: rebuilding — its base ${s(e.via)} was re-dispatched, so this close embeds stale work`;
+    case 'land-rebuild':
+      return `↻ ${s(e.node)}: rebuilding on the landed stack (${s(e.onto).slice(0, 7)}) — a land conflict pinned it, so the sibling's change is integrated and re-gated`;
+    case 'land-rebuild-done':
+      return `✓ ${s(e.node)}: rebuilt on the landed stack — the conflict pin is cleared`;
     case 'not-closed':
       return `${s(e.node)}: ledger declined to close — local branch written, not verified`;
     case 'quarantined':
@@ -165,7 +169,7 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
     case 'land-blocked':
       return `✗ land refused: ${s(e.reason ?? e.unverified)}`;
     case 'land-conflict':
-      return `✗ land conflict on ${s(e.ref)} — repository left untouched`;
+      return `✗ land conflict on ${s(e.ref)} — ${s(e.node ?? e.ref)} is pinned for a rebuild on the landed stack (run 'pleach run <plan>', then land again)`;
     case 'land-merge-refused':
       return `✗ land refused on ${s(e.ref)}: git would not merge it — repository left untouched`;
     case 'landed': {

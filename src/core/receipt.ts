@@ -75,7 +75,11 @@ export interface ReceiptFacts {
   // conductor's commit on top of the quarantined tree, kept rather than
   // rebuilt, so a resumed close that carried that fix stays distinguishable
   // from one that stood on the tree exactly as it was quarantined.
-  base?: { kind: 'quarantine'; sha: string; moved?: boolean };
+  // `land-rebuild` (issue #116) is the same fact for a node rebuilt on the
+  // stack a land conflict pinned it at: `sha` is the stack commit.
+  base?:
+    | { kind: 'quarantine'; sha: string; moved?: boolean }
+    | { kind: 'land-rebuild'; sha: string };
   // How far the tree this close held got through a phased work list (D13): the
   // index of the red phase whose seal is IN that tree's history. A later
   // attempt standing on that tree — a resumed quarantine, a re-adjudication

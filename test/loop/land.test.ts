@@ -116,6 +116,36 @@ describe('landPlan', () => {
     expect(h.log.count('lock.release')).toBe(1);
   });
 
+  // issue #116 — a conflict is pinned: the node is named, the stack commit it
+  // stands on is kept under refs/pleach/rebuild/<id>, and the journal says all
+  // of it so the next run knows to rebuild instead of the operator merging.
+  test('a conflict with a stack commit is pinned and journaled with node/stackSha/rebuildRef', async () => {
+    const p = plan([{ id: 'a' }, { id: 'b' }]);
+    const { LandConflictError } = await import('../../src/core/errors.ts');
+    const h = makeHarness({
+      closed: new Map([
+        ['a', 'sha-a'],
+        ['b', 'sha-b'],
+      ]),
+      refs: { 'node/a': 'sha-a', 'node/b': 'sha-b' },
+      landThrows: new LandConflictError('node/b', ['same.txt'], 'stack-sha'),
+    });
+
+    await expect(landPlan(p, h.deps, OPTS)).rejects.toBeInstanceOf(LandConflictError);
+
+    const conflict = h.journal.find((e) => e.event === 'land-conflict');
+    expect(conflict).toMatchObject({
+      ref: 'node/b',
+      files: ['same.txt'],
+      node: 'b',
+      stackSha: 'stack-sha',
+      rebuildRef: 'refs/pleach/rebuild/b',
+    });
+    // The stack commit is kept alive by a ref under refs/pleach/.
+    expect(h.git.refs.get('refs/pleach/rebuild/b')).toBe('stack-sha');
+    expect(h.log.count('setRef')).toBe(1);
+  });
+
   // ledger: D28 — the refusal is journaled with its tail, and the lock releases.
   test('a seam merge refusal is journaled and the lock still releases', async () => {
     const p = plan([{ id: 'a' }]);

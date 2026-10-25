@@ -47,6 +47,16 @@ Landing is deterministic and fail-closed. It refuses unless every plan node is
 verified, builds the merges in a throwaway worktree, and touches your checkout only
 via a final fast-forward. A conflict aborts with the repo untouched.
 
+A conflict is never merged by hand. pleach pins the conflicting sink: it writes
+`refs/pleach/rebuild/<id>` at the stack commit (the target tip plus the sinks that
+landed before it) and journals `land-conflict` with the node, that stack commit and
+the files. The next `pleach run` rebuilds that node on the stack — its own verified
+branch merged on top with the conflict markers in the tree — so a worker integrates
+the sibling's change and the whole gate ladder judges the result. The close records
+`facts.base.kind: 'land-rebuild'`, and on publish the pin is cleared with
+`land-rebuild-done`; any other verdict keeps the pin for the next run. Nothing is
+published that a gate did not judge.
+
 It holds a lock of its own beside the run's, so it never queues behind gates it has
 no stake in. Settled work lands while the run is still building the rest, two
 landings serialise, and a refusal names the pid holding the lock and which lock it is.

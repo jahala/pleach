@@ -7,6 +7,7 @@ import {
 } from '../core/errors.ts';
 import { aheadOfUpstream } from '../core/local-only.ts';
 import type { Plan } from '../core/plan.ts';
+import { rebuildRef } from '../core/rebuild.ts';
 import { sinkIds, validatePlan } from '../core/validate.ts';
 import type { ConductorDeps, LandStack } from './deps.ts';
 import { resolveBaseRef, seedClosure } from './run-plan.ts';
@@ -99,7 +100,24 @@ export async function landPlan(
     } catch (err) {
       // A refused land must be explainable from the journal alone.
       if (err instanceof LandConflictError) {
-        await deps.journal.append({ event: 'land-conflict', ref: err.ref, files: err.files });
+        // issue #116: pin the conflict instead of telling the operator to
+        // merge by hand. The conflicting ref maps back to its sink id, and the
+        // stack commit it conflicted against is kept under refs/pleach/rebuild/
+        // so the next run rebuilds the node on the landed stack.
+        const index = refs.indexOf(err.ref);
+        const node = index === -1 ? undefined : sinks[index];
+        const rebuildRefName = node === undefined ? undefined : rebuildRef(node);
+        if (node !== undefined && err.stackSha !== null) {
+          await deps.isolate.setRef(opts.repoRoot, rebuildRefName as string, err.stackSha);
+        }
+        await deps.journal.append({
+          event: 'land-conflict',
+          ref: err.ref,
+          files: err.files,
+          ...(node !== undefined ? { node } : {}),
+          ...(rebuildRefName !== undefined ? { rebuildRef: rebuildRefName } : {}),
+          ...(err.stackSha !== null ? { stackSha: err.stackSha } : {}),
+        });
       } else if (err instanceof LandMergeRefusedError) {
         await deps.journal.append({
           event: 'land-merge-refused',

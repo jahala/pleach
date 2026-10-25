@@ -51,6 +51,8 @@ tolerate unknown events and unknown fields.
 | `receipt-write-failed` | `node`, `detail` | the receipt file, or one of the artifacts kept beside it, could not be written (the trailer is still pinned in git; the close stands) |
 | `acceptance-changed` | `node`, `recorded` (`{smoke?, audit?}`), `current` (same shape) | a ledger-closed node's receipt records a different acceptance than the current plan — the old verification proves nothing about the new gate, so the node re-dispatches instead of skip-trusting |
 | `acceptance-cascade` | `node`, `via` (the invalidated dependency) | a closed dependent of a re-dispatched node rebuilds too — its close embedded the OLD ancestor, and only sinks land, so skip-trusting it would silently keep the re-verified work off the target branch |
+| `land-rebuild` | `node`, `onto` (the stack commit) | a node pinned by a land conflict re-dispatched on the landed stack: `onto` is the stack commit `refs/pleach/rebuild/<id>` pointed at, now the node's isolation base — the sibling's landed change is integrated by a worker and every gate re-runs (issue #116) |
+| `land-rebuild-done` | `node` | the rebuilt node published verified work, so its rebuild pin (`refs/pleach/rebuild/<id>`) was cleared (issue #116) |
 | `rebuild-required` | `node` | a verified branch moved since close — refusing to trust it |
 | `sha-mismatch` | `node`, `recordedSha`, `foundSha` | ledger SHA disagrees with the branch |
 | `dispose-failed` | `node`, `detail` | worktree cleanup failure (diagnostic) |
@@ -72,7 +74,7 @@ tolerate unknown events and unknown fields.
 | `land-culprit` | `node`, `command`, `outputTail` | the sink whose inclusion breaks the composition (refuse-all — diagnostic only) |
 | `land-integrity-failed` | `command`, `outputTail` | culprit-free subset also failed — diagnosis untrusted, nothing lands |
 | `land-blocked` | `reason` or `unverified` (ids) | landing refused — nothing touched |
-| `land-conflict` | `ref`, `files` | merge conflict — repository left untouched |
+| `land-conflict` | `ref`, `files`, `node`, `stackSha`, `rebuildRef` | merge conflict — the conflicting node is pinned for a rebuild: `node` is its id, `stackSha` the stack commit it conflicted against (the target tip plus the sinks merged before it), `rebuildRef` the ref `refs/pleach/rebuild/<id>` that keeps that commit alive; the repository is left untouched and the next `pleach run` rebuilds the node on that stack (issue #116) |
 | `land-merge-refused` | `ref`, `outputTail` | git refused a landing merge without a conflict, most often because a merge commit's hook (`commit-msg`, `pre-merge-commit`) said no; `outputTail` is the end of git's output, which names the cause. | The repository is left untouched |
 | `landed` | `branch` (the branch landed onto), `sha` (the landed tip), `nodes` (the sinks landed), `localOnly` (`aheadOfUpstream` — how many commits the branch is ahead of its upstream, or `null` when it has no upstream; issue #130) | verified sinks merged onto the checked-out branch |
 
@@ -98,7 +100,7 @@ profile's names:
 | kind | lines | mirrors |
 |---|---|---|
 | `run.lifecycle` | the run and the landing, beginning to end: `run-start`, `journal-gap`, `journal-gap-check-failed`, `run-end`, `journal-copy-failed`, `local-only-check-failed`, `run-aborted`, `run-stopped`, `land-start`, `land-setup`, `land-bisect`, `land-culprit`, `land-integrity-failed`, `land-blocked`, `land-conflict`, `land-merge-refused`, `landed` | — |
-| `node.lifecycle` | one node's passage, and every record kept or refused along the way: `node-start`, `attempt-start`, `phase-start`, `gate-start`, `blocked`, `worker-spawned`, `worker-killed`, `worker-reaped`, `phase-commit`, `provider-error-backoff`, `set-aside`, `resumed-from-quarantine`, `resume-refused`, `audit-egress-unparseable`, `verdict`, `closed`, `not-closed`, `quarantined`, `quarantine-failed`, `receipt`, `gate-artifact`, `handback-read-failed`, `receipt-write-failed`, `acceptance-changed`, `acceptance-cascade`, `rebuild-required`, `sha-mismatch`, `dispose-failed`, `seam-violation`, `tree-settled`, `tree-still-changing` | `plotplot.node` |
+| `node.lifecycle` | one node's passage, and every record kept or refused along the way: `node-start`, `attempt-start`, `phase-start`, `gate-start`, `blocked`, `worker-spawned`, `worker-killed`, `worker-reaped`, `phase-commit`, `provider-error-backoff`, `set-aside`, `resumed-from-quarantine`, `resume-refused`, `land-rebuild`, `land-rebuild-done`, `audit-egress-unparseable`, `verdict`, `closed`, `not-closed`, `quarantined`, `quarantine-failed`, `receipt`, `gate-artifact`, `handback-read-failed`, `receipt-write-failed`, `acceptance-changed`, `acceptance-cascade`, `rebuild-required`, `sha-mismatch`, `dispose-failed`, `seam-violation`, `tree-settled`, `tree-still-changing` | `plotplot.node` |
 | `gate.result` | a gate said yes or no: `gate-end`, `audit-check`, `gate-fail`, `gate-flaky`, `gate-writes-restored`, `land-gate`, `land-gate-retry`, `land-gate-refused`, `land-setup-failed` | `plotplot.gate`, `plotplot.node` (`null` on land-level lines, which belong to no node) |
 | `gate.retry` | an exec gate's one same-tree re-run: `gate-retry` | `plotplot.node`, `plotplot.gate` |
 

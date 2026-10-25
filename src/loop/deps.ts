@@ -128,6 +128,13 @@ export interface IsolateSeam {
   // Resolve a ref to a commit SHA in the repo containing `cwd`; null if the
   // ref does not exist (ledger B1 — the baseRef fallback chain).
   refSha(cwd: string, ref: string): Promise<string | null>;
+  // Set a ref under refs/pleach/ (issue #116): the land-conflict pin keeps the
+  // stack commit alive after the throwaway worktree goes, through `git
+  // update-ref` the way snapshot writes refs. No hook runs.
+  setRef(cwd: string, ref: string, sha: string): Promise<void>;
+  // Delete a ref under refs/pleach/ — clearing the rebuild pin when the node
+  // publishes. A ref that is already gone is an answer, not an error.
+  deleteRef(cwd: string, ref: string): Promise<void>;
   // Full commit message (subject + body) of `ref`; null when it doesn't
   // resolve. The receipt verb reads the receipt-sha256 trailer from it (§D).
   commitMessageOf(cwd: string, ref: string): Promise<string | null>;
