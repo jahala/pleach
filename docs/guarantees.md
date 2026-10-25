@@ -47,6 +47,16 @@ Landing is deterministic and fail-closed. It refuses unless every plan node is
 verified, builds the merges in a throwaway worktree, and touches your checkout only
 via a final fast-forward. A conflict aborts with the repo untouched.
 
+A conflict is never merged by hand. pleach pins the conflicting sink: it writes
+`refs/pleach/rebuild/<id>` at the stack commit (the target tip plus the sinks that
+landed before it) and journals `land-conflict` with the node, that stack commit and
+the files. The next `pleach run` rebuilds that node on the stack — its own verified
+branch merged on top with the conflict markers in the tree — so a worker integrates
+the sibling's change and the whole gate ladder judges the result. The close records
+`facts.base.kind: 'land-rebuild'`, and on publish the pin is cleared with
+`land-rebuild-done`; any other verdict keeps the pin for the next run. Nothing is
+published that a gate did not judge.
+
 It holds a lock of its own beside the run's, so it never queues behind gates it has
 no stake in. Settled work lands while the run is still building the rest, two
 landings serialise, and a refusal names the pid holding the lock and which lock it is.
@@ -68,6 +78,27 @@ pleach land plan.json \
 A non-zero exit refuses the landing as `land-gate-refused`, with the command's output
 tail on stderr and the repository untouched. Both flags shape `pleach run --land` too:
 the landing a run performs is the same landing.
+
+## Work that exists only on this machine is named
+
+pleach never pushes — the conductor pushes. A verified `node/<id>` branch and a landed
+branch are local until someone pushes them, so pleach says which are on no remote. Work
+never sits stranded on the one laptop without a word.
+
+At `run-end` the journal line gains `localOnly: { nodeBranches: [...], remotes: N }`: the
+verified `node/*` branches whose tip no remote-tracking ref contains, and how many remotes
+the repository has. A run that leaves any of it on no remote prints one stderr line —
+`⚠ N verified node branch(es) exist only on this machine — push them to keep the work` —
+and a repository with no remote is told it has none.
+
+After `land` the `landed` line gains `localOnly: { aheadOfUpstream: N | null }`: how many
+commits the branch is ahead of its upstream, or `null` when it has no upstream. The stderr
+warning says the same. When everything is on a remote, pleach prints nothing — the state
+is secured, and silence is the good news.
+
+The answer is read from local git only (`git for-each-ref` against the refs and
+`git rev-list` against the remote-tracking refs), with no network call, so it is safe to
+read while a plan runs.
 
 ## An auditor's bad relay never costs the node
 
@@ -242,6 +273,26 @@ clean continues with the rest.
 The order is unchanged: stale locks first; while any live lock exists a run may be in flight, so
 clean touches nothing else and exits 3. `--dry-run` lists the locks, sessions and worktrees it would
 act on, and changes nothing.
+
+## A receipt survives a rebase or squash, or says it is orphaned
+
+A verified close's receipt points at the `node/<id>` commit by sha. A repository
+that lands by rebase gives that commit a new sha; one that lands by squash folds
+several nodes' changes into one commit. When the `node/<id>` branch is then
+deleted, the recorded sha no longer resolves and the receipt would read
+UNDERIVABLE even though the work is on the branch.
+
+So a verified close also records the commit's stable patch-id (`git patch-id
+--stable` over its diff — it ignores line numbers, so the same change keeps its
+id through a rebase) and its committer time, beside the ref and outside the
+hashed envelope. `pleach receipt` then resolves the work to the commit on the
+landed history that carries the patch, searching only commits newer than the
+close. Exactly one commit carrying the patch passes with `resolvedBy:
+'patch-id'` and the landed sha, and `trailer` says whether that commit also
+carries the receipt's trailer (a squash or a rewritten message drops it). No
+commit, or several, is ORPHANED with the reason, never a guessed commit. A git
+error during the search is reported as an error, never as an orphan. A receipt
+written before this change has no patch-id and verifies exactly as it did.
 
 ## Two operational facts
 

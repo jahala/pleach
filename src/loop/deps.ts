@@ -1,3 +1,4 @@
+import type { BranchUpstream, LocalOnlyFacts } from '../core/local-only.ts';
 import type { Node, Verdict } from '../core/plan.ts';
 import type { Receipt } from '../core/receipt.ts';
 
@@ -15,9 +16,17 @@ export interface ExecResult {
 
 // Arg-array only — never a shell string (ledger SEC1). timeoutMs kills the
 // process and resolves with the output gathered so far + a non-zero exitCode.
+// `input` is written to the child's stdin and closed (EOF); absent, stdin is
+// closed empty, exactly as before — the patch-id seam pipes a diff through it.
 export type ExecFn = (
   argv: readonly string[],
-  opts: { cwd: string; timeoutMs?: number; env?: Record<string, string>; signal?: AbortSignal },
+  opts: {
+    cwd: string;
+    timeoutMs?: number;
+    env?: Record<string, string>;
+    signal?: AbortSignal;
+    input?: string;
+  },
 ) => Promise<ExecResult>;
 
 export interface Isolation {
@@ -119,6 +128,13 @@ export interface IsolateSeam {
   // Resolve a ref to a commit SHA in the repo containing `cwd`; null if the
   // ref does not exist (ledger B1 — the baseRef fallback chain).
   refSha(cwd: string, ref: string): Promise<string | null>;
+  // Set a ref under refs/pleach/ (issue #116): the land-conflict pin keeps the
+  // stack commit alive after the throwaway worktree goes, through `git
+  // update-ref` the way snapshot writes refs. No hook runs.
+  setRef(cwd: string, ref: string, sha: string): Promise<void>;
+  // Delete a ref under refs/pleach/ — clearing the rebuild pin when the node
+  // publishes. A ref that is already gone is an answer, not an error.
+  deleteRef(cwd: string, ref: string): Promise<void>;
   // Full commit message (subject + body) of `ref`; null when it doesn't
   // resolve. The receipt verb reads the receipt-sha256 trailer from it (§D).
   commitMessageOf(cwd: string, ref: string): Promise<string | null>;
@@ -133,6 +149,25 @@ export interface IsolateSeam {
   // an ancestor, including when the ancestor commit no longer resolves — a
   // moved branch is not to be trusted either way.
   isAncestor(cwd: string, ancestor: string, descendant: string): Promise<boolean>;
+  // The stable patch-id of commit `ref` (`git patch-id --stable` over its diff
+  // against its parent); null when the ref doesn't resolve or introduces no
+  // diff (a merge, or an empty commit). The settle path records it beside
+  // `diffRef` so verify can re-locate the work on the landed history after a
+  // rebase or squash (issue #105).
+  commitPatchId(cwd: string, ref: string): Promise<string | null>;
+  // The committer timestamp (unix seconds) of commit `ref`; null when it
+  // doesn't resolve. Recorded as the receipt's close time, the bound of the
+  // landed-history search (issue #105).
+  commitTime(cwd: string, ref: string): Promise<number | null>;
+  // The commits on the checked-out branch (HEAD) whose stable patch-id equals
+  // `patchId`, among commits with committer date at or after `sinceEpoch` (unix
+  // seconds), each with its full message. Empty when none match. The `--since`
+  // bound keeps the search from scanning history older than the close (issue #105).
+  commitsByPatchId(
+    cwd: string,
+    patchId: string,
+    sinceEpoch: number,
+  ): Promise<{ sha: string; message: string }[]>;
   // Land verified refs onto the branch checked out in repoRoot (ledger B3).
   // Builds the merges in a throwaway detached worktree; the checkout is only
   // ever touched by a final `merge --ff-only`, so a conflict (LandConflictError),
@@ -142,6 +177,13 @@ export interface IsolateSeam {
   // hand the loop its cwd for the land gate, publish only on explicit call
   // (ff-only, the sole touch on the checkout).
   landStack(repoRoot: string, refs: readonly string[]): Promise<LandStack>;
+  // issue #130: what exists only on this machine, read over local git only (no
+  // network). localOnlyFacts gathers the node/* branches, the commits reachable
+  // from any remote-tracking ref, and the remote count; branchUpstream reports
+  // a branch's upstream and how far ahead of it the branch is. Both feed the
+  // pure src/core/local-only.ts.
+  localOnlyFacts(repoRoot: string): Promise<LocalOnlyFacts>;
+  branchUpstream(repoRoot: string, branch: string): Promise<BranchUpstream>;
 }
 
 export interface WorkerResult {

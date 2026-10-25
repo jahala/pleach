@@ -24,12 +24,61 @@ function firstSentence(v: unknown): string {
   return end === -1 ? text : text.slice(0, end + 1);
 }
 
+// issue #130: one line when a run leaves verified work on no remote, nothing
+// when it does not. No remote at all is its own fact, said instead of counted.
+function runEndLocalOnlyWarning(localOnly: unknown): string | null {
+  if (typeof localOnly !== 'object' || localOnly === null) return null;
+  const lo = localOnly as { nodeBranches?: unknown; remotes?: unknown };
+  if (n(lo.remotes) === 0) {
+    return '⚠ the repository has no remote — nothing is pushed off this machine';
+  }
+  const count = len(lo.nodeBranches);
+  if (count > 0) {
+    return `⚠ ${count} verified node branch(es) exist only on this machine — push them to keep the work`;
+  }
+  return null;
+}
+
+// issue #130: one line when a landing left the branch off its upstream.
+function landedLocalOnlyWarning(e: Record<string, unknown>): string | null {
+  const lo = e.localOnly as { aheadOfUpstream?: unknown } | undefined;
+  if (lo === undefined) return null;
+  const ahead = lo.aheadOfUpstream;
+  const branch = s(e.branch);
+  if (ahead === null) {
+    return `⚠ landed on '${branch}' — the branch has no upstream; push it to keep the work`;
+  }
+  if (typeof ahead === 'number' && ahead > 0) {
+    return `⚠ landed on '${branch}', ${ahead} commit(s) ahead of its upstream — push to keep the work`;
+  }
+  return null;
+}
+
 export function narrateEvent(e: Record<string, unknown>): string | null {
   switch (e.event) {
     case 'run-start':
       return `pleach: running ${n(e.nodes)} node(s) — ${firstSentence(e.goal)}`;
     case 'node-start':
       return `▶ ${s(e.node)}: building`;
+    case 'attempt-start': {
+      // The first attempt is the "building" the node-start already announced;
+      // a re-attempt is the news.
+      if (n(e.attempt) <= 1) return null;
+      return `↻ ${s(e.node)}: attempt ${n(e.attempt)}`;
+    }
+    case 'phase-start': {
+      if (n(e.attempt) <= 1) return null;
+      return `▸ ${s(e.node)}: phase ${s(e.phase)}`;
+    }
+    case 'gate-end': {
+      const seconds = (n(e.durationMs) / 1000).toFixed(1);
+      if (n(e.exitCode) === 0) return `▸ ${s(e.node)}: ${s(e.gate)} passed (${seconds}s)`;
+      const head = `✗ ${s(e.node)}: ${s(e.gate)} refused (attempt ${n(e.attempt)})`;
+      const tail = typeof e.outputTail === 'string' ? (e.outputTail.split('\n')[0] ?? '') : '';
+      return tail === '' ? head : `${head}\n${tail}`;
+    }
+    case 'audit-check':
+      return `· ${s(e.node)}: audit ${s(e.check)}: ${s(e.verdict)}`;
     case 'gate-fail':
       return `✗ ${s(e.node)}: ${s(e.gate)} gate failed`;
     case 'run-aborted':
@@ -57,7 +106,9 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
     case 'closed': {
       // degraded[] rides the close line — "no coverage is not coverage" must
       // be visible when the trust decision happens, not on later inspection.
-      const line = `✓ ${s(e.node)}: published node/${s(e.node)} @ ${s(e.sha).slice(0, 7)}`;
+      // issue #130: a close is a LOCAL branch, never "published" (which reads
+      // as "out of this machine").
+      const line = `✓ ${s(e.node)}: verified on local branch node/${s(e.node)} @ ${s(e.sha).slice(0, 7)}`;
       return len(e.degraded) > 0
         ? `${line} — degraded: ${(e.degraded as unknown[]).map(s).join(', ')}`
         : line;
@@ -66,24 +117,32 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       return `↻ ${s(e.node)}: acceptance changed since its close — re-dispatching (was verified against a different gate)`;
     case 'acceptance-cascade':
       return `↻ ${s(e.node)}: rebuilding — its base ${s(e.via)} was re-dispatched, so this close embeds stale work`;
+    case 'land-rebuild':
+      return `↻ ${s(e.node)}: rebuilding on the landed stack (${s(e.onto).slice(0, 7)}) — a land conflict pinned it, so the sibling's change is integrated and re-gated`;
+    case 'land-rebuild-done':
+      return `✓ ${s(e.node)}: rebuilt on the landed stack — the conflict pin is cleared`;
     case 'not-closed':
-      return `${s(e.node)}: ledger declined to close — branch published, not verified`;
+      return `${s(e.node)}: ledger declined to close — local branch written, not verified`;
     case 'quarantined':
       return `${s(e.node)}: unfinished or failed work kept on ${s(e.branch)} for inspection`;
     case 'handback-read-failed':
       return `${s(e.node)}: could not read the worker's final message (read exited ${n(e.exitCode)}) — keeping a note in its place`;
+    case 'local-only-check-failed':
+      return `could not tell what exists only on this machine (${s(e.detail)})`;
     case 'quarantine-failed':
       return `${s(e.node)}: could not preserve failed work (${s(e.detail)})`;
     case 'rebuild-required':
       return `✗ ${s(e.node)}: verified branch moved since close — rebuild required`;
     case 'sha-mismatch':
       return `✗ ${s(e.node)}: branch does not match its recorded verification`;
-    case 'run-end':
-      return (
+    case 'run-end': {
+      const base =
         `pleach: run complete — ${len(e.closed)} closed · ${len(e.failed)} failed · ` +
         `${len(e.skipped)} skipped · ${len(e.blocked)} blocked · ` +
-        `${len(e.alreadyVerified)} already verified`
-      );
+        `${len(e.alreadyVerified)} already verified`;
+      const warning = runEndLocalOnlyWarning(e.localOnly);
+      return warning === null ? base : `${base}\n${warning}`;
+    }
     case 'land-start':
       return `landing verified work — ${firstSentence(e.goal)}`;
     case 'land-setup':
@@ -110,11 +169,14 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
     case 'land-blocked':
       return `✗ land refused: ${s(e.reason ?? e.unverified)}`;
     case 'land-conflict':
-      return `✗ land conflict on ${s(e.ref)} — repository left untouched`;
+      return `✗ land conflict on ${s(e.ref)} — ${s(e.node ?? e.ref)} is pinned for a rebuild on the landed stack (run 'pleach run <plan>', then land again)`;
     case 'land-merge-refused':
       return `✗ land refused on ${s(e.ref)}: git would not merge it — repository left untouched`;
-    case 'landed':
-      return `✓ landed ${s(e.ref ?? e.sha ?? '')}`.trim();
+    case 'landed': {
+      const base = `✓ landed ${s(e.branch ?? e.sha ?? '')}`.trim();
+      const warning = landedLocalOnlyWarning(e);
+      return warning === null ? base : `${base}\n${warning}`;
+    }
     default:
       return null; // diagnostic noise (dispose-failed, …) and future events
   }

@@ -7,10 +7,11 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import type { MintFacts, Receipt } from '../../src/core/receipt.ts';
+import type { LandedCandidate, MintFacts, Receipt } from '../../src/core/receipt.ts';
 import {
   CONTRACT_VERSION,
   canonicalJson,
+  chooseLanded,
   computeDegraded,
   deriveStatus,
   mintReceipt,
@@ -132,21 +133,86 @@ describe('deriveStatus', () => {
     if (!d.ok) expect(d.reason).toContain('0.9.0');
   });
 
-  test('a receipt minted under an earlier patch of the same minor still derives', () => {
+  test('a receipt minted under an earlier minor or patch of the same major still derives', () => {
     // Semantic versioning: a patch never changes how a receipt derives, so a
     // v1.1.5 close is judged exactly as it was the day it was minted.
     const r = mintReceipt(makeFacts());
-    const earlier = { ...r.facts, contractVersion: '1.1.5' };
-    expect(deriveStatus(earlier)).toEqual({ ok: true, status: r.derived });
+    for (const version of ['1.1.5', '1.0.0']) {
+      const earlier = { ...r.facts, contractVersion: version };
+      expect(deriveStatus(earlier)).toEqual({ ok: true, status: r.derived });
+    }
   });
 
-  test('a receipt from another minor or major, or with no readable version, is underivable', () => {
+  test('a receipt minted under a later minor of the same major still derives', () => {
+    // A minor adds to the contract; it never changes how a receipt derives.
     const r = mintReceipt(makeFacts());
-    for (const version of ['1.2.0', '1.0.9', '2.1.6', '1.1', 'one.one.six', '']) {
+    const later = { ...r.facts, contractVersion: '1.2.0' };
+    expect(deriveStatus(later)).toEqual({ ok: true, status: r.derived });
+  });
+
+  test('a receipt from another major, or with no readable version, is underivable', () => {
+    const r = mintReceipt(makeFacts());
+    for (const version of ['2.1.6', '0.9.0', '1.1', 'one.one.six', '']) {
       const d = deriveStatus({ ...r.facts, contractVersion: version });
       expect(d.ok).toBe(false);
       if (!d.ok) expect(d.reason).toContain('contract version fence');
     }
+  });
+});
+
+describe('chooseLanded', () => {
+  const patchId = 'pid';
+  const sha256 = 'receipt-sha';
+  const withTrailer = (sha: string): LandedCandidate => ({
+    sha,
+    message: `work\n\nreceipt-sha256: ${sha256}`,
+  });
+  const withoutTrailer = (sha: string): LandedCandidate => ({ sha, message: 'work' });
+
+  test('a resolved ref reports where the work landed when exactly one commit carries the patch', () => {
+    const decision = chooseLanded(patchId, sha256, true, [withTrailer('landed')]);
+    expect(decision).toEqual({ outcome: 'pass', landedAs: 'landed' });
+  });
+
+  test('a resolved ref with no matching commit still passes, with no landing claimed', () => {
+    expect(chooseLanded(patchId, sha256, true, [])).toEqual({ outcome: 'pass' });
+    expect(chooseLanded(patchId, sha256, true, [withTrailer('a'), withTrailer('b')])).toEqual({
+      outcome: 'pass',
+    });
+  });
+
+  test('an unresolvable ref passes by patch-id when exactly one commit carries the patch', () => {
+    const decision = chooseLanded(patchId, sha256, false, [withTrailer('landed')]);
+    expect(decision).toEqual({
+      outcome: 'pass',
+      landedAs: 'landed',
+      resolvedBy: 'patch-id',
+      trailer: true,
+    });
+  });
+
+  test('a single match without the trailer (a one-node squash) still resolves, saying so', () => {
+    // plotplot#54: verify resolves each receipt to the commit that carries its
+    // patch. The patch is the binding; the trailer is a fact reported beside it.
+    const decision = chooseLanded(patchId, sha256, false, [withoutTrailer('cand')]);
+    expect(decision).toEqual({
+      outcome: 'pass',
+      landedAs: 'cand',
+      resolvedBy: 'patch-id',
+      trailer: false,
+    });
+  });
+
+  test('zero matches orphan the receipt, saying no single commit carries the work', () => {
+    const decision = chooseLanded(patchId, sha256, false, []);
+    expect(decision.outcome).toBe('orphaned');
+    if (decision.outcome === 'orphaned') expect(decision.detail).toContain('no commit');
+  });
+
+  test('several matches are ambiguous and orphan the receipt rather than guess', () => {
+    const decision = chooseLanded(patchId, sha256, false, [withTrailer('a'), withTrailer('b')]);
+    expect(decision.outcome).toBe('orphaned');
+    if (decision.outcome === 'orphaned') expect(decision.detail).toContain('refusing to guess');
   });
 });
 
@@ -162,23 +228,24 @@ describe('computeDegraded', () => {
   });
 });
 
-// The rules a receipt derives by, pinned to the contract minor they belong to.
-// The fence trusts every patch of a minor to derive the same way, so a change
-// to `deriveCore` must move the minor: bump CONTRACT_VERSION and the doc's
-// version line to the next minor, add a docs/contract/CHANGES.md entry, then
-// pin the new function's hash under the new minor here.
-const DERIVATION_BY_MINOR: Record<string, string> = {
-  '1.1': 'f93a2e95c1f7cc286d178e2887af3a697d4b5441ca9a34cb7a935bd82e4b9388',
+// The rules a receipt derives by, pinned to the contract major they belong to.
+// Semantic versioning: minors and patches stay compatible, so the fence trusts
+// every 1.x receipt to derive the same way. A change to `deriveCore` is an
+// incompatible change: bump CONTRACT_VERSION and the doc's version line to the
+// next major, add a docs/contract/CHANGES.md entry, then pin the new
+// function's hash under the new major here.
+const DERIVATION_BY_MAJOR: Record<string, string> = {
+  '1': 'f93a2e95c1f7cc286d178e2887af3a697d4b5441ca9a34cb7a935bd82e4b9388',
 };
 
 describe('the version constant', () => {
-  test('the rules a receipt derives by changed only with a minor bump', () => {
+  test('the rules a receipt derives by changed only with a major bump', () => {
     const source = readFileSync('src/core/receipt.ts', 'utf8');
     const start = source.indexOf('function deriveCore(');
     const end = source.indexOf('\n}\n', start) + 2;
     expect(start).toBeGreaterThan(-1);
-    const minor = CONTRACT_VERSION.split('.').slice(0, 2).join('.');
-    expect(DERIVATION_BY_MINOR[minor]).toBe(sha256Hex(source.slice(start, end)));
+    const major = CONTRACT_VERSION.split('.')[0] ?? '';
+    expect(DERIVATION_BY_MAJOR[major]).toBe(sha256Hex(source.slice(start, end)));
   });
 
   test('CONTRACT_VERSION matches the canonical contract doc header', () => {

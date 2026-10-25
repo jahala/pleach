@@ -26,12 +26,20 @@ export type NodeStatus =
   | 'blocked'
   | 'partial'
   | 'aborted'
-  | 'skipped';
+  | 'skipped'
+  | 'out-of-scope';
 
 export interface NodeRunState {
   status: NodeStatus;
   attempts?: number;
   durationMs?: number;
+  // A running node's place on its ladder (issue #63), from the journal:
+  // the attempt in flight, the phase it is in, and the gate in flight (the
+  // last `gate-start` without a matching `gate-end`). Absent once the node
+  // settles — the verdict's `attempts` is its own story.
+  attempt?: number;
+  phase?: string;
+  gate?: string;
 }
 
 export interface RunState {
@@ -107,6 +115,20 @@ export function foldRunState(
 
   const runId = asString(lines[startIndex]?.runId);
 
+  // A `--only` run records the ids it ran on its start line (issue #85). Nodes
+  // outside that scope are not part of the run: they read `out-of-scope`, never
+  // `skipped` — "skipped" would claim the run chose not to build them, when in
+  // fact it was told to leave them alone.
+  const scopeLine = lines[startIndex]?.scope;
+  const scope = Array.isArray(scopeLine)
+    ? new Set(scopeLine.filter((v) => typeof v === 'string'))
+    : undefined;
+  if (scope !== undefined) {
+    for (const id of nodeIds) {
+      if (!scope.has(id)) nodes[id] = { status: 'out-of-scope' };
+    }
+  }
+
   for (let i = startIndex + 1; i < lines.length; i++) {
     const line = lines[i];
     if (line === null || line === undefined || typeof line !== 'object') continue;
@@ -117,6 +139,51 @@ export function foldRunState(
     switch (event) {
       case 'node-start':
         if (inPlan) nodes[node as string] = { status: 'running' };
+        break;
+      case 'attempt-start':
+        // A fresh attempt clears the phase and gate the previous attempt left.
+        if (inPlan && nodes[node as string]?.status === 'running') {
+          const attempt = asNumber(line.attempt);
+          if (attempt !== undefined) nodes[node as string] = { status: 'running', attempt };
+        }
+        break;
+      case 'phase-start':
+        if (inPlan && nodes[node as string]?.status === 'running') {
+          const phase = asString(line.phase);
+          if (phase !== undefined) {
+            const prev = nodes[node as string] as NodeRunState;
+            nodes[node as string] = {
+              status: 'running',
+              ...(prev.attempt !== undefined ? { attempt: prev.attempt } : {}),
+              phase,
+            };
+          }
+        }
+        break;
+      case 'gate-start':
+        if (inPlan && nodes[node as string]?.status === 'running') {
+          const gate = asString(line.gate);
+          if (gate !== undefined) {
+            const prev = nodes[node as string] as NodeRunState;
+            nodes[node as string] = {
+              status: 'running',
+              ...(prev.attempt !== undefined ? { attempt: prev.attempt } : {}),
+              ...(prev.phase !== undefined ? { phase: prev.phase } : {}),
+              gate,
+            };
+          }
+        }
+        break;
+      case 'gate-end':
+        // The gate finished; what remains is the attempt and phase it sat in.
+        if (inPlan && nodes[node as string]?.status === 'running') {
+          const prev = nodes[node as string] as NodeRunState;
+          nodes[node as string] = {
+            status: 'running',
+            ...(prev.attempt !== undefined ? { attempt: prev.attempt } : {}),
+            ...(prev.phase !== undefined ? { phase: prev.phase } : {}),
+          };
+        }
         break;
       case 'verdict':
         if (inPlan) {
@@ -145,6 +212,7 @@ export function foldRunState(
             : [],
         );
         for (const id of nodeIds) {
+          if (nodes[id]?.status === 'out-of-scope') continue;
           if (verified.has(id)) nodes[id] = { status: 'verified' };
           else if (nodes[id]?.status === 'pending') nodes[id] = { status: 'skipped' };
         }

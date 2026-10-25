@@ -565,10 +565,49 @@ checkpoint but have different lifetimes and trust domains.**
 - **D46 ◦ [review] The contract version fence refused receipts whose rules had not changed.** Found
   while landing D44: the fence compared a receipt's contract version with the build's exactly, so v1.1.6,
   a text-only patch, made every v1.1.5 receipt fail `pleach receipt`. **Fix:** the contract follows
-  semantic versioning from v1.1.5, and the fence compares major.minor only, refusing a receipt from
-  another minor or with no readable version. A test pins `deriveCore` to its minor, so a change to how
-  receipts derive cannot land without a minor bump. Tests: `test/unit/receipt.test.ts`,
+  semantic versioning from v1.1.5, and the fence compares the major only, refusing a receipt from
+  another major or with no readable version. A test pins `deriveCore` to its major, so a change to how
+  receipts derive cannot land without a major bump. (First shipped comparing major.minor; corrected
+  2026-10-25, because a minor release stays compatible and the first schema addition would have
+  refused every older receipt.) Tests: `test/unit/receipt.test.ts`,
   `test/loop/receipt-verify.test.ts`.
+- **D47 ⚠ [field] Between node-start and verdict the journal said nothing.** jahala/pleach#63 (four
+  conducted runs; one evening's six "what is it doing" questions answered by `ps`, `umbel ls` and the
+  worktree). **Fix:** the loop journals `attempt-start`, `phase-start`, `gate-start`/`gate-end` around
+  every gate (setup, settle, marker, hygiene, smoke, audit, red, green; a refused gate's `gate-end`
+  carries its output tail) and one `audit-check` per parsed verdict. `pleach status` shows a running
+  node's attempt, phase and gate from the same lines, and the run log narrates gate ends. Tests:
+  `test/loop/gate-events.test.ts`, `test/e2e/gate-events.test.ts`, `test/unit/run-state.test.ts`,
+  `test/unit/narrate.test.ts`.
+- **D48 ⚠ [field] A land conflict stopped pleach, and the conductor merged the node by hand.**
+  jahala/pleach#116 (12 refusals across 3 sessions, 8 followed by a hand merge). A first design that
+  replayed the node's commits onto the stack was rejected: it rarely resolved anything and once dropped a
+  sibling's verified line. **Fix:** `pleach land` still refuses, but pins the conflict: the stack it had
+  composed (target plus the sinks merged before) is kept under `refs/pleach/rebuild/<id>`. The next
+  `pleach run` re-dispatches that node on the stack with its own verified work merged in, its conflict
+  markers kept for the worker, and the whole ladder judges the result (the marker gate refuses a tree
+  still holding markers). A verified close records `facts.base.kind: 'land-rebuild'` and clears the
+  pin; anything else keeps it. Tests: `test/integration/land-rebuild.test.ts`,
+  `test/loop/land-rebuild.test.ts`, `test/loop/land.test.ts`, `test/e2e/land-rebuild.test.ts`.
+- **D49 ⚠ [field] A receipt pointed at a commit that a rebase or squash landing left off the branch.**
+  jahala/pleach#105 (umbel PR 80, rebase-merged; plotplot#54). **Fix:** a verified close records its
+  commit's stable patch-id and close time beside `diffRef`, outside the hashed envelope. `pleach receipt`
+  resolves a receipt whose ref no longer resolves to the one commit on the landed history that carries
+  its patch (`resolvedBy: 'patch-id'`, with `trailer` saying whether the commit kept the receipt's
+  trailer), and reports `orphaned` when no commit or several do. A git error in the search is an error,
+  never an orphan. Tests: `test/unit/receipt.test.ts`, `test/integration/receipt-patch-id.test.ts`.
+- **D50 ⚠ [field] Six hours of verified work existed only on one laptop, and nothing said so.**
+  jahala/pleach#130 (quadrat, 2026-09-18). **Fix:** pleach still never pushes. `run-end` names the
+  verified `node/*` branches no remote holds (`git rev-list <tips> --not --remotes`, local data only),
+  `landed` says how far the branch is ahead of its upstream, and the run log warns when anything is
+  local only. A failed git read there is journaled as `local-only-check-failed` after the line and
+  costs nothing else. The run log says "verified on local branch" where it said "published". Tests:
+  `test/unit/local-only.test.ts`, `test/loop/local-only.test.ts`, `test/e2e/local-only.test.ts`.
+- **D51 ◦ [field] No way to run a named subset of a plan.** jahala/pleach#85. **Fix:** `pleach run
+  --only <ids>` schedules the named nodes and their unclosed dependencies, records `only` and `scope` on
+  `run-start`, refuses an unknown id before the lock (exit 2), and composes with `--land`. `pleach
+  status` reads nodes outside the scope as `out-of-scope`. Tests: `test/unit/scope.test.ts`,
+  `test/loop/run-only.test.ts`, `test/e2e/run-only.test.ts`, `test/unit/run-state.test.ts`.
 
 ### Verified-sound (attacks refuted — do not relitigate)
 

@@ -5,7 +5,9 @@
 
 **A deterministic conductor for DAGs of verified agent work.** pleach takes a plan, isolates
 each node in a detached git worktree merged from its dependencies' verified branches, enforces
-gates, and publishes a `node/<id>` branch only for work that passed them.
+gates, and writes a local `node/<id>` branch only for work that passed them. It never pushes —
+the conductor does — but it says, at run end and after a landing, what exists only on this
+machine.
 
 Agents produce; code decides. Close, verify, quarantine and retry are deterministic code paths.
 Agent output is parsed evidence, never interpreted.
@@ -57,7 +59,8 @@ work. Only a node that clears all of it publishes a branch.
 ## Usage
 
 ```
-pleach run <plan.json>          Execute a plan (--land to land a fully-verified close)
+pleach run <plan.json>          Execute a plan (--land to land a fully-verified close; --only a,b
+                                to run a named subset and its unbuilt dependencies)
 pleach land <plan.json>         Merge a verified plan's sinks onto the checked-out branch
 pleach audit <plan.json> <node> Re-run only the audit on a quarantined node; a further re-audit
                                  needs a changed accept.audit.command
@@ -73,6 +76,11 @@ pleach clean                    Sweep a killed run's stale locks, orphaned workt
 ```
 
 `pleach --help` carries every flag, default and exit code.
+
+`pleach run --only a,b` runs just the named nodes and the unbuilt dependencies they need —
+nothing else is scheduled, closed dependencies are used as bases, and an id not in the plan
+refuses with exit 2. With `--land` the named ids become the landing's sinks. A node the subset
+left out reads `out-of-scope` in `pleach status`/`wait` (never `skipped`, never `failed`).
 
 ## What happens when things go wrong
 
@@ -93,9 +101,11 @@ tree on `quarantine/<id>` and writes a receipt.
 | A worker is stuck | It writes `BLOCKED.md` and is not asked again |
 | A git hook refuses the commit | Gate verdict like any other; tree kept on a snapshot no hook can refuse |
 | A git hook changes the commit | The node fails; nothing a gate did not judge is published |
+| A landing conflicts | The conflicting sink is pinned at `refs/pleach/rebuild/<id>` and rebuilt on the landed stack by the next `pleach run`, never merged by hand |
 | A seam throws mid-node | Settles under `seam:<lane>`; the verdict names the next step |
 | The journal loses lines | Reported as `journal-gap` at the next run; each run keeps its own copy |
 | A worker or gate prints a secret | Redacted (`[REDACTED]`) before it reaches the journal, the log or a receipt |
+| A verified branch or landing is on no remote | `run-end` and `landed` name what is local-only; stderr warns to push |
 | A killed run leaves sessions behind | `pleach clean` kills the sessions its journal names, sweeps their worktrees, and clears stale locks; `--dry-run` lists them without changing |
 
 Full detail, one section each: [`docs/guarantees.md`](docs/guarantees.md).

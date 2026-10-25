@@ -24,6 +24,19 @@ const verdict = (node: string, status: string, attempts = 1, durationMs = 10): L
   attempts,
   durationMs,
 });
+const attemptStart = (node: string, attempt: number): Line => ({
+  event: 'attempt-start',
+  node,
+  attempt,
+});
+const phaseStart = (node: string, phase: string, index: number): Line => ({
+  event: 'phase-start',
+  node,
+  phase,
+  index,
+});
+const gateStart = (node: string, gate: string): Line => ({ event: 'gate-start', node, gate });
+const gateEnd = (node: string, gate: string): Line => ({ event: 'gate-end', node, gate });
 const closed = (node: string): Line => ({ event: 'closed', node, sha: 'abc' });
 const notClosed = (node: string): Line => ({ event: 'not-closed', node });
 const runEnd = (runId: string, alreadyVerified: string[] = []): Line => ({
@@ -174,5 +187,122 @@ describe('foldRunState', () => {
     const state = foldRunState([runStart('mine', 'r1'), nodeStart('a'), other], 'mine', ['a']);
     expect(state.ended).toBe(false);
     expect(state.nodes.a?.status).toBe('running');
+  });
+
+  // issue #63 — a running node's attempt, phase and gate come from the journal.
+  test('a running node mid-gate reports its attempt and the gate in flight', () => {
+    const state = foldRunState(
+      [runStart('mine', 'r1'), nodeStart('a'), attemptStart('a', 1), gateStart('a', 'smoke')],
+      'mine',
+      ['a'],
+    );
+    expect(state.nodes.a).toEqual({ status: 'running', attempt: 1, gate: 'smoke' });
+  });
+
+  test('a gate-end clears the gate, leaving the attempt', () => {
+    const state = foldRunState(
+      [
+        runStart('mine', 'r1'),
+        nodeStart('a'),
+        attemptStart('a', 1),
+        gateStart('a', 'smoke'),
+        gateEnd('a', 'smoke'),
+      ],
+      'mine',
+      ['a'],
+    );
+    expect(state.nodes.a).toEqual({ status: 'running', attempt: 1 });
+  });
+
+  test('a running node mid-phase reports its attempt and the current phase', () => {
+    const state = foldRunState(
+      [runStart('mine', 'r1'), nodeStart('a'), attemptStart('a', 1), phaseStart('a', 'impl', 1)],
+      'mine',
+      ['a'],
+    );
+    expect(state.nodes.a).toEqual({ status: 'running', attempt: 1, phase: 'impl' });
+  });
+
+  test('a node on its second attempt reports attempt 2', () => {
+    const state = foldRunState(
+      [runStart('mine', 'r1'), nodeStart('a'), attemptStart('a', 2), gateStart('a', 'smoke')],
+      'mine',
+      ['a'],
+    );
+    expect(state.nodes.a).toEqual({ status: 'running', attempt: 2, gate: 'smoke' });
+  });
+
+  test('a verdict drops the running attempt/phase/gate, keeping its own attempts', () => {
+    const state = foldRunState(
+      [
+        runStart('mine', 'r1'),
+        nodeStart('a'),
+        attemptStart('a', 2),
+        gateStart('a', 'smoke'),
+        verdict('a', 'failed', 2, 20),
+      ],
+      'mine',
+      ['a'],
+    );
+    expect(state.nodes.a).toEqual({ status: 'failed', attempts: 2, durationMs: 20 });
+  });
+});
+
+describe('foldRunState — a scoped run (--only, issue #85)', () => {
+  const scopedStart = (source: string, runId: string, scope: string[]): Line => ({
+    event: 'run-start',
+    source,
+    goal: 'g',
+    nodes: 4,
+    runId,
+    only: ['b'],
+    scope,
+  });
+
+  test('a node outside the run-start scope reads out-of-scope, never skipped', () => {
+    const state = foldRunState(
+      [
+        scopedStart('mine', 'r1', ['a', 'b']),
+        nodeStart('a'),
+        verdict('a', 'done', 1, 5),
+        closed('a'),
+        nodeStart('b'),
+        verdict('b', 'done', 1, 6),
+        closed('b'),
+        runEnd('r1'),
+      ],
+      'mine',
+      ['a', 'b', 'c', 'd'],
+    );
+    expect(state.nodes.a?.status).toBe('closed');
+    expect(state.nodes.b?.status).toBe('closed');
+    expect(state.nodes.c?.status).toBe('out-of-scope');
+    expect(state.nodes.d?.status).toBe('out-of-scope');
+  });
+
+  test('out-of-scope nodes read out-of-scope while the run is still going', () => {
+    const state = foldRunState([scopedStart('mine', 'r1', ['a']), nodeStart('a')], 'mine', [
+      'a',
+      'b',
+    ]);
+    expect(state.ended).toBe(false);
+    expect(state.nodes.a?.status).toBe('running');
+    expect(state.nodes.b?.status).toBe('out-of-scope');
+  });
+
+  test('a scoped run still reports in-scope never-started nodes as skipped', () => {
+    const state = foldRunState(
+      [
+        scopedStart('mine', 'r1', ['a', 'b']),
+        nodeStart('a'),
+        verdict('a', 'done', 1, 5),
+        closed('a'),
+        runEnd('r1'),
+      ],
+      'mine',
+      ['a', 'b'],
+    );
+    expect(state.nodes.a?.status).toBe('closed');
+    expect(state.nodes.b?.status).toBe('skipped');
   });
 });

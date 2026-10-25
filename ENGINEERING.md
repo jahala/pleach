@@ -101,9 +101,9 @@ changing the doc + the source + the drift test in ONE commit, with a version not
 recorded in `docs/contract/CHANGES.md` for the other two repos. Any change to the canonical text —
 the seam block included — moves the version line in the doc's title with it: `test/unit/plan-version.test.ts`
 guards this by failing when the doc differs from its content at the commit that last changed the version
-line, unless the version line changed too. The version is semantic from v1.1.5: a patch never changes how a receipt
-derives, so the receipt fence compares major.minor only, and `test/unit/receipt.test.ts` pins `deriveCore`
-to its minor.
+line, unless the version line changed too. The version is semantic from v1.1.5: a minor or a patch never changes how a
+receipt derives, so the receipt fence compares the major only, and `test/unit/receipt.test.ts` pins
+`deriveCore` to its major.
 
 ## Error taxonomy (the classify ladder — `core/classify.ts`)
 
@@ -172,7 +172,7 @@ raise a timeout to "fix" a flake — find the race.
   real tend transport. **No mocks. Ever.**
 - **Proof runs** — real claude builds and real codex audits against `examples/`, driven by
   `scripts/proof-run.sh`. Burns subscription; run by hand, never in CI.
-- **The ledger is the test plan.** `docs/ledger.md` items (A1–A3, B1–B4, C1–C5, D1–D46 with
+- **The ledger is the test plan.** `docs/ledger.md` items (A1–A3, B1–B4, C1–C5, D1–D51 with
   D20 unused, SEC4)
   each map to at least one named test (`// ledger: B2` comment at the test). The §6 cases from the bridge
   spec (fan-out, join-conflict, concurrency invariant, commit-on-verified, dead-retry-re-isolates,

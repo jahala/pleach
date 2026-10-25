@@ -36,6 +36,7 @@ export const KINDS: Record<string, Kind> = {
   'journal-gap': 'run.lifecycle',
   'journal-gap-check-failed': 'run.lifecycle',
   'run-end': 'run.lifecycle',
+  'local-only-check-failed': 'run.lifecycle',
   'journal-copy-failed': 'run.lifecycle',
   'run-aborted': 'run.lifecycle',
   'run-stopped': 'run.lifecycle',
@@ -52,6 +53,9 @@ export const KINDS: Record<string, Kind> = {
   // One node's passage: dispatched, judged, closed or preserved, and every
   // record kept or refused along the way.
   'node-start': 'node.lifecycle',
+  'attempt-start': 'node.lifecycle',
+  'phase-start': 'node.lifecycle',
+  'gate-start': 'node.lifecycle',
   blocked: 'node.lifecycle',
   'worker-spawned': 'node.lifecycle',
   'worker-killed': 'node.lifecycle',
@@ -73,6 +77,8 @@ export const KINDS: Record<string, Kind> = {
   'receipt-write-failed': 'node.lifecycle',
   'acceptance-changed': 'node.lifecycle',
   'acceptance-cascade': 'node.lifecycle',
+  'land-rebuild': 'node.lifecycle',
+  'land-rebuild-done': 'node.lifecycle',
   'rebuild-required': 'node.lifecycle',
   'sha-mismatch': 'node.lifecycle',
   'dispose-failed': 'node.lifecycle',
@@ -81,6 +87,8 @@ export const KINDS: Record<string, Kind> = {
   'tree-still-changing': 'node.lifecycle',
 
   // A gate said yes or no.
+  'gate-end': 'gate.result',
+  'audit-check': 'gate.result',
   'gate-fail': 'gate.result',
   'gate-flaky': 'gate.result',
   'gate-writes-restored': 'gate.result',

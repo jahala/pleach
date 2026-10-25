@@ -5,7 +5,9 @@ import {
   PlanInvalidError,
   RebuildRequiredError,
 } from '../core/errors.ts';
+import { aheadOfUpstream } from '../core/local-only.ts';
 import type { Plan } from '../core/plan.ts';
+import { rebuildRef } from '../core/rebuild.ts';
 import { sinkIds, validatePlan } from '../core/validate.ts';
 import type { ConductorDeps, LandStack } from './deps.ts';
 import { resolveBaseRef, seedClosure } from './run-plan.ts';
@@ -98,7 +100,24 @@ export async function landPlan(
     } catch (err) {
       // A refused land must be explainable from the journal alone.
       if (err instanceof LandConflictError) {
-        await deps.journal.append({ event: 'land-conflict', ref: err.ref, files: err.files });
+        // issue #116: pin the conflict instead of telling the operator to
+        // merge by hand. The conflicting ref maps back to its sink id, and the
+        // stack commit it conflicted against is kept under refs/pleach/rebuild/
+        // so the next run rebuilds the node on the landed stack.
+        const index = refs.indexOf(err.ref);
+        const node = index === -1 ? undefined : sinks[index];
+        const rebuildRefName = node === undefined ? undefined : rebuildRef(node);
+        if (node !== undefined && err.stackSha !== null) {
+          await deps.isolate.setRef(opts.repoRoot, rebuildRefName as string, err.stackSha);
+        }
+        await deps.journal.append({
+          event: 'land-conflict',
+          ref: err.ref,
+          files: err.files,
+          ...(node !== undefined ? { node } : {}),
+          ...(rebuildRefName !== undefined ? { rebuildRef: rebuildRefName } : {}),
+          ...(err.stackSha !== null ? { stackSha: err.stackSha } : {}),
+        });
       } else if (err instanceof LandMergeRefusedError) {
         await deps.journal.append({
           event: 'land-merge-refused',
@@ -110,12 +129,31 @@ export async function landPlan(
       }
       throw err;
     }
+    // issue #130: how far ahead of its upstream the landing left the branch,
+    // or null when it has no upstream, so a landing on a laptop is never read
+    // as secured on a remote. The branch is already published here, so a git
+    // read that fails is journaled after `landed` and costs nothing else.
+    let localOnly: { aheadOfUpstream: number | null } | undefined;
+    let localOnlyError: string | undefined;
+    try {
+      localOnly = {
+        aheadOfUpstream: aheadOfUpstream(
+          await deps.isolate.branchUpstream(opts.repoRoot, landed.branch),
+        ),
+      };
+    } catch (err) {
+      localOnlyError = err instanceof Error ? err.message : String(err);
+    }
     await deps.journal.append({
       event: 'landed',
       branch: landed.branch,
       sha: landed.sha,
       nodes: sinks,
+      ...(localOnly !== undefined ? { localOnly } : {}),
     });
+    if (localOnlyError !== undefined) {
+      await deps.journal.append({ event: 'local-only-check-failed', detail: localOnlyError });
+    }
     return { branch: landed.branch, sha: landed.sha, landed: sinks };
   } finally {
     await lock.release();

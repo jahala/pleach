@@ -56,8 +56,9 @@ One command turns a plan into verified branches, and the exit code alone says wh
 - [x] (code) Retry ladder: flaky command node (fails once) retries and closes; node/id branch published with retry evidence. (inferred from test/e2e/cli.test.ts — requires real umbel + missoula) · test/e2e/cli.test.ts @83c8d9f · by cli
 - [x] (code) Resume surfacing: an already-verified node is reported, not re-run — RunSummary.alreadyVerified lists it and verbRun's stderr says 'skipped N already-verified node(s)'. · test/loop/run-plan.test.ts @84ed1ac
 
-- [x] (code) The run-state fold reads the latest run of the plan's source from journal lines alone: pending, running, the verdict's status, closed or partial, verified for a node the run-end lists as already verified, skipped otherwise; a run-end is matched by its runId · test/unit/run-state.test.ts @38dd290 · by cli
+- [x] (code) The run-state fold reads the latest run of the plan's source from journal lines alone: pending, running, the verdict's status, closed or partial, verified for a node the run-end lists as already verified, skipped otherwise; a run-end is matched by its runId · test/unit/run-state.test.ts @9a700002066bcd · by cli
 - [x] (code) Through the real CLI, `pleach wait` on a background run returns with every node closed and exit 0, `--node --timeout 1` on a sleeping node exits 124 naming it, `wait` after a resumed run with every node already verified exits 0, and `status` with no run exits 3 · test/e2e/status-wait.test.ts @8031855 · by cli
+- [x] (code) Through the real CLI, `--only b` builds b and its dependency and nothing else, a later full run skips them as verified, `--only nosuch` exits 2, and `--only` with `--land` lands exactly the named node · test/e2e/run-only.test.ts @93a1f563192e10 · by cli
 ## For #operator
 
 ## Tried
@@ -67,5 +68,6 @@ One command turns a plan into verified branches, and the exit code alone says wh
 - 2026-08-18 v1: enabled by #pluggable-adapters (same v1 user-journey edge, recorded on this side too)
 - 2026-09-23 restored the lock-held check retired above with evidence of its own: a B4 case in test/integration/stop.test.ts starts a real lock holder, then `pleach run` on the same source; exit 3, no `node/<id>`, holder alive. Proved it discriminates by pointing the holder at another source for one run (red).
 - 2026-10-21 D31 (#114): `pleach status` and `pleach wait`, built by a DeepSeek V4 Pro worker through umbel. The lead's review found a resumed run's already-verified nodes reading `skipped`, so `wait` exited 1 over all-verified work; they now read `verified`, and `run-end` names its `runId` so the fold matches its run exactly instead of searching a path. Rejected `run --wait`: `run` already blocks in the foreground.
+- 2026-10-25 D51 (#85), built by a DeepSeek V4 Pro worker, proven red on master by the lead. `run` now reads the ledger before `run-start` so the line can carry the scope; the re-dispatch lines are written right after it, inside the run's own journal copy.
 </script>
 <script src="./loop.js"></script>

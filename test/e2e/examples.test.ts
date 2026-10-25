@@ -89,7 +89,7 @@ describe('examples e2e — runnable without umbel or API keys', () => {
     // The verified nodes are published; nothing is published for the quarantined node.
     expect(await nodeBranches(repo)).toEqual(['node/check', 'node/lib']);
     // W1 narration floor: stderr narrates the run in plain language.
-    expect(r.stderr).toContain('published node/lib');
+    expect(r.stderr).toContain('verified on local branch node/lib');
     expect(r.stderr).toContain('▶ broken: building');
     expect(r.stderr).toContain('run complete');
   }, 60_000);

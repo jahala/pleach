@@ -139,3 +139,26 @@
   cannot land under a patch. The v1.1.6 entry above says v1.1.5 receipts fail `pleach receipt`; that
   held for the few hours between the two changes and no longer does. `@agent-contract/plan` is
   untouched: no schema-block change and nothing for tend or umbel to re-vendor.
+
+- **Receipt, not schema (2026-10-25)** — the receipt version fence compares the major only. The entry
+  above had it compare major.minor, but under semantic versioning a minor release adds to the contract
+  and stays compatible, so the first schema addition (a v1.2) would have refused every v1.1 receipt
+  although nothing it derives by changed. A change to how a receipt derives is the incompatible kind
+  and bumps the major; `test/unit/receipt.test.ts` pins `deriveCore` to the major it belongs to.
+  `@agent-contract/plan` is untouched.
+
+- **Receipt, not schema (2026-10-25)** — the close receipt's `refs` gained `patchId?` (the verified
+  commit's stable patch-id, `git patch-id --stable` over its diff) and `closedAt?` (its committer
+  timestamp, the close time), both read from git at settle and bound by git (issue #105). A receipt
+  whose `diffRef` no longer resolves — a rebase or squash landing, the branch deleted and the dangling
+  commit pruned — is re-located on the landed history by patch-id instead of reading UNDERIVABLE:
+  `pleach receipt` searches commits newer than the close for the commit whose patch-id matches, and
+  exactly one passes with `resolvedBy: 'patch-id'`, `landedAs`, and `trailer` saying whether that
+  commit also carries the receipt's trailer; none or several is the new `orphaned` outcome, with the
+  reason, never a guessed commit (the umbrella's plotplot#54: resolve to the commit that carries the
+  patch, or report orphaned). Additive, and outside the contract:
+  `@agent-contract/plan` is untouched — no schema-block change, no version bump, drift guards
+  unaffected, nothing for tend or umbel to re-vendor. `refs` already sat outside the hashed envelope,
+  so every receipt already on disk still hashes and verifies; a receipt without `patchId` verifies
+  exactly as it did. `deriveStatus` does not read either field: where the work landed changes what a
+  verify can prove, never what a close's facts imply.

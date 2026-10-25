@@ -140,6 +140,10 @@ Flags (run):
   --land                  After a fully-verified close, land the plan (see below); the run
                           summary gains a "land" object. A red run never lands. The landing
                           flags below shape that landing exactly as they shape \`pleach land\`.
+  --only a,b              Run only these named node ids and their unbuilt dependencies
+                          (comma-separated); nothing else is scheduled. Closed dependencies
+                          are used as bases. A named id not in the plan refuses (exit 2).
+                          With --land, the landing's sinks are the named ids (as --sinks).
   --quiet                 Suppress the per-event narration on stderr (one plain line per
                           node event; a worker blocked on you is shouted). The JSONL
                           journal records everything regardless.
@@ -171,6 +175,10 @@ Flags (status / wait):
   --timeout SECONDS       (wait) give up after this long and exit 124, naming the nodes still
                           pending or running
 
+A node outside a \`--only\` run's scope reads "out-of-scope" in \`pleach status\`
+and the wait table — it is not part of that run, so it never counts as skipped
+or failed.
+
 Flags (audit-wrap):
   --check ID              The check id the verdict block reports (default: the command text)
 
@@ -180,9 +188,11 @@ Flags (clean):
 
 Landing: verified work is published as node/<id> branches; \`pleach land\` merges
 the plan's sinks onto the branch checked out in --repo-root. It refuses unless
-EVERY plan node is verified (with --sinks, unless every named one is), and a
-merge conflict or non-fast-forward aborts with the repo untouched — resolve
-those by hand (git merge node/<id>).
+EVERY plan node is verified (with --sinks, unless every named one is). A merge
+conflict aborts with the repo untouched and pins the conflicting sink at
+refs/pleach/rebuild/<id> — the next \`pleach run\` rebuilds it on the landed
+stack (a worker integrates the sibling's change, the gates judge it), then
+\`pleach land\` again. A non-fast-forward aborts with the repo untouched.
 
 Resuming is automatic: re-running a plan skips nodes already verified in the
 ledger (their node/<id> branch exists) — only unbuilt or previously-failed
@@ -224,10 +234,16 @@ Receipts: every close and quarantine mints a sealed receipt (facts frozen at
 classify time, sha256 pinned as a receipt-sha256 trailer in the node's commit,
 files under <git-dir>/pleach/receipts/ — <node>.<sha256 prefix>.json is that
 close's own and <node>.json is whatever closed last, so a node that runs again
-keeps both). \`pleach receipt <node>\` re-hashes the latest file, re-derives the
-status from its facts, checks the trailer, and lists every close behind it:
-PASS (exit 0) · TAMPERED (exit 1) · UNDERIVABLE (exit 2 — nothing proved
-either way: no receipt, foreign contract version, or unresolvable ref).
+keeps both). A verified close also records the commit's stable patch-id and its
+close time beside the ref, so after a rebase or squash the work is re-located
+on the landed history by patch-id instead of reading off-master. \`pleach
+receipt <node>\` re-hashes the latest file, re-derives the status from its
+facts, checks the trailer, resolves where the work landed (landedAs, resolvedBy
+on the JSON), and lists every close behind it:
+PASS (exit 0) · TAMPERED (exit 1) · ORPHANED (exit 2 — the record is honest but
+no single commit on the landed history carries the work, e.g. after a squash) ·
+UNDERIVABLE (exit 2 — nothing proved either way: no receipt, foreign contract
+version, or unresolvable ref).
 `;
 
 interface Flags {
@@ -249,6 +265,7 @@ interface Flags {
   fresh: boolean;
   land: boolean;
   sinks?: string[];
+  only?: string[];
   landGates: string[];
   now: boolean;
   quiet: boolean;
@@ -391,6 +408,16 @@ function parseFlags(argv: readonly string[]): { positionals: string[]; flags: Fl
           .filter((id) => id.length > 0);
         if (ids.length === 0) throw new UsageError('--sinks requires at least one node id');
         flags.sinks = ids;
+        i += 1;
+        break;
+      }
+      case '--only': {
+        const ids = takeValue(arg, next)
+          .split(',')
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0);
+        if (ids.length === 0) throw new UsageError('--only requires at least one node id');
+        flags.only = ids;
         i += 1;
         break;
       }
@@ -619,6 +646,7 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     ...(flags.timeoutMs !== undefined ? { defaultTimeoutMs: flags.timeoutMs } : {}),
     ...(flags.fallbackProvider !== undefined ? { fallbackProvider: flags.fallbackProvider } : {}),
     ...(flags.fresh ? { fresh: true } : {}),
+    ...(flags.only !== undefined ? { only: flags.only } : {}),
     ...(providers !== undefined ? { providers } : {}),
   });
 
@@ -640,8 +668,18 @@ async function verbReceipt(nodeId: string, flags: Flags): Promise<number> {
   const degraded = receipt?.facts.degraded ?? [];
 
   if (check.outcome === 'pass' && receipt !== undefined) {
+    const landed =
+      check.landedAs !== undefined
+        ? ` — landed as ${check.landedAs}${
+            check.resolvedBy === 'patch-id'
+              ? check.trailer === false
+                ? " (resolved by patch-id; the commit lacks the receipt's trailer)"
+                : ' (resolved by patch-id)'
+              : ''
+          }`
+        : '';
     process.stderr.write(
-      `pleach: receipt PASS — ${nodeId} ${receipt.derived} (receipt-sha256 ${receiptPrefix(receipt.sha256)}…)\n`,
+      `pleach: receipt PASS — ${nodeId} ${receipt.derived} (receipt-sha256 ${receiptPrefix(receipt.sha256)}…)${landed}\n`,
     );
     for (const d of degraded) process.stderr.write(`pleach:   degraded: ${d}\n`);
   } else if (check.outcome !== 'pass') {
@@ -666,10 +704,21 @@ async function verbReceipt(nodeId: string, flags: Flags): Promise<number> {
       ...(receipt !== undefined
         ? { derived: receipt.derived, sha256: receipt.sha256, degraded }
         : {}),
+      ...(check.outcome === 'pass' && check.landedAs !== undefined
+        ? { landedAs: check.landedAs }
+        : {}),
+      ...(check.outcome === 'pass' && check.resolvedBy !== undefined
+        ? { resolvedBy: check.resolvedBy }
+        : {}),
+      ...(check.outcome === 'pass' && check.trailer !== undefined
+        ? { trailer: check.trailer }
+        : {}),
       history: check.history,
       ...(check.outcome !== 'pass' ? { detail: check.detail } : {}),
     })}\n`,
   );
+  // PASS is the only success; TAMPERED is a definite negative (1). ORPHANED and
+  // UNDERIVABLE both prove nothing either way (2).
   return check.outcome === 'pass' ? 0 : check.outcome === 'tampered' ? 1 : 2;
 }
 
@@ -705,7 +754,13 @@ async function verbAudit(
 // reads and the other silently drops is a landing that says one thing and does
 // another, which is the failure D18 exists to end.
 function landOpts(flags: Flags): LandOpts {
-  return { repoRoot: flags.repoRoot, sinks: flags.sinks, landGates: flags.landGates };
+  // `run --only <ids> --land` lands the named ids as its sinks, exactly as
+  // `land --sinks <ids>` would (issue #85) — `--only` is the stronger subset.
+  return {
+    repoRoot: flags.repoRoot,
+    sinks: flags.only ?? flags.sinks,
+    landGates: flags.landGates,
+  };
 }
 
 async function verbLand(planPath: string, flags: Flags): Promise<number> {
@@ -795,6 +850,17 @@ function statusReport(state: RunState, level: RunLevel): StatusReport {
 
 function renderTable(plan: Plan, state: RunState, level: RunLevel): string {
   const ids = plan.nodes.map((n) => n.id);
+  // A running node's place on its ladder (issue #63): attempt, phase and gate
+  // read from the journal, so a watcher sees what the node is doing, not just
+  // that it is running.
+  const progressOf = (n: NodeRunState): string =>
+    [
+      n.attempt === undefined ? '' : `attempt ${n.attempt}`,
+      n.phase === undefined ? '' : `phase ${n.phase}`,
+      n.gate === undefined ? '' : `gate ${n.gate}`,
+    ]
+      .filter((part) => part !== '')
+      .join(' · ');
   const rows: string[][] = ids.map((id) => {
     const n = state.nodes[id] ?? { status: 'pending' as const };
     return [
@@ -802,11 +868,12 @@ function renderTable(plan: Plan, state: RunState, level: RunLevel): string {
       n.status,
       n.attempts === undefined ? '' : String(n.attempts),
       n.durationMs === undefined ? '' : String(n.durationMs),
+      n.status === 'running' ? progressOf(n) : '',
     ];
   });
-  const header = ['node', 'status', 'attempts', 'duration(ms)'];
+  const header = ['node', 'status', 'attempts', 'duration(ms)', 'progress'];
   const all = [header, ...rows];
-  const widths = [0, 1, 2, 3].map((c) => Math.max(...all.map((r) => (r[c] ?? '').length)));
+  const widths = [0, 1, 2, 3, 4].map((c) => Math.max(...all.map((r) => (r[c] ?? '').length)));
   const line = (r: string[]): string =>
     r
       .map((cell, c) => cell.padEnd(widths[c] ?? 0))
@@ -822,13 +889,18 @@ function isTerminal(status: NodeStatus | undefined): boolean {
     status === 'failed' ||
     status === 'blocked' ||
     status === 'partial' ||
-    status === 'aborted'
+    status === 'aborted' ||
+    // A node outside a `--only` run's scope will never settle — waiting on it
+    // returns at once rather than blocking until a close that cannot come.
+    status === 'out-of-scope'
   );
 }
 
-// Closed in this run or verified before it: both are verified work.
+// Closed in this run or verified before it: both are verified work. An
+// out-of-scope node is neither — it is not part of the run at all, so it does
+// not weigh against a clean wait.
 const settledGreen = (status: NodeStatus | undefined): boolean =>
-  status === 'closed' || status === 'verified';
+  status === 'closed' || status === 'verified' || status === 'out-of-scope';
 
 function waitExitCode(state: RunState, node?: string): number {
   if (node !== undefined) return settledGreen(state.nodes[node]?.status) ? 0 : 1;

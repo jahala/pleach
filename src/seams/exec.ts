@@ -16,7 +16,7 @@ import type { ExecFn } from '../loop/deps.ts';
 // expansion, no command substitution. ledger: SEC1
 
 export const exec: ExecFn = async (argv, opts) => {
-  const { cwd, timeoutMs, env, signal } = opts;
+  const { cwd, timeoutMs, env, signal, input } = opts;
 
   const mergedEnv = env ? { ...process.env, ...env } : process.env;
 
@@ -24,13 +24,16 @@ export const exec: ExecFn = async (argv, opts) => {
   // is "the return type says so" — resolve with exit 127 (command-not-found
   // convention) instead of rejecting with an untyped Error. The loop reads it
   // as the environment's fault, never the work's (ledger D19).
-  let proc: Bun.Subprocess<'ignore', 'pipe', 'pipe'>;
+  let proc: Bun.Subprocess<'pipe', 'pipe', 'pipe'>;
   try {
     proc = Bun.spawn(argv as string[], {
       cwd,
       env: mergedEnv,
       stdout: 'pipe',
       stderr: 'pipe',
+      // stdin is a pipe closed at once below, so a command that never reads it
+      // still sees EOF — the same as the 'ignore' (/dev/null) it replaced.
+      stdin: 'pipe',
       // Its own process group, so the interrupt below can reap the whole tree
       // (ledger D16). A child that inherits OUR group is not a group leader, so
       // `kill(-pid)` names no group: the command dies, the `sleep` it forked
@@ -44,6 +47,11 @@ export const exec: ExecFn = async (argv, opts) => {
     const message = err instanceof Error ? err.message : String(err);
     return { output: message, stdout: '', exitCode: SPAWN_FAILED_EXIT };
   }
+
+  // Write `input` (the patch-id seam's diff) and close stdin before the drains
+  // run, so a command that reads stdin to EOF finishes instead of hanging.
+  if (input !== undefined) await proc.stdin.write(input);
+  await proc.stdin.end();
 
   let output = '';
   let stdout = '';

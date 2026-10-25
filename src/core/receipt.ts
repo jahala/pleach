@@ -21,14 +21,14 @@ import type { Redaction } from './redact.ts';
 // unit test asserts the pin. A receipt is minted under this version.
 export const CONTRACT_VERSION = '1.1.6';
 
-// The contract follows semantic versioning from v1.1.5, where receipts began:
-// a patch changes the contract's text and never how a receipt derives, so the
-// fence compares major.minor only. A change to `deriveCore` bumps the minor at
-// least, and a test pins `deriveCore` to the minor it belongs to. A receipt
-// from another minor fails derivation honestly ("wrong contract version"),
-// never mysteriously.
-function minorLine(version: string): string | undefined {
-  return /^(\d+\.\d+)\.\d+$/.exec(version)?.[1];
+// The contract follows semantic versioning from v1.1.5, where receipts began.
+// A minor or a patch stays compatible and never changes how a receipt
+// derives, so the fence compares the major only. A change to `deriveCore` is
+// an incompatible change and bumps the major; a test pins `deriveCore` to the
+// major it belongs to. A receipt from another major fails derivation honestly
+// ("wrong contract version"), never mysteriously.
+function majorOf(version: string): string | undefined {
+  return /^(\d+)\.\d+\.\d+$/.exec(version)?.[1];
 }
 
 export interface GateRecord {
@@ -75,7 +75,11 @@ export interface ReceiptFacts {
   // conductor's commit on top of the quarantined tree, kept rather than
   // rebuilt, so a resumed close that carried that fix stays distinguishable
   // from one that stood on the tree exactly as it was quarantined.
-  base?: { kind: 'quarantine'; sha: string; moved?: boolean };
+  // `land-rebuild` (issue #116) is the same fact for a node rebuilt on the
+  // stack a land conflict pinned it at: `sha` is the stack commit.
+  base?:
+    | { kind: 'quarantine'; sha: string; moved?: boolean }
+    | { kind: 'land-rebuild'; sha: string };
   // How far the tree this close held got through a phased work list (D13): the
   // index of the red phase whose seal is IN that tree's history. A later
   // attempt standing on that tree — a resumed quarantine, a re-adjudication
@@ -127,6 +131,14 @@ export interface Receipt {
     // The receipt this write replaced (a retried node) — the settle trail
     // survives the overwrite without receipt-chaining infrastructure.
     previousReceiptSha256?: string;
+    // The verified commit's stable patch-id (git patch-id --stable over its
+    // diff) and its committer timestamp (the close time), both read from git at
+    // settle (issue #105). They let verify re-locate the work on the landed
+    // history after a rebase or squash — the patch-id is stable under a rebase
+    // and the timestamp bounds the search with `--since`. Absent for a receipt
+    // minted before this change, which verifies exactly as it did.
+    patchId?: string;
+    closedAt?: number;
   };
   // The gate artifacts settle kept, as paths — never content (D14). Outside
   // the envelope for the same reason refs are: they are written after the
@@ -183,11 +195,11 @@ export function receiptPrefix(sha256: string): string {
 // dual close); 'fail' and 'skip' both block, because "never adjudicated" must
 // gate exactly as hard as "checked and failed".
 export function deriveStatus(facts: ReceiptFacts): Derivation {
-  const line = minorLine(facts.contractVersion);
-  if (line === undefined || line !== minorLine(CONTRACT_VERSION)) {
+  const major = majorOf(facts.contractVersion);
+  if (major === undefined || major !== majorOf(CONTRACT_VERSION)) {
     return {
       ok: false,
-      reason: `contract version fence: receipt minted under v${facts.contractVersion}, this build derives v${minorLine(CONTRACT_VERSION)}.x receipts`,
+      reason: `contract version fence: receipt minted under v${facts.contractVersion}, this build derives v${majorOf(CONTRACT_VERSION)}.x receipts`,
     };
   }
   return { ok: true, status: deriveCore(facts) };
@@ -215,6 +227,64 @@ export function receiptHash(facts: ReceiptFacts, derived: DerivedStatus): string
 // True iff the envelope still hashes to its seal. Refs are not consulted.
 export function rehash(receipt: Receipt): boolean {
   return receiptHash(receipt.facts, receipt.derived) === receipt.sha256;
+}
+
+// A commit on the landed history whose patch-id matched, with its message to
+// check the trailer against.
+export interface LandedCandidate {
+  sha: string;
+  message: string;
+}
+
+// The landed-history decision (issue #105): where a receipt's work sits on the
+// current branch, chosen from the commits whose stable patch-id equals the
+// receipt's recorded `refs.patchId`. Pure — the git walk lives in the isolate
+// seam; this maps the candidate list to the one honest outcome, and never
+// guesses when the mapping is ambiguous.
+export type LandedDecision =
+  | { outcome: 'pass'; landedAs?: string; resolvedBy?: 'patch-id'; trailer?: boolean }
+  | { outcome: 'orphaned'; detail: string };
+
+export function chooseLanded(
+  patchId: string,
+  receiptSha256: string,
+  diffRefResolved: boolean,
+  candidates: LandedCandidate[],
+): LandedDecision {
+  const carriesTrailer = (c: LandedCandidate): boolean =>
+    c.message.includes(`receipt-sha256: ${receiptSha256}`);
+  // The close already passed on its own ref (the trailer matched): the patch-id
+  // only reports where the work landed on THIS branch, when exactly one commit
+  // carries it. Zero or several → no claim about a landing, still a pass.
+  if (diffRefResolved) {
+    if (candidates.length === 1) return { outcome: 'pass', landedAs: candidates[0].sha };
+    return { outcome: 'pass' };
+  }
+  // The ref no longer resolves: the patch-id is the only way to the work. One
+  // commit carrying the patch is the commit (plotplot#54); whether it also
+  // carries the receipt's trailer is reported beside it, since a squash or a
+  // rewritten message drops the trailer and keeps the patch.
+  if (candidates.length === 1) {
+    const only = candidates[0] as LandedCandidate;
+    return {
+      outcome: 'pass',
+      landedAs: only.sha,
+      resolvedBy: 'patch-id',
+      trailer: carriesTrailer(only),
+    };
+  }
+  if (candidates.length === 0) {
+    return {
+      outcome: 'orphaned',
+      detail: `no commit on the landed history carries patch-id ${patchId} — the work is orphaned`,
+    };
+  }
+  return {
+    outcome: 'orphaned',
+    detail: `${candidates.length} commits carry patch-id ${patchId} (${candidates
+      .map((c) => c.sha)
+      .join(', ')}) — ambiguous, refusing to guess`,
+  };
 }
 
 // "No coverage is not coverage" as a recorded fact: every check the plan

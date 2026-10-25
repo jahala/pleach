@@ -22,11 +22,20 @@ describe('narrateEvent (W1 narration floor)', () => {
     expect(line).toContain('permission prompt');
   });
 
-  test('closed reports the published branch and short sha', () => {
+  test('closed reports the local branch and short sha', () => {
     const line = narrateEvent({ event: 'closed', node: 'api', sha: 'abcdef0123456789' });
     expect(line).toContain('node/api');
     expect(line).toContain('abcdef0');
     expect(line).not.toContain('abcdef0123456789');
+    // issue #130: a close is a local branch, never "published" (which reads as remote).
+    expect(line).toContain('verified on local branch');
+    expect(line).not.toContain('published');
+  });
+
+  test('not-closed says the branch is local, not published', () => {
+    const line = narrateEvent({ event: 'not-closed', node: 'api' });
+    expect(line).toContain('local branch written');
+    expect(line).not.toContain('published');
   });
 
   test('verdict phrases terminal failure with attempts', () => {
@@ -110,6 +119,155 @@ describe('narrateEvent (W1 narration floor)', () => {
   test('diagnostic noise stays out of the narration', () => {
     expect(narrateEvent({ event: 'dispose-failed', node: 'x', detail: 'boom' })).toBeNull();
     expect(narrateEvent({ event: 'unknown-future-event' })).toBeNull();
+  });
+
+  // issue #63 — the narration floor speaks the gate events as they happen.
+  test('a passing gate-end is one line with the duration in seconds', () => {
+    const line = narrateEvent({
+      event: 'gate-end',
+      node: 'api',
+      gate: 'smoke',
+      attempt: 1,
+      exitCode: 0,
+      durationMs: 12300,
+    });
+    expect(line).toBe('▸ api: smoke passed (12.3s)');
+  });
+
+  test('a refused gate-end names the attempt and the tail first line', () => {
+    const line = narrateEvent({
+      event: 'gate-end',
+      node: 'api',
+      gate: 'hygiene',
+      attempt: 1,
+      exitCode: -1,
+      durationMs: 50,
+      outputTail: 'secret detected in src/x.ts\nsecond line',
+    });
+    expect(line).toBe('✗ api: hygiene refused (attempt 1)\nsecret detected in src/x.ts');
+  });
+
+  test('a refused gate-end with no tail stays one line', () => {
+    const line = narrateEvent({
+      event: 'gate-end',
+      node: 'api',
+      gate: 'marker',
+      attempt: 2,
+      exitCode: -1,
+      durationMs: 1,
+    });
+    expect(line).toBe('✗ api: marker refused (attempt 2)');
+  });
+
+  test('audit-check is one short line per check verdict', () => {
+    const line = narrateEvent({
+      event: 'audit-check',
+      node: 'api',
+      check: 'c3',
+      verdict: 'fail',
+    });
+    expect(line).toBe('· api: audit c3: fail');
+  });
+
+  test('attempt-start is narrated only on attempt 2 and up', () => {
+    expect(narrateEvent({ event: 'attempt-start', node: 'api', attempt: 1 })).toBeNull();
+    expect(narrateEvent({ event: 'attempt-start', node: 'api', attempt: 2 })).toBe(
+      '↻ api: attempt 2',
+    );
+  });
+
+  test('phase-start is narrated only on attempt 2 and up', () => {
+    expect(
+      narrateEvent({ event: 'phase-start', node: 'api', attempt: 1, phase: 'impl', index: 1 }),
+    ).toBeNull();
+    expect(
+      narrateEvent({ event: 'phase-start', node: 'api', attempt: 2, phase: 'impl', index: 1 }),
+    ).toBe('▸ api: phase impl');
+  });
+
+  test('gate-start is never narrated — the status verb carries it', () => {
+    expect(narrateEvent({ event: 'gate-start', node: 'api', gate: 'smoke' })).toBeNull();
+  });
+});
+
+// issue #130: a run and a landing say when their work is on no remote.
+describe('narrate — local-only work (issue #130)', () => {
+  test('run-end with no remote says the repository has no remote', () => {
+    const line = narrateEvent({
+      event: 'run-end',
+      closed: ['a'],
+      failed: [],
+      skipped: [],
+      partial: [],
+      blocked: [],
+      alreadyVerified: [],
+      localOnly: { nodeBranches: ['node/a'], remotes: 0 },
+    });
+    expect(line).toContain('no remote');
+  });
+
+  test('run-end names the verified branches that exist only on this machine', () => {
+    const line = narrateEvent({
+      event: 'run-end',
+      closed: ['a', 'b'],
+      failed: [],
+      skipped: [],
+      partial: [],
+      blocked: [],
+      alreadyVerified: [],
+      localOnly: { nodeBranches: ['node/a', 'node/b'], remotes: 1 },
+    });
+    expect(line).toContain('2 verified node branch(es) exist only on this machine');
+  });
+
+  test('run-end with everything on a remote prints no local-only warning', () => {
+    const line = narrateEvent({
+      event: 'run-end',
+      closed: ['a'],
+      failed: [],
+      skipped: [],
+      partial: [],
+      blocked: [],
+      alreadyVerified: [],
+      localOnly: { nodeBranches: [], remotes: 1 },
+    });
+    expect(line).not.toContain('only on this machine');
+    expect(line).not.toContain('no remote');
+  });
+
+  test('landed ahead of its upstream warns to push', () => {
+    const line = narrateEvent({
+      event: 'landed',
+      branch: 'main',
+      sha: 'abc',
+      nodes: ['a'],
+      localOnly: { aheadOfUpstream: 27 },
+    });
+    expect(line).toContain('landed on');
+    expect(line).toContain('27 commit(s) ahead of its upstream');
+  });
+
+  test('landed with no upstream warns there is no upstream', () => {
+    const line = narrateEvent({
+      event: 'landed',
+      branch: 'main',
+      sha: 'abc',
+      nodes: ['a'],
+      localOnly: { aheadOfUpstream: null },
+    });
+    expect(line).toContain('no upstream');
+  });
+
+  test('landed up to date with its upstream prints no warning', () => {
+    const line = narrateEvent({
+      event: 'landed',
+      branch: 'main',
+      sha: 'abc',
+      nodes: ['a'],
+      localOnly: { aheadOfUpstream: 0 },
+    });
+    expect(line).not.toContain('ahead of its upstream');
+    expect(line).not.toContain('no upstream');
   });
 });
 

@@ -10,6 +10,7 @@ import {
   LandConflictError,
   LandMergeRefusedError,
 } from '../core/errors.ts';
+import type { BranchUpstream, LocalOnlyFacts, LocalOnlyNodeBranch } from '../core/local-only.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, IsolateSeam, Isolation } from '../loop/deps.ts';
 import { resolveGitDir } from './gitdir.ts';
@@ -40,6 +41,16 @@ async function gitEnv(
   ...args: string[]
 ): Promise<{ output: string; exitCode: number }> {
   return exec(['git', '-C', cwd, ...args], { cwd, env });
+}
+
+// `git` with `input` fed to stdin — the patch-id seam pipes a diff through it.
+async function gitInput(
+  exec: ExecFn,
+  cwd: string,
+  input: string,
+  ...args: string[]
+): Promise<{ output: string; exitCode: number }> {
+  return exec(['git', '-C', cwd, ...args], { cwd, input });
 }
 
 async function gitMust(exec: ExecFn, cwd: string, ...args: string[]): Promise<string> {
@@ -667,6 +678,27 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     return r.output.trim() || null;
   }
 
+  // ── the rebuild pin (issue #116) ──────────────────────────────────────────
+  // The stack commit a land conflict refused against, kept alive under
+  // refs/pleach/ so the throwaway worktree can be disposed without losing it.
+  // Written through `update-ref` with no hook running, the way snapshot keeps a
+  // quarantine — a hook gates what publishes, never what pleach keeps.
+
+  async function setRef(cwd: string, ref: string, sha: string): Promise<void> {
+    await gitMust(exec, cwd, '-c', 'core.hooksPath=/dev/null', 'update-ref', ref, sha);
+  }
+
+  async function deleteRef(cwd: string, ref: string): Promise<void> {
+    const r = await git(exec, cwd, '-c', 'core.hooksPath=/dev/null', 'update-ref', '-d', ref);
+    // The pin is consumed exactly once; a ref that is already gone is an answer.
+    if (r.exitCode !== 0 && !/unable to resolve|does not exist|not exist/i.test(r.output)) {
+      throw new IsolateCatastrophicError(
+        'git update-ref -d',
+        `exited ${r.exitCode} in ${cwd}:\n${r.output}`,
+      );
+    }
+  }
+
   async function commitMessageOf(cwd: string, ref: string): Promise<string | null> {
     const r = await git(exec, cwd, 'show', '-s', '--format=%B', `${ref}^{commit}`);
     if (r.exitCode !== 0) return null;
@@ -693,6 +725,58 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
   async function isAncestor(cwd: string, ancestor: string, descendant: string): Promise<boolean> {
     const r = await git(exec, cwd, 'merge-base', '--is-ancestor', ancestor, descendant);
     return r.exitCode === 0;
+  }
+
+  // The stable patch-id of a commit (issue #105): `git log -1 -p --format=%H`
+  // gives the commit's diff prefixed by its object name, and `git patch-id
+  // --stable` reads that through stdin. A commit that introduces no diff (a
+  // merge, an empty commit) has no patch-id — null. The patch-id ignores line
+  // numbers, so the same change keeps its id after a rebase.
+  async function commitPatchId(cwd: string, ref: string): Promise<string | null> {
+    const patch = await git(exec, cwd, 'log', '-1', '-p', '--format=%H', `${ref}^{commit}`);
+    if (patch.exitCode !== 0) return null;
+    const id = await gitInput(exec, cwd, patch.output, 'patch-id', '--stable');
+    if (id.exitCode !== 0) return null;
+    return id.output.trim().split(/\s+/)[0] || null;
+  }
+
+  async function commitTime(cwd: string, ref: string): Promise<number | null> {
+    const r = await git(exec, cwd, 'show', '-s', '--format=%ct', `${ref}^{commit}`);
+    if (r.exitCode !== 0) return null;
+    const epoch = Number(r.output.trim());
+    return Number.isFinite(epoch) && epoch > 0 ? epoch : null;
+  }
+
+  // The landed-history search (issue #105): every commit on HEAD at or after
+  // `sinceEpoch`, with its stable patch-id, in one pass through `git patch-id`.
+  // Commits whose patch-id equals `patchId` come back with their messages so
+  // the caller can decide (trailer present → landed; absent → orphaned).
+  async function commitsByPatchId(
+    cwd: string,
+    patchId: string,
+    sinceEpoch: number,
+  ): Promise<{ sha: string; message: string }[]> {
+    // A git failure here is an error, never "no commit carries the work":
+    // reading it as zero matches would report a landed receipt as orphaned.
+    const log = await git(exec, cwd, 'log', `--since=@${sinceEpoch}`, '-p', '--format=%H', 'HEAD');
+    if (log.exitCode !== 0) {
+      throw new IsolateCatastrophicError('git log -p', `exited ${log.exitCode}: ${log.output}`);
+    }
+    const id = await gitInput(exec, cwd, log.output, 'patch-id', '--stable');
+    if (id.exitCode !== 0) {
+      throw new IsolateCatastrophicError('git patch-id', `exited ${id.exitCode}: ${id.output}`);
+    }
+    const matches: string[] = [];
+    for (const line of id.output.split('\n')) {
+      const [pid, sha] = line.trim().split(/\s+/);
+      if (pid === patchId && sha !== undefined && sha.length > 0) matches.push(sha);
+    }
+    const out: { sha: string; message: string }[] = [];
+    for (const sha of matches) {
+      const message = await commitMessageOf(cwd, sha);
+      if (message !== null) out.push({ sha, message });
+    }
+    return out;
   }
 
   // ── land ─────────────────────────────────────────────────────────────────
@@ -758,6 +842,11 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
             .split('\n')
             .map((l) => l.trim())
             .filter(Boolean);
+          // The stack's HEAD before the abort: the target tip plus every sink
+          // merged before this one — the commit the node must rebuild on
+          // (issue #116). Read while the merge is still in progress, when HEAD
+          // is the pre-merge commit.
+          const stackSha = await gitMust(exec, worktreePath, 'rev-parse', 'HEAD');
           await git(exec, worktreePath, 'merge', '--abort');
           if (files.length === 0) {
             // No unmerged files: git refused the merge without a conflict. Most
@@ -766,7 +855,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
             // the cause either way (D28).
             throw new LandMergeRefusedError(ref, merge.output);
           }
-          throw new LandConflictError(ref, files);
+          throw new LandConflictError(ref, files, stackSha);
         }
       }
       // The stack is built and unpublished; the loop gates it in `cwd`, then
@@ -793,6 +882,83 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     }
   }
 
+  // ── localOnly / branchUpstream (issue #130) ──────────────────────────────
+
+  // The facts core/local-only.ts computes from, read over local git only (no
+  // network). The node/* branches (short name + tip SHA), the commits only
+  // they reach (`git rev-list <tips> --not --remotes`, one call), and the
+  // remote count. A node branch's tip
+  // that is reachable from a remote ref is on that remote; one push of a
+  // chain's newest node secures every earlier one, exactly as git sees it.
+  async function localOnlyFacts(repoRoot: string): Promise<LocalOnlyFacts> {
+    const nodeRefs = await git(
+      exec,
+      repoRoot,
+      'for-each-ref',
+      '--format=%(refname:short)%00%(objectname)',
+      'refs/heads/node/',
+    );
+    if (nodeRefs.exitCode !== 0) {
+      throw new IsolateCatastrophicError(
+        'git for-each-ref refs/heads/node/',
+        `exited ${nodeRefs.exitCode}: ${nodeRefs.output}`,
+      );
+    }
+    const nodeBranches: LocalOnlyNodeBranch[] = [];
+    for (const line of nodeRefs.output.split('\n')) {
+      if (line === '') continue;
+      const [name, sha] = line.split('\0');
+      if (name === undefined || sha === undefined || name === '' || sha === '') continue;
+      nodeBranches.push({ name, sha });
+    }
+
+    // Only what no remote holds: the commits reachable from the node tips and
+    // from no remote-tracking ref. Its size is the unpushed work, never the
+    // repository's history, however many commits the remotes carry.
+    let notOnRemote = new Set<string>();
+    if (nodeBranches.length > 0) {
+      const tips = [...new Set(nodeBranches.map((b) => b.sha))];
+      const reach = await git(exec, repoRoot, 'rev-list', ...tips, '--not', '--remotes');
+      if (reach.exitCode !== 0) {
+        throw new IsolateCatastrophicError(
+          'git rev-list --not --remotes',
+          `exited ${reach.exitCode}: ${reach.output}`,
+        );
+      }
+      notOnRemote = new Set(reach.output.split('\n').filter((l) => l !== ''));
+    }
+
+    const remotes = await git(exec, repoRoot, 'remote');
+    if (remotes.exitCode !== 0) {
+      throw new IsolateCatastrophicError(
+        'git remote',
+        `exited ${remotes.exitCode}: ${remotes.output}`,
+      );
+    }
+    const remoteNames = remotes.output.split('\n').filter((l) => l !== '');
+
+    return { nodeBranches, notOnRemote, remotes: remoteNames.length };
+  }
+
+  // A branch's upstream and how many commits ahead of it the branch is. A
+  // branch with no upstream is the honest `{ upstream: null, ahead: 0 }` — the
+  // pure function maps it to `null`, never a number invented for a branch that
+  // tracks nothing.
+  async function branchUpstream(repoRoot: string, branch: string): Promise<BranchUpstream> {
+    const upstream = await git(exec, repoRoot, 'rev-parse', '--abbrev-ref', `${branch}@{upstream}`);
+    if (upstream.exitCode !== 0) return { upstream: null, ahead: 0 };
+    const name = upstream.output.trim();
+    const count = await git(exec, repoRoot, 'rev-list', '--count', `${name}..${branch}`);
+    if (count.exitCode !== 0) {
+      throw new IsolateCatastrophicError(
+        'git rev-list --count',
+        `exited ${count.exitCode}: ${count.output}`,
+      );
+    }
+    const ahead = Number(count.output.trim());
+    return { upstream: name, ahead: Number.isFinite(ahead) ? ahead : 0 };
+  }
+
   return {
     isolate,
     scanMarkers,
@@ -811,9 +977,16 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     commitBranch,
     snapshot,
     refSha,
+    setRef,
+    deleteRef,
     commitMessageOf,
     commitStat,
     isAncestor,
+    commitPatchId,
+    commitTime,
+    commitsByPatchId,
     landStack,
+    localOnlyFacts,
+    branchUpstream,
   };
 }
