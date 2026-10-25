@@ -32,8 +32,8 @@ Every journal line parses as one JSON object carrying the envelope, so tend2 rea
 - [x] (code) Through the real CLI: every line of a real run's journal parses as one JSON object carrying the envelope, `time` ends in `Z`, `gate-retry` lines (if any) carry `plotplot.node` + `plotplot.gate`, and the `verdict` line carries `plotplot.runner` · test/e2e/journal-envelope.test.ts @bbc0fc6 · by cli
 - [x] (code) Every `verdict` line whose status is not `done` carries a non-empty `reason` and `nextStep` derived from what the loop observed; a blocked node with no recorded prompt still says what was seen, and an audit with no readable answer over a green build names `pleach audit` · test/loop/verdict-account.test.ts @d37c88c · by cli
 - [x] (code) Through the real CLI, a one-node plan whose command fails settles with non-empty `reason` and `nextStep` on its journal verdict, as the umbrella's `contracts/test/verdict.test.sh` asserts · test/integration/verdict-account.test.ts @440573c · by cli
-- [ ] (code) A node journals `attempt-start`, `phase-start`, a `gate-start`/`gate-end` pair around every gate with a refused gate's output tail, and one `audit-check` per verdict, in order, across a failed and a passing attempt · test/loop/gate-events.test.ts
-- [ ] (code) Through the real CLI, a smoke red on attempt 1 and green on attempt 2 journals its gate events, every line enveloped · test/e2e/gate-events.test.ts
+- [x] (code) A node journals `attempt-start`, `phase-start`, a `gate-start`/`gate-end` pair around every gate with a refused gate's output tail, and one `audit-check` per verdict, in order, across a failed and a passing attempt · test/loop/gate-events.test.ts @f456a06318ca28 · by cli
+- [x] (code) Through the real CLI, a smoke red on attempt 1 and green on attempt 2 journals its gate events, every line enveloped · test/e2e/gate-events.test.ts @f03a1976c91cb7 · by cli
 
 ## Needs #gate-artifacts #lock-journal
 
