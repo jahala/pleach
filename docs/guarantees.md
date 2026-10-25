@@ -264,6 +264,26 @@ The order is unchanged: stale locks first; while any live lock exists a run may 
 clean touches nothing else and exits 3. `--dry-run` lists the locks, sessions and worktrees it would
 act on, and changes nothing.
 
+## A receipt survives a rebase or squash, or says it is orphaned
+
+A verified close's receipt points at the `node/<id>` commit by sha. A repository
+that lands by rebase gives that commit a new sha; one that lands by squash folds
+several nodes' changes into one commit. When the `node/<id>` branch is then
+deleted, the recorded sha no longer resolves and the receipt would read
+UNDERIVABLE even though the work is on the branch.
+
+So a verified close also records the commit's stable patch-id (`git patch-id
+--stable` over its diff — it ignores line numbers, so the same change keeps its
+id through a rebase) and its committer time, beside the ref and outside the
+hashed envelope. `pleach receipt` then resolves the work to the commit on the
+landed history that carries the patch, searching only commits newer than the
+close. Exactly one commit carrying the patch passes with `resolvedBy:
+'patch-id'` and the landed sha, and `trailer` says whether that commit also
+carries the receipt's trailer (a squash or a rewritten message drops it). No
+commit, or several, is ORPHANED with the reason, never a guessed commit. A git
+error during the search is reported as an error, never as an orphan. A receipt
+written before this change has no patch-id and verifies exactly as it did.
+
 ## Two operational facts
 
 **Claude Code workers need the repo trusted.** Trust follows the main checkout

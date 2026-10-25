@@ -1,5 +1,11 @@
 import type { Verdict } from '../core/plan.ts';
-import { type DerivedStatus, deriveStatus, type Receipt, rehash } from '../core/receipt.ts';
+import {
+  chooseLanded,
+  type DerivedStatus,
+  deriveStatus,
+  type Receipt,
+  rehash,
+} from '../core/receipt.ts';
 import type { ConductorDeps, ReceiptStore } from './deps.ts';
 
 // The receipt verb's engine (§D): three checks against a settled node's
@@ -13,8 +19,18 @@ import type { ConductorDeps, ReceiptStore } from './deps.ts';
 //                immutable history (missing ref → UNDERIVABLE, different
 //                hash → TAMPERED: a re-sealed forgery caught by git).
 //
+// After a rebase or squash the commit that carries the work has a new sha, and
+// the ref above no longer resolves. A verified close records the stable
+// patch-id of its diff beside `diffRef`, so a fourth step (issue #105)
+// re-locates the work on the landed history by patch-id: one match with the
+// trailer is a pass by patch-id, one without it or none or several is the new
+// ORPHANED outcome, and the sha is never guessed. A receipt without a patch-id
+// (minted before this change) verifies exactly as before.
+//
 // TAMPERED means the record contradicts itself or history; UNDERIVABLE means
-// nothing is proved either way (no receipt, foreign version, lost ref).
+// nothing is proved either way (no receipt, foreign version, lost ref);
+// ORPHANED means the record is honest but no single commit on the landed
+// history can be shown to carry the work.
 //
 // Beside the verdict rides the node's history (D17): every earlier close, in
 // the order `refs.previousReceiptSha256` links them. A listing, not a second
@@ -27,7 +43,20 @@ export type ReceiptHistoryEntry =
   | { sha256: string; missing: true };
 
 export type ReceiptCheck =
-  | { outcome: 'pass'; receipt: Receipt; history: ReceiptHistoryEntry[] }
+  | {
+      outcome: 'pass';
+      receipt: Receipt;
+      history: ReceiptHistoryEntry[];
+      // Where the work landed on this branch, when the patch-id names exactly
+      // one commit; `resolvedBy` is 'patch-id' when the close passed through
+      // the patch-id lookup rather than its own ref (issue #105).
+      landedAs?: string;
+      resolvedBy?: 'patch-id';
+      // Whether the commit found by patch-id also carries the receipt's
+      // trailer; a squash or a rewritten message drops it (issue #105).
+      trailer?: boolean;
+    }
+  | { outcome: 'orphaned'; receipt: Receipt; detail: string; history: ReceiptHistoryEntry[] }
   | { outcome: 'tampered'; receipt: Receipt; detail: string; history: ReceiptHistoryEntry[] }
   | {
       outcome: 'underivable';
@@ -103,12 +132,18 @@ export async function verifyReceipt(
   }
   const message = await deps.isolate.commitMessageOf(repoRoot, ref);
   if (message === null) {
-    return {
-      outcome: 'underivable',
-      receipt,
-      history,
-      detail: `ref ${ref} does not resolve in this repo (branch deleted or history rewritten)`,
-    };
+    // The ref no longer resolves (branch deleted, history rewritten and
+    // pruned). With a patch-id, re-locate the work on the landed history.
+    const patchId = receipt.refs?.patchId;
+    if (patchId === undefined) {
+      return {
+        outcome: 'underivable',
+        receipt,
+        history,
+        detail: `ref ${ref} does not resolve in this repo (branch deleted or history rewritten)`,
+      };
+    }
+    return landedOutcome(receipt, patchId, history, false, deps, repoRoot);
   }
   if (!message.includes(`receipt-sha256: ${receipt.sha256}`)) {
     return {
@@ -119,5 +154,38 @@ export async function verifyReceipt(
     };
   }
 
-  return { outcome: 'pass', receipt, history };
+  // The ref resolves and passes. With a patch-id, also report where the work
+  // landed on this branch (landedAs); the same commit itself counts.
+  const patchId = receipt.refs?.patchId;
+  if (patchId === undefined) {
+    return { outcome: 'pass', receipt, history };
+  }
+  return landedOutcome(receipt, patchId, history, true, deps, repoRoot);
+}
+
+// The landed-history lookup (issue #105): search the current branch, newer than
+// the receipt's close time, for commits whose stable patch-id matches, and map
+// the candidates to the one honest outcome. Never picks a commit by guess.
+async function landedOutcome(
+  receipt: Receipt,
+  patchId: string,
+  history: ReceiptHistoryEntry[],
+  diffRefResolved: boolean,
+  deps: Pick<ConductorDeps, 'receipts' | 'isolate'>,
+  repoRoot: string,
+): Promise<ReceiptCheck> {
+  const since = receipt.refs?.closedAt ?? 0;
+  const candidates = await deps.isolate.commitsByPatchId(repoRoot, patchId, since);
+  const decision = chooseLanded(patchId, receipt.sha256, diffRefResolved, candidates);
+  if (decision.outcome === 'orphaned') {
+    return { outcome: 'orphaned', receipt, history, detail: decision.detail };
+  }
+  return {
+    outcome: 'pass',
+    receipt,
+    history,
+    ...(decision.landedAs !== undefined ? { landedAs: decision.landedAs } : {}),
+    ...(decision.resolvedBy !== undefined ? { resolvedBy: decision.resolvedBy } : {}),
+    ...(decision.trailer !== undefined ? { trailer: decision.trailer } : {}),
+  };
 }

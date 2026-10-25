@@ -16,9 +16,17 @@ export interface ExecResult {
 
 // Arg-array only — never a shell string (ledger SEC1). timeoutMs kills the
 // process and resolves with the output gathered so far + a non-zero exitCode.
+// `input` is written to the child's stdin and closed (EOF); absent, stdin is
+// closed empty, exactly as before — the patch-id seam pipes a diff through it.
 export type ExecFn = (
   argv: readonly string[],
-  opts: { cwd: string; timeoutMs?: number; env?: Record<string, string>; signal?: AbortSignal },
+  opts: {
+    cwd: string;
+    timeoutMs?: number;
+    env?: Record<string, string>;
+    signal?: AbortSignal;
+    input?: string;
+  },
 ) => Promise<ExecResult>;
 
 export interface Isolation {
@@ -134,6 +142,25 @@ export interface IsolateSeam {
   // an ancestor, including when the ancestor commit no longer resolves — a
   // moved branch is not to be trusted either way.
   isAncestor(cwd: string, ancestor: string, descendant: string): Promise<boolean>;
+  // The stable patch-id of commit `ref` (`git patch-id --stable` over its diff
+  // against its parent); null when the ref doesn't resolve or introduces no
+  // diff (a merge, or an empty commit). The settle path records it beside
+  // `diffRef` so verify can re-locate the work on the landed history after a
+  // rebase or squash (issue #105).
+  commitPatchId(cwd: string, ref: string): Promise<string | null>;
+  // The committer timestamp (unix seconds) of commit `ref`; null when it
+  // doesn't resolve. Recorded as the receipt's close time, the bound of the
+  // landed-history search (issue #105).
+  commitTime(cwd: string, ref: string): Promise<number | null>;
+  // The commits on the checked-out branch (HEAD) whose stable patch-id equals
+  // `patchId`, among commits with committer date at or after `sinceEpoch` (unix
+  // seconds), each with its full message. Empty when none match. The `--since`
+  // bound keeps the search from scanning history older than the close (issue #105).
+  commitsByPatchId(
+    cwd: string,
+    patchId: string,
+    sinceEpoch: number,
+  ): Promise<{ sha: string; message: string }[]>;
   // Land verified refs onto the branch checked out in repoRoot (ledger B3).
   // Builds the merges in a throwaway detached worktree; the checkout is only
   // ever touched by a final `merge --ff-only`, so a conflict (LandConflictError),

@@ -224,10 +224,16 @@ Receipts: every close and quarantine mints a sealed receipt (facts frozen at
 classify time, sha256 pinned as a receipt-sha256 trailer in the node's commit,
 files under <git-dir>/pleach/receipts/ — <node>.<sha256 prefix>.json is that
 close's own and <node>.json is whatever closed last, so a node that runs again
-keeps both). \`pleach receipt <node>\` re-hashes the latest file, re-derives the
-status from its facts, checks the trailer, and lists every close behind it:
-PASS (exit 0) · TAMPERED (exit 1) · UNDERIVABLE (exit 2 — nothing proved
-either way: no receipt, foreign contract version, or unresolvable ref).
+keeps both). A verified close also records the commit's stable patch-id and its
+close time beside the ref, so after a rebase or squash the work is re-located
+on the landed history by patch-id instead of reading off-master. \`pleach
+receipt <node>\` re-hashes the latest file, re-derives the status from its
+facts, checks the trailer, resolves where the work landed (landedAs, resolvedBy
+on the JSON), and lists every close behind it:
+PASS (exit 0) · TAMPERED (exit 1) · ORPHANED (exit 2 — the record is honest but
+no single commit on the landed history carries the work, e.g. after a squash) ·
+UNDERIVABLE (exit 2 — nothing proved either way: no receipt, foreign contract
+version, or unresolvable ref).
 `;
 
 interface Flags {
@@ -640,8 +646,18 @@ async function verbReceipt(nodeId: string, flags: Flags): Promise<number> {
   const degraded = receipt?.facts.degraded ?? [];
 
   if (check.outcome === 'pass' && receipt !== undefined) {
+    const landed =
+      check.landedAs !== undefined
+        ? ` — landed as ${check.landedAs}${
+            check.resolvedBy === 'patch-id'
+              ? check.trailer === false
+                ? " (resolved by patch-id; the commit lacks the receipt's trailer)"
+                : ' (resolved by patch-id)'
+              : ''
+          }`
+        : '';
     process.stderr.write(
-      `pleach: receipt PASS — ${nodeId} ${receipt.derived} (receipt-sha256 ${receiptPrefix(receipt.sha256)}…)\n`,
+      `pleach: receipt PASS — ${nodeId} ${receipt.derived} (receipt-sha256 ${receiptPrefix(receipt.sha256)}…)${landed}\n`,
     );
     for (const d of degraded) process.stderr.write(`pleach:   degraded: ${d}\n`);
   } else if (check.outcome !== 'pass') {
@@ -666,10 +682,21 @@ async function verbReceipt(nodeId: string, flags: Flags): Promise<number> {
       ...(receipt !== undefined
         ? { derived: receipt.derived, sha256: receipt.sha256, degraded }
         : {}),
+      ...(check.outcome === 'pass' && check.landedAs !== undefined
+        ? { landedAs: check.landedAs }
+        : {}),
+      ...(check.outcome === 'pass' && check.resolvedBy !== undefined
+        ? { resolvedBy: check.resolvedBy }
+        : {}),
+      ...(check.outcome === 'pass' && check.trailer !== undefined
+        ? { trailer: check.trailer }
+        : {}),
       history: check.history,
       ...(check.outcome !== 'pass' ? { detail: check.detail } : {}),
     })}\n`,
   );
+  // PASS is the only success; TAMPERED is a definite negative (1). ORPHANED and
+  // UNDERIVABLE both prove nothing either way (2).
   return check.outcome === 'pass' ? 0 : check.outcome === 'tampered' ? 1 : 2;
 }
 

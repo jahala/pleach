@@ -43,6 +43,16 @@ async function gitEnv(
   return exec(['git', '-C', cwd, ...args], { cwd, env });
 }
 
+// `git` with `input` fed to stdin — the patch-id seam pipes a diff through it.
+async function gitInput(
+  exec: ExecFn,
+  cwd: string,
+  input: string,
+  ...args: string[]
+): Promise<{ output: string; exitCode: number }> {
+  return exec(['git', '-C', cwd, ...args], { cwd, input });
+}
+
 async function gitMust(exec: ExecFn, cwd: string, ...args: string[]): Promise<string> {
   const r = await git(exec, cwd, ...args);
   if (r.exitCode !== 0) {
@@ -696,6 +706,58 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     return r.exitCode === 0;
   }
 
+  // The stable patch-id of a commit (issue #105): `git log -1 -p --format=%H`
+  // gives the commit's diff prefixed by its object name, and `git patch-id
+  // --stable` reads that through stdin. A commit that introduces no diff (a
+  // merge, an empty commit) has no patch-id — null. The patch-id ignores line
+  // numbers, so the same change keeps its id after a rebase.
+  async function commitPatchId(cwd: string, ref: string): Promise<string | null> {
+    const patch = await git(exec, cwd, 'log', '-1', '-p', '--format=%H', `${ref}^{commit}`);
+    if (patch.exitCode !== 0) return null;
+    const id = await gitInput(exec, cwd, patch.output, 'patch-id', '--stable');
+    if (id.exitCode !== 0) return null;
+    return id.output.trim().split(/\s+/)[0] || null;
+  }
+
+  async function commitTime(cwd: string, ref: string): Promise<number | null> {
+    const r = await git(exec, cwd, 'show', '-s', '--format=%ct', `${ref}^{commit}`);
+    if (r.exitCode !== 0) return null;
+    const epoch = Number(r.output.trim());
+    return Number.isFinite(epoch) && epoch > 0 ? epoch : null;
+  }
+
+  // The landed-history search (issue #105): every commit on HEAD at or after
+  // `sinceEpoch`, with its stable patch-id, in one pass through `git patch-id`.
+  // Commits whose patch-id equals `patchId` come back with their messages so
+  // the caller can decide (trailer present → landed; absent → orphaned).
+  async function commitsByPatchId(
+    cwd: string,
+    patchId: string,
+    sinceEpoch: number,
+  ): Promise<{ sha: string; message: string }[]> {
+    // A git failure here is an error, never "no commit carries the work":
+    // reading it as zero matches would report a landed receipt as orphaned.
+    const log = await git(exec, cwd, 'log', `--since=@${sinceEpoch}`, '-p', '--format=%H', 'HEAD');
+    if (log.exitCode !== 0) {
+      throw new IsolateCatastrophicError('git log -p', `exited ${log.exitCode}: ${log.output}`);
+    }
+    const id = await gitInput(exec, cwd, log.output, 'patch-id', '--stable');
+    if (id.exitCode !== 0) {
+      throw new IsolateCatastrophicError('git patch-id', `exited ${id.exitCode}: ${id.output}`);
+    }
+    const matches: string[] = [];
+    for (const line of id.output.split('\n')) {
+      const [pid, sha] = line.trim().split(/\s+/);
+      if (pid === patchId && sha !== undefined && sha.length > 0) matches.push(sha);
+    }
+    const out: { sha: string; message: string }[] = [];
+    for (const sha of matches) {
+      const message = await commitMessageOf(cwd, sha);
+      if (message !== null) out.push({ sha, message });
+    }
+    return out;
+  }
+
   // ── land ─────────────────────────────────────────────────────────────────
 
   async function landStack(
@@ -892,6 +954,9 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
     commitMessageOf,
     commitStat,
     isAncestor,
+    commitPatchId,
+    commitTime,
+    commitsByPatchId,
     landStack,
     localOnlyFacts,
     branchUpstream,

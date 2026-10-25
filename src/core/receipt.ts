@@ -127,6 +127,14 @@ export interface Receipt {
     // The receipt this write replaced (a retried node) — the settle trail
     // survives the overwrite without receipt-chaining infrastructure.
     previousReceiptSha256?: string;
+    // The verified commit's stable patch-id (git patch-id --stable over its
+    // diff) and its committer timestamp (the close time), both read from git at
+    // settle (issue #105). They let verify re-locate the work on the landed
+    // history after a rebase or squash — the patch-id is stable under a rebase
+    // and the timestamp bounds the search with `--since`. Absent for a receipt
+    // minted before this change, which verifies exactly as it did.
+    patchId?: string;
+    closedAt?: number;
   };
   // The gate artifacts settle kept, as paths — never content (D14). Outside
   // the envelope for the same reason refs are: they are written after the
@@ -215,6 +223,64 @@ export function receiptHash(facts: ReceiptFacts, derived: DerivedStatus): string
 // True iff the envelope still hashes to its seal. Refs are not consulted.
 export function rehash(receipt: Receipt): boolean {
   return receiptHash(receipt.facts, receipt.derived) === receipt.sha256;
+}
+
+// A commit on the landed history whose patch-id matched, with its message to
+// check the trailer against.
+export interface LandedCandidate {
+  sha: string;
+  message: string;
+}
+
+// The landed-history decision (issue #105): where a receipt's work sits on the
+// current branch, chosen from the commits whose stable patch-id equals the
+// receipt's recorded `refs.patchId`. Pure — the git walk lives in the isolate
+// seam; this maps the candidate list to the one honest outcome, and never
+// guesses when the mapping is ambiguous.
+export type LandedDecision =
+  | { outcome: 'pass'; landedAs?: string; resolvedBy?: 'patch-id'; trailer?: boolean }
+  | { outcome: 'orphaned'; detail: string };
+
+export function chooseLanded(
+  patchId: string,
+  receiptSha256: string,
+  diffRefResolved: boolean,
+  candidates: LandedCandidate[],
+): LandedDecision {
+  const carriesTrailer = (c: LandedCandidate): boolean =>
+    c.message.includes(`receipt-sha256: ${receiptSha256}`);
+  // The close already passed on its own ref (the trailer matched): the patch-id
+  // only reports where the work landed on THIS branch, when exactly one commit
+  // carries it. Zero or several → no claim about a landing, still a pass.
+  if (diffRefResolved) {
+    if (candidates.length === 1) return { outcome: 'pass', landedAs: candidates[0].sha };
+    return { outcome: 'pass' };
+  }
+  // The ref no longer resolves: the patch-id is the only way to the work. One
+  // commit carrying the patch is the commit (plotplot#54); whether it also
+  // carries the receipt's trailer is reported beside it, since a squash or a
+  // rewritten message drops the trailer and keeps the patch.
+  if (candidates.length === 1) {
+    const only = candidates[0] as LandedCandidate;
+    return {
+      outcome: 'pass',
+      landedAs: only.sha,
+      resolvedBy: 'patch-id',
+      trailer: carriesTrailer(only),
+    };
+  }
+  if (candidates.length === 0) {
+    return {
+      outcome: 'orphaned',
+      detail: `no commit on the landed history carries patch-id ${patchId} — the work is orphaned`,
+    };
+  }
+  return {
+    outcome: 'orphaned',
+    detail: `${candidates.length} commits carry patch-id ${patchId} (${candidates
+      .map((c) => c.sha)
+      .join(', ')}) — ambiguous, refusing to guess`,
+  };
 }
 
 // "No coverage is not coverage" as a recorded fact: every check the plan
