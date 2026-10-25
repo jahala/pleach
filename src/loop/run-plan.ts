@@ -5,6 +5,7 @@ import {
   QuarantineBusyError,
   RebuildRequiredError,
 } from '../core/errors.ts';
+import { computeLocalOnly } from '../core/local-only.ts';
 import type { Node, Plan, Verdict } from '../core/plan.ts';
 import {
   computeDegraded,
@@ -789,7 +790,27 @@ async function runUnderLock(
   };
   // The run-end names the copy before the copy is made, so the copy holds it.
   const journalCopy = deps.receipts.runJournalPath(runId);
-  await deps.journal.append({ event: 'run-end', runId, ...summary, journalCopy });
+  // issue #130: say what is true about the state this run leaves — which
+  // verified node branches are on no remote, and how many remotes there are.
+  // The report is an account of the state, never part of the run: a git read
+  // that fails here is journaled after run-end and costs nothing else.
+  let localOnly: ReturnType<typeof computeLocalOnly> | undefined;
+  let localOnlyError: string | undefined;
+  try {
+    localOnly = computeLocalOnly(await deps.isolate.localOnlyFacts(opts.repoRoot));
+  } catch (err) {
+    localOnlyError = err instanceof Error ? err.message : String(err);
+  }
+  await deps.journal.append({
+    event: 'run-end',
+    runId,
+    ...summary,
+    journalCopy,
+    ...(localOnly !== undefined ? { localOnly } : {}),
+  });
+  if (localOnlyError !== undefined) {
+    await deps.journal.append({ event: 'local-only-check-failed', detail: localOnlyError });
+  }
   await copyRunJournalOrJournal(deps, runId, journalCopy);
   return summary;
 }

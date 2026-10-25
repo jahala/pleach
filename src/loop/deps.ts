@@ -1,3 +1,4 @@
+import type { BranchUpstream, LocalOnlyFacts } from '../core/local-only.ts';
 import type { Node, Verdict } from '../core/plan.ts';
 import type { Receipt } from '../core/receipt.ts';
 
@@ -142,6 +143,13 @@ export interface IsolateSeam {
   // hand the loop its cwd for the land gate, publish only on explicit call
   // (ff-only, the sole touch on the checkout).
   landStack(repoRoot: string, refs: readonly string[]): Promise<LandStack>;
+  // issue #130: what exists only on this machine, read over local git only (no
+  // network). localOnlyFacts gathers the node/* branches, the commits reachable
+  // from any remote-tracking ref, and the remote count; branchUpstream reports
+  // a branch's upstream and how far ahead of it the branch is. Both feed the
+  // pure src/core/local-only.ts.
+  localOnlyFacts(repoRoot: string): Promise<LocalOnlyFacts>;
+  branchUpstream(repoRoot: string, branch: string): Promise<BranchUpstream>;
 }
 
 export interface WorkerResult {

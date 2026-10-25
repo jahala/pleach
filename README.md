@@ -5,7 +5,9 @@
 
 **A deterministic conductor for DAGs of verified agent work.** pleach takes a plan, isolates
 each node in a detached git worktree merged from its dependencies' verified branches, enforces
-gates, and publishes a `node/<id>` branch only for work that passed them.
+gates, and writes a local `node/<id>` branch only for work that passed them. It never pushes —
+the conductor does — but it says, at run end and after a landing, what exists only on this
+machine.
 
 Agents produce; code decides. Close, verify, quarantine and retry are deterministic code paths.
 Agent output is parsed evidence, never interpreted.
@@ -96,6 +98,7 @@ tree on `quarantine/<id>` and writes a receipt.
 | A seam throws mid-node | Settles under `seam:<lane>`; the verdict names the next step |
 | The journal loses lines | Reported as `journal-gap` at the next run; each run keeps its own copy |
 | A worker or gate prints a secret | Redacted (`[REDACTED]`) before it reaches the journal, the log or a receipt |
+| A verified branch or landing is on no remote | `run-end` and `landed` name what is local-only; stderr warns to push |
 | A killed run leaves sessions behind | `pleach clean` kills the sessions its journal names, sweeps their worktrees, and clears stale locks; `--dry-run` lists them without changing |
 
 Full detail, one section each: [`docs/guarantees.md`](docs/guarantees.md).
