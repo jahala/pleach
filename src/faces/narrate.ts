@@ -30,6 +30,25 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       return `pleach: running ${n(e.nodes)} node(s) — ${firstSentence(e.goal)}`;
     case 'node-start':
       return `▶ ${s(e.node)}: building`;
+    case 'attempt-start': {
+      // The first attempt is the "building" the node-start already announced;
+      // a re-attempt is the news.
+      if (n(e.attempt) <= 1) return null;
+      return `↻ ${s(e.node)}: attempt ${n(e.attempt)}`;
+    }
+    case 'phase-start': {
+      if (n(e.attempt) <= 1) return null;
+      return `▸ ${s(e.node)}: phase ${s(e.phase)}`;
+    }
+    case 'gate-end': {
+      const seconds = (n(e.durationMs) / 1000).toFixed(1);
+      if (n(e.exitCode) === 0) return `▸ ${s(e.node)}: ${s(e.gate)} passed (${seconds}s)`;
+      const head = `✗ ${s(e.node)}: ${s(e.gate)} refused (attempt ${n(e.attempt)})`;
+      const tail = typeof e.outputTail === 'string' ? (e.outputTail.split('\n')[0] ?? '') : '';
+      return tail === '' ? head : `${head}\n${tail}`;
+    }
+    case 'audit-check':
+      return `· ${s(e.node)}: audit ${s(e.check)}: ${s(e.verdict)}`;
     case 'gate-fail':
       return `✗ ${s(e.node)}: ${s(e.gate)} gate failed`;
     case 'run-aborted':

@@ -97,6 +97,20 @@ export interface RunWorkOpts {
   // #127). run-node supplies it — it owns the isolate seam, the sleep and the
   // journal. A settle cut short by the run's own signal returns 'aborted'.
   settleTree?: () => Promise<SettleOutcome>;
+  // The attempt in flight (issue #63) and the journal callbacks that say where
+  // this attempt is on its ladder. run-node supplies them — it owns the journal
+  // seam. Absent for direct callers that want no journaling (unit tests).
+  attempt?: number;
+  onPhaseStart?: (phase: string, index: number) => Promise<void>;
+  onGateStart?: (gate: string) => Promise<void>;
+  // `exitCode` is the gate's own outcome (0 = passed, non-zero = refused);
+  // `output` is the raw gate output when it refused, capped by the caller.
+  onGateEnd?: (
+    gate: string,
+    exitCode: number,
+    durationMs: number,
+    output?: string,
+  ) => Promise<void>;
 }
 
 // The base worker prompt for a node, plus an optional clearly-delimited
@@ -186,6 +200,9 @@ export async function runWork(
     let last: WorkerResult | null = null;
     for (let i = start; i < work.phases.length; i += 1) {
       const phase = work.phases[i] as (typeof work.phases)[number];
+      // The journal says where this attempt is on its ladder (issue #63): one
+      // phase-start per phase, before the prompt goes out.
+      await opts.onPhaseStart?.(phase.phase, i);
       // On a retry, the evidence rides the first phase prompt this attempt
       // actually sends — the impl phase when the red is sealed — so the worker
       // sees why the previous attempt failed before re-entering the cycle (A3).
@@ -202,12 +219,30 @@ export async function runWork(
       // the tree the gate is about to read (issue #127). Settle it before the
       // red/green gate; an impl phase has no gate, so nothing reads the tree here.
       if (opts.settleTree !== undefined && (phase.phase === 'red' || phase.phase === 'green')) {
-        const settle = await opts.settleTree();
+        await opts.onGateStart?.('settle');
+        const settleStartedAt = Date.now();
+        let settle: SettleOutcome;
+        try {
+          settle = await opts.settleTree();
+        } catch (err) {
+          if (err instanceof GateFailedError) {
+            await opts.onGateEnd?.(
+              'settle',
+              err.exitCode,
+              Date.now() - settleStartedAt,
+              err.evidence,
+            );
+          }
+          throw err;
+        }
         if (settle.kind === 'aborted') return { ...last, reason: 'aborted' };
+        await opts.onGateEnd?.('settle', 0, Date.now() - settleStartedAt);
       }
 
       if (phase.phase === 'red') {
         const before = opts.recordGateTree ? await opts.recordGateTree() : undefined;
+        await opts.onGateStart?.('red');
+        const gateStartedAt = Date.now();
         const { output, exitCode } = await guardedExec(exec, work.test, {
           cwd,
           timeoutMs: opts.timeoutMs,
@@ -215,13 +250,19 @@ export async function runWork(
         // A test that never ran is no red (D19). RED must FAIL: a test that
         // already passes means no failing test was written — the TDD
         // guarantee is void.
-        refuseIfCannotRun('red', output, exitCode);
+        const fault = gateFault(exitCode);
+        if (fault !== null) {
+          await opts.onGateEnd?.('red', exitCode, Date.now() - gateStartedAt, output);
+          throw new GateCannotRunError('red', output, exitCode, fault);
+        }
         if (exitCode === 0) {
           // The gate went red over a tree nothing named as failing — rewind
           // whatever the test command wrote before the retry starts from it.
           if (before !== undefined) await opts.restoreGateTree?.(before, 'red');
+          await opts.onGateEnd?.('red', -1, Date.now() - gateStartedAt, output);
           throw new GateFailedError('red', output, exitCode);
         }
+        await opts.onGateEnd?.('red', 0, Date.now() - gateStartedAt);
         // The red state is sealed as its own commit before the next prompt goes
         // out (D13) — after that the tree carries impl work and nothing can
         // prove the test ever failed. A red phase that wrote nothing fails the
@@ -229,15 +270,23 @@ export async function runWork(
         if (opts.sealRed) await opts.sealRed(last, exitCode, i);
       } else if (phase.phase === 'green') {
         const before = opts.recordGateTree ? await opts.recordGateTree() : undefined;
+        await opts.onGateStart?.('green');
+        const gateStartedAt = Date.now();
         const { output, exitCode } = await guardedExec(exec, work.test, {
           cwd,
           timeoutMs: opts.timeoutMs,
         });
-        refuseIfCannotRun('green', output, exitCode);
+        const fault = gateFault(exitCode);
+        if (fault !== null) {
+          await opts.onGateEnd?.('green', exitCode, Date.now() - gateStartedAt, output);
+          throw new GateCannotRunError('green', output, exitCode, fault);
+        }
         if (exitCode !== 0) {
           if (before !== undefined) await opts.restoreGateTree?.(before, 'green');
+          await opts.onGateEnd?.('green', exitCode, Date.now() - gateStartedAt, output);
           throw new GateFailedError('green', output, exitCode);
         }
+        await opts.onGateEnd?.('green', 0, Date.now() - gateStartedAt);
       }
     }
     // The guard above ran at least one phase, so last is set.

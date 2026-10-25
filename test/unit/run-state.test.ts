@@ -24,6 +24,19 @@ const verdict = (node: string, status: string, attempts = 1, durationMs = 10): L
   attempts,
   durationMs,
 });
+const attemptStart = (node: string, attempt: number): Line => ({
+  event: 'attempt-start',
+  node,
+  attempt,
+});
+const phaseStart = (node: string, phase: string, index: number): Line => ({
+  event: 'phase-start',
+  node,
+  phase,
+  index,
+});
+const gateStart = (node: string, gate: string): Line => ({ event: 'gate-start', node, gate });
+const gateEnd = (node: string, gate: string): Line => ({ event: 'gate-end', node, gate });
 const closed = (node: string): Line => ({ event: 'closed', node, sha: 'abc' });
 const notClosed = (node: string): Line => ({ event: 'not-closed', node });
 const runEnd = (runId: string, alreadyVerified: string[] = []): Line => ({
@@ -174,5 +187,63 @@ describe('foldRunState', () => {
     const state = foldRunState([runStart('mine', 'r1'), nodeStart('a'), other], 'mine', ['a']);
     expect(state.ended).toBe(false);
     expect(state.nodes.a?.status).toBe('running');
+  });
+
+  // issue #63 — a running node's attempt, phase and gate come from the journal.
+  test('a running node mid-gate reports its attempt and the gate in flight', () => {
+    const state = foldRunState(
+      [runStart('mine', 'r1'), nodeStart('a'), attemptStart('a', 1), gateStart('a', 'smoke')],
+      'mine',
+      ['a'],
+    );
+    expect(state.nodes.a).toEqual({ status: 'running', attempt: 1, gate: 'smoke' });
+  });
+
+  test('a gate-end clears the gate, leaving the attempt', () => {
+    const state = foldRunState(
+      [
+        runStart('mine', 'r1'),
+        nodeStart('a'),
+        attemptStart('a', 1),
+        gateStart('a', 'smoke'),
+        gateEnd('a', 'smoke'),
+      ],
+      'mine',
+      ['a'],
+    );
+    expect(state.nodes.a).toEqual({ status: 'running', attempt: 1 });
+  });
+
+  test('a running node mid-phase reports its attempt and the current phase', () => {
+    const state = foldRunState(
+      [runStart('mine', 'r1'), nodeStart('a'), attemptStart('a', 1), phaseStart('a', 'impl', 1)],
+      'mine',
+      ['a'],
+    );
+    expect(state.nodes.a).toEqual({ status: 'running', attempt: 1, phase: 'impl' });
+  });
+
+  test('a node on its second attempt reports attempt 2', () => {
+    const state = foldRunState(
+      [runStart('mine', 'r1'), nodeStart('a'), attemptStart('a', 2), gateStart('a', 'smoke')],
+      'mine',
+      ['a'],
+    );
+    expect(state.nodes.a).toEqual({ status: 'running', attempt: 2, gate: 'smoke' });
+  });
+
+  test('a verdict drops the running attempt/phase/gate, keeping its own attempts', () => {
+    const state = foldRunState(
+      [
+        runStart('mine', 'r1'),
+        nodeStart('a'),
+        attemptStart('a', 2),
+        gateStart('a', 'smoke'),
+        verdict('a', 'failed', 2, 20),
+      ],
+      'mine',
+      ['a'],
+    );
+    expect(state.nodes.a).toEqual({ status: 'failed', attempts: 2, durationMs: 20 });
   });
 });
