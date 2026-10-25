@@ -247,3 +247,62 @@ describe('foldRunState', () => {
     expect(state.nodes.a).toEqual({ status: 'failed', attempts: 2, durationMs: 20 });
   });
 });
+
+describe('foldRunState — a scoped run (--only, issue #85)', () => {
+  const scopedStart = (source: string, runId: string, scope: string[]): Line => ({
+    event: 'run-start',
+    source,
+    goal: 'g',
+    nodes: 4,
+    runId,
+    only: ['b'],
+    scope,
+  });
+
+  test('a node outside the run-start scope reads out-of-scope, never skipped', () => {
+    const state = foldRunState(
+      [
+        scopedStart('mine', 'r1', ['a', 'b']),
+        nodeStart('a'),
+        verdict('a', 'done', 1, 5),
+        closed('a'),
+        nodeStart('b'),
+        verdict('b', 'done', 1, 6),
+        closed('b'),
+        runEnd('r1'),
+      ],
+      'mine',
+      ['a', 'b', 'c', 'd'],
+    );
+    expect(state.nodes.a?.status).toBe('closed');
+    expect(state.nodes.b?.status).toBe('closed');
+    expect(state.nodes.c?.status).toBe('out-of-scope');
+    expect(state.nodes.d?.status).toBe('out-of-scope');
+  });
+
+  test('out-of-scope nodes read out-of-scope while the run is still going', () => {
+    const state = foldRunState([scopedStart('mine', 'r1', ['a']), nodeStart('a')], 'mine', [
+      'a',
+      'b',
+    ]);
+    expect(state.ended).toBe(false);
+    expect(state.nodes.a?.status).toBe('running');
+    expect(state.nodes.b?.status).toBe('out-of-scope');
+  });
+
+  test('a scoped run still reports in-scope never-started nodes as skipped', () => {
+    const state = foldRunState(
+      [
+        scopedStart('mine', 'r1', ['a', 'b']),
+        nodeStart('a'),
+        verdict('a', 'done', 1, 5),
+        closed('a'),
+        runEnd('r1'),
+      ],
+      'mine',
+      ['a', 'b'],
+    );
+    expect(state.nodes.a?.status).toBe('closed');
+    expect(state.nodes.b?.status).toBe('skipped');
+  });
+});

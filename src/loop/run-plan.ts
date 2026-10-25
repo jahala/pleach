@@ -16,6 +16,7 @@ import {
   sha256Hex,
 } from '../core/receipt.ts';
 import type { Redaction } from '../core/redact.ts';
+import { computeRunScope, onlyIds } from '../core/scope.ts';
 import { DEFAULT_WORKER_PROVIDER, validatePlan } from '../core/validate.ts';
 import type { ArtifactKind, ConductorDeps, Isolation, RunSummary } from './deps.ts';
 import { patchRefs } from './receipt-patch.ts';
@@ -74,6 +75,11 @@ export interface RunPlanOpts {
   // visible. The face refuses to start before this when the redactor is
   // missing; the loop just records and composes the injected redactor.
   redaction?: Redaction;
+  // `--only` (issue #85): run exactly these named nodes and their unclosed
+  // transitive dependencies; nothing else is scheduled. The face parses the
+  // flag; the loop expands it against the ledger's closed set. Unknown ids
+  // refuse (PlanInvalidError) before the lock.
+  only?: string[];
 }
 
 export const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes (binding prose).
@@ -86,6 +92,9 @@ export async function runPlan(
   opts: RunPlanOpts,
 ): Promise<RunSummary> {
   validatePlan(plan, opts.providers); // throws PlanInvalidError — the face maps exit 2.
+  // issue #85: an unknown `--only` id is a plan-level refusal, raised before
+  // the lock is taken — nothing the ledger says can make it schedulable.
+  if (opts.only !== undefined) onlyIds(plan, opts.only);
 
   const defaultTimeoutMs = opts.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxConcurrency = Math.max(
@@ -109,6 +118,7 @@ export async function runPlan(
         : {}),
       ...(opts.settleMs !== undefined ? { settleMs: opts.settleMs } : {}),
       ...(opts.fallbackProvider !== undefined ? { fallbackProvider: opts.fallbackProvider } : {}),
+      ...(opts.only !== undefined ? { only: opts.only } : {}),
     });
   } finally {
     await lock.release();
@@ -127,6 +137,7 @@ interface ResolvedOpts {
   settleMs?: number;
   fallbackProvider?: string;
   redaction: Redaction;
+  only?: string[];
 }
 
 async function runUnderLock(
@@ -137,64 +148,48 @@ async function runUnderLock(
   // When the run began, RFC 3339 with ':' as '-' so it can name a file: the
   // key its copy of the journal is kept under at run-end (D21).
   const runId = new Date().toISOString().replaceAll(':', '-');
-  await deps.journal.append({
-    event: 'run-start',
-    goal: plan.goal,
-    source: plan.source,
-    nodes: plan.nodes.length,
-    runId,
-    redaction: opts.redaction,
-  });
-  await journalGapsOrJournal(deps);
 
   // Defensive copy (M3) — never mutate what the seam returned.
   const closed = new Map<string, string | null>(await deps.ledger.readClosed(plan.source));
 
-  // §D acceptance-evolution invalidation: a close was verified against the
-  // acceptance recorded in its receipt. If the plan's CURRENT acceptance
-  // differs (generic string compare — no pin semantics parsed), the old
-  // verification proves nothing about the new fitness function: re-dispatch
-  // instead of skip-trusting. No receipt (legacy close, tend-verified lane)
-  // → no comparison; the skip stands.
-  const invalidated = new Set<string>();
-  for (const node of plan.nodes) {
-    if (!closed.has(node.id)) continue;
-    const receipt = await deps.receipts.read(node.id);
-    if (receipt === null || receipt.facts.source !== plan.source) continue;
-    const current = acceptanceOf(node);
-    const recorded = receipt.facts.acceptance;
-    if (recorded.smoke !== current.smoke || recorded.audit !== current.audit) {
-      closed.delete(node.id);
-      invalidated.add(node.id);
-      await deps.journal.append({
-        event: 'acceptance-changed',
-        node: node.id,
-        recorded,
-        current,
-      });
-    }
-  }
-  // Cascade: a closed dependent's verification embedded the OLD ancestor —
-  // skip-trusting it would land stale work (only sinks land, so the
-  // re-verified ancestor would silently never reach the target branch).
-  for (let changed = invalidated.size > 0; changed; ) {
-    changed = false;
-    for (const node of plan.nodes) {
-      if (!closed.has(node.id)) continue;
-      const via = node.needs.find((d) => invalidated.has(d));
-      if (via === undefined) continue;
-      closed.delete(node.id);
-      invalidated.add(node.id);
-      changed = true;
-      await deps.journal.append({ event: 'acceptance-cascade', node: node.id, via });
-    }
-  }
+  // issue #85: run-start must carry the run's scope, which is known only from
+  // the closed set — so the closed set is read and settled (acceptance
+  // re-dispatch applied, ancestors seeded) BEFORE the start line. The
+  // re-dispatch's journal lines are buffered and written right after run-start,
+  // so the start line stays the run's first line and the re-dispatch stays
+  // inside the run's own journal copy (D21).
+  const redispatch: Record<string, unknown>[] = [];
+  await applyAcceptanceEvolution(plan, deps, closed, redispatch);
 
-  // Nodes the ledger already had verified — skipped this run, surfaced so the
-  // caller knows a resume happened. Captured BEFORE seedClosure adds ancestors,
-  // so it names only what the ledger directly reported (not implied ancestors).
-  const alreadyVerified = plan.nodes.filter((n) => closed.has(n.id)).map((n) => n.id);
+  // Nodes the ledger directly reported closed, captured before seedClosure
+  // implies ancestors — surfaced as alreadyVerified (skipped, not re-run), and
+  // naming only what the ledger directly reported (not implied ancestors).
+  const reportedClosed = new Set(plan.nodes.filter((n) => closed.has(n.id)).map((n) => n.id));
   seedClosure(plan, closed);
+
+  // The run's scope (issue #85): the named ids plus their unclosed transitive
+  // dependencies. Computed from the seeded closed set, so a named node that is
+  // already closed — or whose dependency is only implicitly closed — never
+  // re-schedules the work its close already contains.
+  const scope =
+    opts.only === undefined ? undefined : computeRunScope(plan, opts.only, new Set(closed.keys()));
+  const scopeSet = scope === undefined ? undefined : new Set(scope.scope);
+
+  await deps.journal.append({
+    event: 'run-start',
+    goal: plan.goal,
+    source: plan.source,
+    nodes: scope?.scope.length ?? plan.nodes.length,
+    runId,
+    redaction: opts.redaction,
+    ...(scope !== undefined ? { only: scope.only, scope: scope.scope } : {}),
+  });
+  for (const line of redispatch) await deps.journal.append(line);
+  await journalGapsOrJournal(deps);
+
+  const alreadyVerified = plan.nodes
+    .filter((n) => reportedClosed.has(n.id) && (scopeSet === undefined || scopeSet.has(n.id)))
+    .map((n) => n.id);
 
   // Startup reconciliation (B1/B2): every closed id a pending node depends on
   // must resolve to a commit NOW, else halt honestly (v1 has no auto-rebuild).
@@ -202,6 +197,7 @@ async function runUnderLock(
   const baseRefForClosed = new Map<string, string>();
   for (const node of plan.nodes) {
     if (closed.has(node.id)) continue; // already closed — not pending
+    if (scopeSet !== undefined && !scopeSet.has(node.id)) continue; // out of scope — not run
     for (const dep of node.needs) {
       if (!closed.has(dep)) continue;
       if (baseRefForClosed.has(dep)) continue;
@@ -230,6 +226,7 @@ async function runUnderLock(
   function ready(): Node[] {
     const out: Node[] = [];
     for (const node of plan.nodes) {
+      if (scopeSet !== undefined && !scopeSet.has(node.id)) continue;
       if (
         closed.has(node.id) ||
         failed.has(node.id) ||
@@ -771,6 +768,7 @@ async function runUnderLock(
   const skipped = plan.nodes
     .filter(
       (n) =>
+        (scopeSet === undefined || scopeSet.has(n.id)) &&
         !closed.has(n.id) &&
         !failed.has(n.id) &&
         !blocked.has(n.id) &&
@@ -782,7 +780,12 @@ async function runUnderLock(
   const alreadyVerifiedSet = new Set(alreadyVerified);
   const summary: RunSummary = {
     closed: plan.nodes
-      .filter((n) => closed.has(n.id) && !alreadyVerifiedSet.has(n.id))
+      .filter(
+        (n) =>
+          closed.has(n.id) &&
+          !alreadyVerifiedSet.has(n.id) &&
+          (scopeSet === undefined || scopeSet.has(n.id)),
+      )
       .map((n) => n.id),
     failed: [...failed],
     partial: [...partial],
@@ -817,6 +820,51 @@ async function runUnderLock(
   }
   await copyRunJournalOrJournal(deps, runId, journalCopy);
   return summary;
+}
+
+// §D acceptance-evolution invalidation: a close was verified against the
+// acceptance recorded in its receipt. If the plan's CURRENT acceptance differs
+// (generic string compare — no pin semantics parsed), the old verification
+// proves nothing about the new fitness function: re-dispatch instead of
+// skip-trusting. No receipt (legacy close, tend-verified lane) → no
+// comparison; the skip stands. The re-dispatch's journal lines are collected
+// into `lines` rather than written here, so the caller can place them right
+// after run-start (the start line stays the run's first line, and the
+// re-dispatch stays inside the run's own journal copy — D21).
+async function applyAcceptanceEvolution(
+  plan: Plan,
+  deps: ConductorDeps,
+  closed: Map<string, string | null>,
+  lines: Record<string, unknown>[],
+): Promise<void> {
+  const invalidated = new Set<string>();
+  for (const node of plan.nodes) {
+    if (!closed.has(node.id)) continue;
+    const receipt = await deps.receipts.read(node.id);
+    if (receipt === null || receipt.facts.source !== plan.source) continue;
+    const current = acceptanceOf(node);
+    const recorded = receipt.facts.acceptance;
+    if (recorded.smoke !== current.smoke || recorded.audit !== current.audit) {
+      closed.delete(node.id);
+      invalidated.add(node.id);
+      lines.push({ event: 'acceptance-changed', node: node.id, recorded, current });
+    }
+  }
+  // Cascade: a closed dependent's verification embedded the OLD ancestor —
+  // skip-trusting it would land stale work (only sinks land, so the
+  // re-verified ancestor would silently never reach the target branch).
+  for (let changed = invalidated.size > 0; changed; ) {
+    changed = false;
+    for (const node of plan.nodes) {
+      if (!closed.has(node.id)) continue;
+      const via = node.needs.find((d) => invalidated.has(d));
+      if (via === undefined) continue;
+      closed.delete(node.id);
+      invalidated.add(node.id);
+      changed = true;
+      lines.push({ event: 'acceptance-cascade', node: node.id, via });
+    }
+  }
 }
 
 // Every run leaves a copy of its own lines beside the receipts (D21): the

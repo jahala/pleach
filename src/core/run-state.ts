@@ -26,7 +26,8 @@ export type NodeStatus =
   | 'blocked'
   | 'partial'
   | 'aborted'
-  | 'skipped';
+  | 'skipped'
+  | 'out-of-scope';
 
 export interface NodeRunState {
   status: NodeStatus;
@@ -114,6 +115,20 @@ export function foldRunState(
 
   const runId = asString(lines[startIndex]?.runId);
 
+  // A `--only` run records the ids it ran on its start line (issue #85). Nodes
+  // outside that scope are not part of the run: they read `out-of-scope`, never
+  // `skipped` — "skipped" would claim the run chose not to build them, when in
+  // fact it was told to leave them alone.
+  const scopeLine = lines[startIndex]?.scope;
+  const scope = Array.isArray(scopeLine)
+    ? new Set(scopeLine.filter((v) => typeof v === 'string'))
+    : undefined;
+  if (scope !== undefined) {
+    for (const id of nodeIds) {
+      if (!scope.has(id)) nodes[id] = { status: 'out-of-scope' };
+    }
+  }
+
   for (let i = startIndex + 1; i < lines.length; i++) {
     const line = lines[i];
     if (line === null || line === undefined || typeof line !== 'object') continue;
@@ -197,6 +212,7 @@ export function foldRunState(
             : [],
         );
         for (const id of nodeIds) {
+          if (nodes[id]?.status === 'out-of-scope') continue;
           if (verified.has(id)) nodes[id] = { status: 'verified' };
           else if (nodes[id]?.status === 'pending') nodes[id] = { status: 'skipped' };
         }

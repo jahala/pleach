@@ -59,7 +59,8 @@ work. Only a node that clears all of it publishes a branch.
 ## Usage
 
 ```
-pleach run <plan.json>          Execute a plan (--land to land a fully-verified close)
+pleach run <plan.json>          Execute a plan (--land to land a fully-verified close; --only a,b
+                                to run a named subset and its unbuilt dependencies)
 pleach land <plan.json>         Merge a verified plan's sinks onto the checked-out branch
 pleach audit <plan.json> <node> Re-run only the audit on a quarantined node; a further re-audit
                                  needs a changed accept.audit.command
@@ -75,6 +76,11 @@ pleach clean                    Sweep a killed run's stale locks, orphaned workt
 ```
 
 `pleach --help` carries every flag, default and exit code.
+
+`pleach run --only a,b` runs just the named nodes and the unbuilt dependencies they need —
+nothing else is scheduled, closed dependencies are used as bases, and an id not in the plan
+refuses with exit 2. With `--land` the named ids become the landing's sinks. A node the subset
+left out reads `out-of-scope` in `pleach status`/`wait` (never `skipped`, never `failed`).
 
 ## What happens when things go wrong
 
