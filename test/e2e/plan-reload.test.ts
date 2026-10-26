@@ -1,8 +1,8 @@
 /**
  * E2E: plan reload through the real CLI + real git (issue #70).
  *
- * A two-node plan (A is {prompt}, B is {command}) runs through the bundled
- * scriptedRunner. A's worker rewrites plan.json on disk while A runs, changing
+ * A two-node plan of command nodes. A's command rewrites plan.json on disk
+ * while A runs, changing
  * B's work.command and accept.smoke. Before B launches the scheduler re-reads
  * the plan; B runs the NEW command (its verified close proves it — the new
  * smoke only passes over the new command's output), and B's close receipt
@@ -14,7 +14,6 @@ import { join } from 'node:path';
 import { createRepo } from '../support/git-repo.ts';
 
 const MAIN = join(import.meta.dir, '../../src/main.ts');
-const SRC = join(import.meta.dir, '../../src');
 
 const SOURCE = 'e2e-plan-reload';
 
@@ -26,11 +25,13 @@ interface PlanNode {
   policy?: { maxAttempts: number };
 }
 
-const nodeA: PlanNode = {
+// A's command writes the corrected plan over plan.json, by absolute path, the
+// way a conductor edits the plan while a run is under way.
+const nodeA = (planPath: string, nextPath: string): PlanNode => ({
   id: 'a',
-  work: { prompt: 'build a' },
+  work: { command: `bash -lc "cp '${nextPath}' '${planPath}' && echo made > a.txt"` },
   policy: { maxAttempts: 1 },
-};
+});
 
 const nodeBOld: PlanNode = {
   id: 'b',
@@ -48,10 +49,10 @@ const nodeBNew: PlanNode = {
   policy: { maxAttempts: 1 },
 };
 
-const plan = (b: PlanNode): object => ({
+const plan = (a: PlanNode, b: PlanNode): object => ({
   goal: 'a node corrects the plan while its dependency runs',
   source: SOURCE,
-  nodes: [nodeA, b],
+  nodes: [a, b],
 });
 
 describe('plan reload — e2e (issue #70)', () => {
@@ -70,33 +71,18 @@ describe('plan reload — e2e (issue #70)', () => {
 
   test('A rewrites plan.json; B runs the new command and records the new acceptance', async () => {
     const planPath = join(repo, 'plan.json');
-    await writeFile(planPath, JSON.stringify(plan(nodeBOld), null, 2));
+    const nextPath = join(repo, 'next-plan.json');
+    const a = nodeA(planPath, nextPath);
+    await writeFile(planPath, JSON.stringify(plan(a, nodeBOld), null, 2));
+    await writeFile(nextPath, JSON.stringify(plan(a, nodeBNew), null, 2));
 
-    // The scripted runner's A scenario writes A's own tree AND the plan.json at
-    // the repo root. The worktree is <repo>/.git/pleach/worktrees/wt-*/wt, so
-    // the repo root is five levels up.
-    const configBody = `import { gitLedger } from '${SRC}/adapters/git.ts';
-import { scriptedRunner } from '${SRC}/adapters/scripted.ts';
-
-export default {
-  runner: scriptedRunner([
-    {
-      prompt: 'build a',
-      files: {
-        'a.txt': 'made',
-        '../../../../../plan.json': ${JSON.stringify(JSON.stringify(plan(nodeBNew)))},
-      },
-    },
-  ]),
-  ledger: gitLedger(),
-};
-`;
-    await writeFile(join(repo, 'pleach.config.ts'), configBody);
-
-    const proc = Bun.spawn(
-      ['bun', MAIN, 'run', '--no-redact', planPath, '--config', join(repo, 'pleach.config.ts')],
-      { cwd: repo, stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: process.env },
-    );
+    const proc = Bun.spawn(['bun', MAIN, 'run', '--no-redact', planPath, '--repo-root', repo], {
+      cwd: repo,
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: process.env,
+    });
     const [stdout, stderr, code] = await Promise.all([
       new Response(proc.stdout).text(),
       new Response(proc.stderr).text(),
