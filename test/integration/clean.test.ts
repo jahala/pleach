@@ -9,7 +9,8 @@
  * reaper never eats a live run's tree.
  */
 import { expect, test } from 'bun:test';
-import { readFile, realpath, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ExecFn } from '../../src/loop/deps.ts';
 import { ownsWorktree, sweepOrphanWorktrees, sweepStaleLocks } from '../../src/seams/clean.ts';
@@ -100,9 +101,13 @@ test('sweepOrphanWorktrees disposes pleach-owned worktrees and prunes vanished e
 
 test('sweepOrphanWorktrees never touches a worktree it does not own', async () => {
   const { path: repo, cleanup } = await createRepo();
+  // A human's own worktree, outside pleach's namespace. The path must be
+  // unique per suite: a `theirs-<Date.now()>` suffix collided when two suites
+  // picked the same millisecond (issue #160), and the second `git worktree add`
+  // failed on the first's `index.lock`. mkdtemp names it once.
+  const theirsBase = await mkdtemp(join(tmpdir(), 'theirs-'));
+  const theirs = join(theirsBase, 'wt');
   try {
-    // A human's own worktree, outside pleach's namespace.
-    const theirs = join(repo, '..', `theirs-${Date.now()}`);
     await gitIn(repo, 'worktree', 'add', '--detach', theirs, 'HEAD');
 
     const removed = await sweepOrphanWorktrees(exec, repo);
@@ -112,6 +117,7 @@ test('sweepOrphanWorktrees never touches a worktree it does not own', async () =
     expect(list).toContain('theirs-');
     await gitIn(repo, 'worktree', 'remove', '--force', theirs);
   } finally {
+    await rm(theirsBase, { recursive: true, force: true });
     await cleanup();
   }
 });

@@ -159,7 +159,7 @@ test('a verified close records refs.patchId, equal to git patch-id --stable of i
 
   const diff = (await execLocal(['git', '-C', repo, 'diff', `${sha}^`, sha], repo)).stdout;
   expect(receipt.refs?.patchId).toBe(await stablePatchId(diff));
-});
+}, 60_000);
 
 // ledger: #105
 test('a rebase-merge resolves the receipt by patch-id after the branch is deleted', async () => {
@@ -186,7 +186,10 @@ test('a rebase-merge resolves the receipt by patch-id after the branch is delete
   expect(json.outcome).toBe('pass');
   expect(json.resolvedBy).toBe('patch-id');
   expect(json.landedAs).toBe(await gitIn(repo, 'rev-parse', target));
-});
+  // A full close, a rebase, a gc prune and a spawned `pleach receipt`; under
+  // five parallel suites this exceeds bun's 5 s default (issue #160 — measured
+  // 5.2 s while failing). The bound catches a hang, never the git work.
+}, 60_000);
 
 // ledger: #105
 test('a squash of two nodes orphans both receipts: no single commit carries the work', async () => {
@@ -209,7 +212,7 @@ test('a squash of two nodes orphans both receipts: no single commit carries the 
     expect(json.detail).toContain('no');
     expect(res.code).not.toBe(0);
   }
-});
+}, 60_000);
 
 // ledger: #105
 test('a squash of one node resolves by patch-id to the squash commit, without the trailer', async () => {
@@ -229,7 +232,7 @@ test('a squash of one node resolves by patch-id to the squash commit, without th
   expect(json.trailer).toBe(false);
   expect(json.landedAs).toBe(await gitIn(repo, 'rev-parse', target));
   expect(res.code).toBe(0);
-});
+}, 60_000);
 
 // ledger: #105
 test('a receipt written before this change (no patchId) verifies exactly as before', async () => {
@@ -250,7 +253,7 @@ test('a receipt written before this change (no patchId) verifies exactly as befo
   expect(json.outcome).toBe('pass');
   expect(json.resolvedBy).toBeUndefined();
   expect(json.landedAs).toBeUndefined();
-});
+}, 60_000);
 
 // ledger: #105
 test('the history search stays correct at real size and is bounded by --since', async () => {
