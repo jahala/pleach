@@ -7,6 +7,7 @@ Entries carry the defect-ledger id where one exists (`D8`, `D21`, ...); the ledg
 ## [Unreleased]
 
 ### Added
+- `pleach run` picks up edits to the plan file for nodes that have not started; a change to the plan's shape is refused and journaled (D52).
 - `pleach land` pins a conflicting node instead of leaving a hand merge: the next `pleach run` rebuilds it on the landed stack, its conflict resolved by its worker and judged by every gate (D48).
 - The journal says what a running node is doing: attempts, phases, the start and end of every gate, and each audit check. `pleach status` shows a running node's attempt, phase and gate (D47).
 - `pleach receipt` finds a receipt's work after a rebase or squash landing, by patch-id, or says the receipt is orphaned (D49).
@@ -21,6 +22,8 @@ Entries carry the defect-ledger id where one exists (`D8`, `D21`, ...); the ledg
 - `pleach audit-wrap -- <check>` turns any check into the `tend-audit-result` block an audit command must print (D33).
 
 ### Fixed
+- A phased node's handback keeps every phase's closing message, each under its own heading (D53).
+- Integration tests no longer flake when several suites run on one machine (D54).
 - A close keeps a handback even when the runner could not read the worker's final message: it names the failure, and the journal says `handback-read-failed`. An empty final message is named too (D42).
 - The plan schema's canonical text is v1.1.6. Five edits had gone in under v1.1.5; a test now fails when the text changes without its version line (D44). `pleach receipt` still verifies receipts minted under v1.1.5: the contract follows semantic versioning, and the version check compares only the major version (D46).
 - A node that fails before its tree is usable no longer reports a catastrophic isolate failure (fixed by D22; pinned by regression tests, D45).

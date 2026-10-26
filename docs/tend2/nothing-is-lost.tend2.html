@@ -37,6 +37,7 @@ Resuming from a quarantine is the one with rules. A quarantined tree was never g
 - [x] (code) Resume stands on a quarantine tip that descends from the recorded tree, a conductor's fix on top, recording it as moved; a tip that does not descend is refused and the journal says why · test/loop/resume-quarantine.test.ts @af2b8d2 · by cli
 - [x] (code) `pleach audit` refuses a further re-audit with an unchanged audit command, saying what would allow it, and re-adjudicates once the plan's command has changed · test/loop/reaudit-changed-command.test.ts @1676a6b · by cli
 - [x] (code) A stop whose `umbel read` failed journals `handback-read-failed` and keeps a handback naming the exit code; an empty final message keeps a note saying so; a close with no worker stop keeps none and clears the node's current handback · test/loop/handback-kept.test.ts @906ba70 · by cli
+- [ ] (code) A red/impl/green node keeps each phase's closing message under its own heading, a node resumed after its red seal keeps impl and green, and a prompt node's handback is unchanged · test/loop/phase-handback.test.ts
 ## Needs #teardown-keeps-work #gate-artifacts #conductor-loop
 
 ## For #operator
@@ -53,5 +54,6 @@ Resuming from a quarantine is the one with rules. A quarantined tree was never g
 - 2026-09-11 conducted: 7 nodes, claude-opus-5 builders through umbel, weeder check --strict as smoke, tend2 verify per check as a self-integral audit run by opencode/DeepSeek V4 Pro; 7 attempts for 7 closes; conducted under D13, D14 and D16; from the first node on, every close on this loop kept its own handback beside its receipt; the sink found that a resumed phased tree must carry its sealed red's index on the receipt (facts.redSealedAt) so the resume re-enters the ladder after it; landed by `pleach land` onto feat/nothing-is-lost; every gate green. Record: docs/dogfood/nothing-is-lost.md.
 - 2026-10-22 D38 (#152) and D39 (#154), built by DeepSeek V4 Pro workers through umbel, test first; each new test proven red on master's code by the lead. #154's only change in review: a type cast replaced by optional chaining.
 - 2026-10-22 D42 (#109), built by a DeepSeek V4 Pro worker through umbel, test first, proven red on master by the lead. The worker replaced the test that also held "a close that keeps nothing clears the node's current handback"; the lead restored that rule with a dead-attempt test and saw it go red with the rule broken. Not done: reading the transcript when umbel's Stop fires early (jahala/umbel#86) stays umbel's to fix.
+- 2026-10-26 D53 (#125), built by a DeepSeek V4 Pro worker, proven red on master by the lead; its edits to two existing tests make their assertions exact, not looser.
 </script>
 <script src="./loop.js"></script>
