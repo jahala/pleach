@@ -6,6 +6,7 @@ import {
   type GateKind,
   PlanInvalidError,
 } from '../core/errors.ts';
+import type { PhaseClosing } from '../core/handback.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, ExecResult, Worker, WorkerResult } from './deps.ts';
 import type { SettleOutcome } from './settle.ts';
@@ -133,13 +134,33 @@ export function promptFor(node: Node, evidence?: string): string {
   return withEvidence(base, evidence);
 }
 
+// What runWork hands back: the WorkerResult the caller already read, plus the
+// per-phase closing messages a {test, phases} node's handback is assembled from
+// (issue #125). Absent for {prompt} and {command} work.
+export type RunWorkResult = WorkerResult & {
+  phaseClosings?: PhaseClosing[];
+};
+
+// One phase's closing, as the handback assembly needs it (issue #125): the
+// name and plan index for the heading, the message verbatim, and the read
+// failure when the runner could not read it. The assembly turns a failed read
+// or an empty message into the note it names, so the loop only records facts.
+function closingOf(phase: { phase: string }, index: number, result: WorkerResult): PhaseClosing {
+  return {
+    name: phase.phase,
+    index,
+    message: result.finalMessage,
+    ...(result.readFailure !== undefined ? { readFailure: result.readFailure } : {}),
+  };
+}
+
 export async function runWork(
   node: Node,
   worker: Worker | null,
   exec: ExecFn,
   cwd: string,
   opts: RunWorkOpts,
-): Promise<WorkerResult> {
+): Promise<RunWorkResult> {
   const { work } = node;
 
   if ('command' in work) {
@@ -198,6 +219,11 @@ export async function runWork(
       ]);
     }
     let last: WorkerResult | null = null;
+    // Each phase that handed back words, in order (issue #125): the closing
+    // messages a phased node's handback is assembled from. A phase whose gate
+    // fails is not here — the throw discards the list and the attempt retries,
+    // so only the final attempt's phases survive.
+    const closings: PhaseClosing[] = [];
     for (let i = start; i < work.phases.length; i += 1) {
       const phase = work.phases[i] as (typeof work.phases)[number];
       // The journal says where this attempt is on its ladder (issue #63): one
@@ -212,8 +238,18 @@ export async function runWork(
           : phase.prompt;
       await w.send(text);
       last = await w.wait({ timeoutMs: opts.timeoutMs, signal: opts.signal, idleMs: opts.idleMs });
-      if (last.reason !== 'stop') return last;
-      if (opts.wroteBlocked !== undefined && (await opts.wroteBlocked())) return last;
+      // The phase's closing is whatever it handed back: a clean stop, an
+      // interrupted one that still said something (D16), or a failed read. A
+      // non-stop end that said nothing contributes nothing.
+      if (last.reason === 'stop' || last.finalMessage !== '' || last.readFailure !== undefined) {
+        closings.push(closingOf(phase, i, last));
+      }
+      if (last.reason !== 'stop') {
+        return { ...last, ...(closings.length > 0 ? { phaseClosings: closings } : {}) };
+      }
+      if (opts.wroteBlocked !== undefined && (await opts.wroteBlocked())) {
+        return { ...last, ...(closings.length > 0 ? { phaseClosings: closings } : {}) };
+      }
 
       // The worker stopped, but its own background command may still be writing
       // the tree the gate is about to read (issue #127). Settle it before the
@@ -235,7 +271,13 @@ export async function runWork(
           }
           throw err;
         }
-        if (settle.kind === 'aborted') return { ...last, reason: 'aborted' };
+        if (settle.kind === 'aborted') {
+          return {
+            ...last,
+            reason: 'aborted',
+            ...(closings.length > 0 ? { phaseClosings: closings } : {}),
+          };
+        }
         await opts.onGateEnd?.('settle', 0, Date.now() - settleStartedAt);
       }
 
@@ -290,7 +332,7 @@ export async function runWork(
       }
     }
     // The guard above ran at least one phase, so last is set.
-    return last as WorkerResult;
+    return { ...(last as WorkerResult), phaseClosings: closings };
   }
 
   // {prompt}: single send/wait.

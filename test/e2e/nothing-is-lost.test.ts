@@ -220,11 +220,14 @@ describe('nothing a worker produced is lost — e2e (D17)', () => {
     const nodeRefs = await execLocal(['git', '-C', repo, 'for-each-ref', 'refs/heads/node/'], repo);
     expect(nodeRefs.output.trim()).toBe('');
 
-    // And the message the worker had already given is kept beside its close.
+    // And the messages the worker had already given are kept beside its close,
+    // each phase under its own heading (issue #125).
     const aborted = await readReceipt(repo, 'feature');
     expect(aborted.facts.status).toBe('aborted');
     expect(aborted.derived).toBe('quarantined');
-    expect(await handbackOf(aborted)).toBe(INTERRUPTED_HANDBACK);
+    expect(await handbackOf(aborted)).toBe(
+      `## red\nwrote the failing test for greet()\n## impl\n${INTERRUPTED_HANDBACK}`,
+    );
 
     // ── the re-run, standing on the tree the halt left behind ─────────────
     const rerun = await pleach(repo, [
@@ -265,10 +268,15 @@ describe('nothing a worker produced is lost — e2e (D17)', () => {
     expect(verified.facts.gates.map((g) => g.gate)).toEqual(['marker', 'hygiene', 'smoke']);
     expect(verified.refs?.previousReceiptSha256).toBe(aborted.sha256);
 
-    // Both hand-backs survive: the finished turn's beside the latest close, the
-    // interrupted turn's still under its own close's name.
-    expect(await handbackOf(verified)).toBe(GREEN_HANDBACK);
-    expect(await handbackOf(aborted)).toBe(INTERRUPTED_HANDBACK);
+    // Both hand-backs survive, each phased close carrying the phases that ran
+    // it: the finished turn's impl + green beside the latest close, the
+    // interrupted turn's red + impl still under its own close's name.
+    expect(await handbackOf(verified)).toBe(
+      `## impl\nimplemented greet()\n## green\n${GREEN_HANDBACK}`,
+    );
+    expect(await handbackOf(aborted)).toBe(
+      `## red\nwrote the failing test for greet()\n## impl\n${INTERRUPTED_HANDBACK}`,
+    );
 
     // The receipt verb verifies the latest close and lists the one behind it.
     const check = await pleach(repo, ['receipt', 'feature', '--repo-root', repo]);
