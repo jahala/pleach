@@ -198,6 +198,13 @@ Resuming is automatic: re-running a plan skips nodes already verified in the
 ledger (their node/<id> branch exists) — only unbuilt or previously-failed
 nodes execute. The JSON summary's "alreadyVerified" lists what was skipped.
 
+A plan may be edited while it runs: before each launch pleach re-reads the plan
+file and applies the change to nodes that have not started (a recast auditor, a
+corrected prompt, \`goal\`, \`maxConcurrency\`). A node already started keeps what
+it started with; a change to the graph (node ids, \`needs\`, \`source\`) or a plan
+that no longer validates is refused, journaled once, and the run carries on
+with the plan in force. Nothing already settled is ever re-dispatched.
+
 A 'blocked' node means its worker stopped at a permission/approval prompt. The
 session is terminated (nothing to attach to); the prompt text is recorded in
 the journal as blockedReason. Fix --permission-mode / --allowed-tools and
@@ -629,6 +636,11 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
   if (missing !== null) throw new CastEnvError(missing.cast, missing.variable);
   const signal = teardownOnSignal();
 
+  // issue #70: the plan is re-read before each launch decision, so a conductor
+  // can recast an auditor or correct a prompt on a node that has not started.
+  // The loop applies the merge; onPlanReload keeps the merged plan here so a
+  // `--land` at the end lands what the run actually executed.
+  let currentPlan = plan;
   const summary = await runPlan(plan, deps, {
     repoRoot: flags.repoRoot,
     pleachVersion: await pleachVersion(),
@@ -648,13 +660,17 @@ async function verbRun(planPath: string, flags: Flags): Promise<number> {
     ...(flags.fresh ? { fresh: true } : {}),
     ...(flags.only !== undefined ? { only: flags.only } : {}),
     ...(providers !== undefined ? { providers } : {}),
+    reloadPlan: async () => readPlan(planPath),
+    onPlanReload: (merged) => {
+      currentPlan = merged;
+    },
   });
 
   const code = summaryExitCode(summary);
   // --land: a fully-verified close lands in the same invocation; a red run
   // never lands (the summary alone says why).
   if (flags.land && code === 0) {
-    const land = await landPlan(plan, deps, landOpts(flags));
+    const land = await landPlan(currentPlan, deps, landOpts(flags));
     process.stdout.write(`${JSON.stringify({ ...summary, land })}\n`);
     return 0;
   }

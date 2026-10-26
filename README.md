@@ -82,6 +82,12 @@ nothing else is scheduled, closed dependencies are used as bases, and an id not 
 refuses with exit 2. With `--land` the named ids become the landing's sinks. A node the subset
 left out reads `out-of-scope` in `pleach status`/`wait` (never `skipped`, never `failed`).
 
+A plan may be edited while it runs. Before each launch, `pleach run` re-reads the plan file and
+applies the change to nodes that have not started — a conductor can recast an auditor or correct
+a prompt without aborting the run, and `goal` / `maxConcurrency` take the new values. A node that
+has already started keeps what it started with, and a change to the graph (node ids, `needs`,
+`source`) or a plan that no longer validates is refused: the run carries on with the plan in force.
+
 ## What happens when things go wrong
 
 Work is never silently lost and a verdict is never invented. A node that cannot finish keeps its
