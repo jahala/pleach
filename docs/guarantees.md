@@ -160,6 +160,22 @@ pleach execs every command string argv-style with no shell. `pleach validate` re
 shell operator such as `&&`, `|` or `>`, naming the node, the field, and the escape hatch:
 `bash -lc '<command>'`. `pleach run` refuses the same plan before it takes the lock.
 
+## A plan may be edited while it runs
+
+`pleach run` re-reads the plan file before each launch decision, so a conductor can recast an
+auditor or correct a prompt on a node that has not started without aborting the run and resuming.
+A change applies only to nodes that have not started: a started node keeps the node it started
+with, and its change is ignored and named. `goal` and `maxConcurrency` take the new values. The
+applied change is journaled as `plan-reloaded` with the applied and ignored node ids.
+
+The plan's shape is load-bearing and never changes mid-run: the same node ids in the same order,
+the same `needs` for each, and the same `source`. Any move — an id added, removed or reordered, a
+changed `needs` or `source` — refuses the whole reload, journaled as `plan-reload-refused` once,
+and the run carries on with the plan in force. A re-read that fails (the file deleted, broken
+JSON, a plan that no longer validates) refuses the same way, naming its error. A reload never
+re-dispatches a node the run has already settled; the acceptance-evolution rule at run start (a
+verified node whose acceptance changed is re-dispatched) is unchanged.
+
 ## A gate that cannot run fails its node once
 
 A gate that cannot run is a fault of the plan or of the environment, never of the work, and
