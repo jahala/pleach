@@ -5,6 +5,7 @@ import {
   QuarantineBusyError,
   RebuildRequiredError,
 } from '../core/errors.ts';
+import { assemblePhaseHandback, EMPTY_HANDBACK, readFailedHandback } from '../core/handback.ts';
 import { computeLocalOnly } from '../core/local-only.ts';
 import type { Node, Plan, Verdict } from '../core/plan.ts';
 import { rebuildRef } from '../core/rebuild.ts';
@@ -17,6 +18,7 @@ import {
   sha256Hex,
 } from '../core/receipt.ts';
 import type { Redaction } from '../core/redact.ts';
+import { mergeReloadedPlan, planFingerprint } from '../core/reload.ts';
 import { computeRunScope, onlyIds } from '../core/scope.ts';
 import { DEFAULT_WORKER_PROVIDER, validatePlan } from '../core/validate.ts';
 import type { ArtifactKind, ConductorDeps, Isolation, RunSummary } from './deps.ts';
@@ -81,6 +83,14 @@ export interface RunPlanOpts {
   // flag; the loop expands it against the ledger's closed set. Unknown ids
   // refuse (PlanInvalidError) before the lock.
   only?: string[];
+  // issue #70: the face's re-read of the same file the run started from. The
+  // loop calls it before each launch decision and never touches the filesystem
+  // itself. Absent → no reload (the plan in force is the plan for the run).
+  reloadPlan?: () => Promise<Plan>;
+  // issue #70: called with the merged plan each time a reload applies, so the
+  // face can land (`run --land`) against what the run actually executed.
+  // Absent → the caller keeps the plan it passed in.
+  onPlanReload?: (plan: Plan) => void;
 }
 
 export const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes (binding prose).
@@ -120,6 +130,13 @@ export async function runPlan(
       ...(opts.settleMs !== undefined ? { settleMs: opts.settleMs } : {}),
       ...(opts.fallbackProvider !== undefined ? { fallbackProvider: opts.fallbackProvider } : {}),
       ...(opts.only !== undefined ? { only: opts.only } : {}),
+      ...(opts.providers !== undefined ? { providers: opts.providers } : {}),
+      ...(opts.defaultConcurrency !== undefined
+        ? { defaultConcurrency: opts.defaultConcurrency }
+        : {}),
+      ...(opts.maxConcurrency !== undefined ? { maxConcurrencyFlag: opts.maxConcurrency } : {}),
+      ...(opts.reloadPlan !== undefined ? { reloadPlan: opts.reloadPlan } : {}),
+      ...(opts.onPlanReload !== undefined ? { onPlanReload: opts.onPlanReload } : {}),
     });
   } finally {
     await lock.release();
@@ -130,6 +147,12 @@ interface ResolvedOpts {
   repoRoot: string;
   defaultTimeoutMs: number;
   maxConcurrency: number;
+  // The raw `--max-concurrency` flag, kept apart from the resolved cap so a
+  // reloaded plan's own `maxConcurrency` can take effect when the flag is
+  // absent (issue #70).
+  maxConcurrencyFlag?: number;
+  // The face's cores−2 fallback, used to re-resolve the cap after a reload.
+  defaultConcurrency?: number;
   pleachVersion: string;
   fresh: boolean;
   signal?: AbortSignal;
@@ -139,6 +162,11 @@ interface ResolvedOpts {
   fallbackProvider?: string;
   redaction: Redaction;
   only?: string[];
+  // The provider names validatePlan checks a reloaded plan against (issue #146).
+  providers?: readonly string[];
+  // issue #70: the face's plan re-read, called before each launch decision.
+  reloadPlan?: () => Promise<Plan>;
+  onPlanReload?: (plan: Plan) => void;
 }
 
 async function runUnderLock(
@@ -149,6 +177,14 @@ async function runUnderLock(
   // When the run began, RFC 3339 with ':' as '-' so it can name a file: the
   // key its copy of the journal is kept under at run-end (D21).
   const runId = new Date().toISOString().replaceAll(':', '-');
+
+  // The plan in force, replaced by each applied reload (issue #70). The run's
+  // shape — node ids, needs, source — is invariant under reload, so everything
+  // that keyed off ids (scope, closure, baseRefs) stays valid; only node
+  // content and the goal/concurrency cap move. The resolved concurrency cap
+  // starts at the face's value and re-resolves from the merged plan.
+  let currentPlan = plan;
+  let maxConcurrency = opts.maxConcurrency;
 
   // Defensive copy (M3) — never mutate what the seam returned.
   const closed = new Map<string, string | null>(await deps.ledger.readClosed(plan.source));
@@ -226,7 +262,7 @@ async function runUnderLock(
   // inflight, and all its needs are closed.
   function ready(): Node[] {
     const out: Node[] = [];
-    for (const node of plan.nodes) {
+    for (const node of currentPlan.nodes) {
       if (scopeSet !== undefined && !scopeSet.has(node.id)) continue;
       if (
         closed.has(node.id) ||
@@ -446,7 +482,7 @@ async function runUnderLock(
       });
     }
     const handback = await keepOrJournal(node, 'handback', 'handback', receipt.sha256, async () => {
-      const text = handbackText(outcome);
+      const text = handbackText(node, outcome);
       if (text === undefined) return null;
       const bytes = await deps.redact.redact(text);
       return { bytes, sha256: sha256Hex(bytes) };
@@ -527,7 +563,7 @@ async function runUnderLock(
       }
       const receipt = mintReceipt(
         buildFacts(
-          plan,
+          currentPlan,
           node,
           outcome,
           durationMs,
@@ -540,7 +576,7 @@ async function runUnderLock(
       const { sha } = await deps.isolate.commitBranch(
         iso.cwd,
         `node/${node.id}`,
-        `${commitMessage(plan, node, outcome.verdict)}\n\nreceipt-sha256: ${receipt.sha256}`,
+        `${commitMessage(currentPlan, node, outcome.verdict)}\n\nreceipt-sha256: ${receipt.sha256}`,
       );
       return { kind: 'committed', sha, receipt };
     } catch (err) {
@@ -675,7 +711,7 @@ async function runUnderLock(
       await deps.ledger.emitVerdict(verdict, plan.source);
       const receipt = mintReceipt(
         buildFacts(
-          plan,
+          currentPlan,
           node,
           outcome,
           durationMs,
@@ -690,7 +726,7 @@ async function runUnderLock(
       const artifacts = await keepArtifactsOrJournal(node, iso, outcome, receipt);
       let refs: Receipt['refs'];
       if (iso) {
-        refs = await quarantineTree(deps, plan, node, iso, receipt);
+        refs = await quarantineTree(deps, currentPlan, node, iso, receipt);
         if (refs !== undefined) quarantined.add(node.id);
         await disposeOrJournal(deps, iso, node.id);
       }
@@ -778,11 +814,72 @@ async function runUnderLock(
     }
   }
 
+  // ── plan reload (issue #70) ────────────────────────────────────────────────
+  // The plan in force, the ids already started (settled before the run, or
+  // launched), and the fingerprints that make "unchanged" and "refused" silent
+  // across scheduler ticks. The loop re-reads the plan before each launch
+  // decision; a reload that changes nothing writes nothing, a refused one
+  // writes once per distinct content, and an applied one merges unstarted
+  // nodes, keeps started ones, and re-resolves the concurrency cap.
+  const started = new Set<string>(closed.keys());
+  let lastAppliedFingerprint = planFingerprint(plan);
+  let lastRefusedKey: string | undefined;
+  const resolveCap = (): number =>
+    Math.max(
+      1,
+      opts.maxConcurrencyFlag ??
+        currentPlan.maxConcurrency ??
+        opts.defaultConcurrency ??
+        FALLBACK_CONCURRENCY,
+    );
+
+  async function reloadPlanIfChanged(): Promise<void> {
+    if (opts.reloadPlan === undefined) return;
+    let reloaded: Plan;
+    try {
+      reloaded = await opts.reloadPlan();
+    } catch (err) {
+      // File gone, broken JSON, schema error — a refusal with the error's
+      // message, once per distinct cause.
+      const detail = err instanceof Error ? err.message : String(err);
+      const key = `throw:${detail}`;
+      if (key !== lastRefusedKey) {
+        lastRefusedKey = key;
+        await deps.journal.append({ event: 'plan-reload-refused', detail });
+      }
+      return;
+    }
+    const fingerprint = planFingerprint(reloaded);
+    if (fingerprint === lastAppliedFingerprint) return;
+    const decision = mergeReloadedPlan(currentPlan, reloaded, started, opts.providers);
+    if (decision.kind === 'refused') {
+      if (fingerprint !== lastRefusedKey) {
+        lastRefusedKey = fingerprint;
+        await deps.journal.append({ event: 'plan-reload-refused', detail: decision.detail });
+      }
+      return;
+    }
+    await deps.journal.append({
+      event: 'plan-reloaded',
+      applied: decision.applied,
+      ignored: decision.ignored,
+    });
+    currentPlan = decision.plan;
+    lastAppliedFingerprint = fingerprint;
+    maxConcurrency = resolveCap();
+    opts.onPlanReload?.(currentPlan);
+  }
+
   // ── scheduler loop ──────────────────────────────────────────────────────────
   for (;;) {
+    // Re-read the plan before this launch decision (issue #70): a conductor can
+    // recast an auditor or correct a prompt on a node that has not started
+    // without an abort. The shape is invariant, so the scheduler's id-keyed
+    // state stays valid; only node content and the cap move.
+    await reloadPlanIfChanged();
     // An abort stops NEW launches; in-flight nodes settle (their waits are
     // interrupted by the same signal) so evidence and teardown still happen.
-    while (inflight.size < opts.maxConcurrency && opts.signal?.aborted !== true) {
+    while (inflight.size < maxConcurrency && opts.signal?.aborted !== true) {
       const next = ready().find((n) => !inflight.has(n.id));
       if (!next) break;
       // The drain (D16) is decided HERE, in the same tick as the close that
@@ -792,6 +889,7 @@ async function runUnderLock(
       // It gates the launch and nothing else: what is already in flight is
       // carried to its own close.
       if (await deps.lock.stopRequested(opts.repoRoot, plan.source)) break;
+      started.add(next.id);
       const promise = runOne(next).finally(() => inflight.delete(next.id));
       inflight.set(next.id, promise);
     }
@@ -1197,25 +1295,22 @@ function commitMessage(plan: Plan, node: Node, verdict: Verdict): string {
   return `pleach: ${node.id} verified (${verdict.status})\n\nsource: ${plan.source}\ngoal: ${plan.goal}`;
 }
 
-// ── the handback settle keeps (issue #109) ───────────────────────────────────
+// ── the handback settle keeps (issue #109, #125) ─────────────────────────────
 //
-// What a close keeps as its handback: the worker's message verbatim, a note
-// when the runner could not read it, a note when the message was empty, or
-// nothing when no worker handed the work back at all. The message is never
-// invented — the two notes name the failure or the emptiness, never stand in
-// for the words.
+// What a close keeps as its handback. A {prompt} node keeps the worker's
+// message verbatim, a note when the runner could not read it, a note when the
+// message was empty, or nothing when no worker handed the work back at all. A
+// {test, phases} node keeps every phase that ran in its final attempt, in
+// order, each under its own heading (issue #125) — the substance of a phased
+// node is said at the end of its impl phase, so the last phase's line alone
+// cannot hold it. The message is never invented — the notes name the failure or
+// the emptiness, never stand in for the words.
 
-const EMPTY_HANDBACK = "The worker's final message was empty.\n";
-
-function readFailedHandback(read: { exitCode: number; outputTail: string }): string {
-  const tail = read.outputTail.trim() === '' ? '(no output)' : read.outputTail;
-  return (
-    `The runner could not read the worker's final message (read exited ${read.exitCode}); ` +
-    `the handback is missing.\nRunner output: ${tail}\n`
-  );
-}
-
-function handbackText(outcome: RunNodeResult): string | undefined {
+function handbackText(node: Node, outcome: RunNodeResult): string | undefined {
+  if ('phases' in node.work) {
+    if (outcome.phaseClosings === undefined || outcome.phaseClosings.length === 0) return undefined;
+    return assemblePhaseHandback(outcome.phaseClosings);
+  }
   if (outcome.readFailure !== undefined) return readFailedHandback(outcome.readFailure);
   if (outcome.handback !== undefined && outcome.handback !== '') return outcome.handback;
   if (outcome.handbackEmpty === true) return EMPTY_HANDBACK;

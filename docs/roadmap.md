@@ -1,7 +1,7 @@
 # pleach roadmap: the open issues as work packages
 
-**You are here (2026-10-25).** v1.0.0 is released. The audit fixes (D24–D27) and the first P1 batch
-(D28 #98, D29 #147, D30 #148) the second batch (D31 #114, D32 #131, D33 #149) the third (D34 #151, D35 #127, D36 #146 with #126) the fourth (D37 #107, D38 #152, D39 #154, D40 #128) the fifth (D41 #106, D42 #109, D43 #115, D44 #123, D45 #100) and the sixth (D47 #63, D48 #116, D49 #105, D50 #130, D51 #85) are merged, and CI runs the umbel suites. Every open issue carries a
+**You are here (2026-10-26).** v1.0.0 is released. The audit fixes (D24–D27) and the first P1 batch
+(D28 #98, D29 #147, D30 #148) the second batch (D31 #114, D32 #131, D33 #149) the third (D34 #151, D35 #127, D36 #146 with #126) the fourth (D37 #107, D38 #152, D39 #154, D40 #128) the fifth (D41 #106, D42 #109, D43 #115, D44 #123, D45 #100) the sixth (D47 #63, D48 #116, D49 #105, D50 #130, D51 #85) and the seventh (D52 #70, D53 #125, D54 #160) are merged, and CI runs the umbel suites. Every open issue carries a
 priority label: P1 loses work or blocks a run, P2 costs time or misleads, P3 is polish. This page groups
 the open issues into work packages that share code and need one design, in the order to build them.
 Each package becomes a tend2 loop when work starts, with a ledger item for each defect.
@@ -10,13 +10,13 @@ Each package becomes a tend2 loop when work starts, with a ledger item for each 
 
 | # | Package | Issues | Why this position |
 |---|---|---|---|
-| 1 | Nothing unjudged, nothing unrecorded | #125 (then #129); #131, #127, #109 done (D32, D35, D42) | Work that no gate judged, or that the record lost, can reach a verified branch. This is the prime invariant. |
+| 1 | Nothing unjudged, nothing unrecorded | #129 next; #125 done (D53); #131, #127, #109 done (D32, D35, D42) | Work that no gate judged, or that the record lost, can reach a verified branch. This is the prime invariant. |
 | 2 | The operator's seat | #86 #71 #87; #114, #115, #63 done (D31, D43, D47) | The largest field pain: 806 `tail` polls across 25 sessions, and sessions killed by hand. |
 | 3 | Casting and the config | #149, #146, #126, #128 done (D33, D36, D40) | Found dogfooding on cfanalytics: one plan cannot reach two endpoints of one CLI, and an ordinary audit command costs a whole build before it fails. |
 | 4 | Landing that finishes the job | #124; #116, #85, #130 done (D48, D51, D50) | One small honesty fix left: the land gate's refusal hides its output. |
 | 5 | Contract v1.2, one round with tend2 | #104 (with #113) #90; #123, #106 done (D44, D41) | Schema changes batched into one conversation once tend2 is public. The receipt version fence is decided (D46). |
 | 6 | Umbrella fit | #108 #112 | Small, and they need plotplot's contracts. |
-| — | Blocked or parked | #111 (umbel#92) · #117 (an experiment outside this repo) · #70 (needs a design); #107 done (D37) | See below. |
+| — | Blocked or parked | #111 (umbel#92) · #117 (an experiment outside this repo); #107, #70 done (D37, D52) | See below. |
 
 ## 1. Nothing unjudged, nothing unrecorded
 
@@ -27,7 +27,7 @@ Each package becomes a tend2 loop when work starts, with a ledger item for each 
   passing gate's writes are never collected. Done in D32: the tree is restored after a failed gate.
 - **#127:** umbel reports `stop` while the worker's own background command is still writing, and the gate
   judges a half-written tree. Done in D35: the tree settles before a gate.
-- **#125:** a phased node keeps only the last phase's closing message.
+- **#125:** a phased node keeps only the last phase's closing message. Done in D53.
 - **#109:** a failed `umbel read` silently becomes an empty handback. Done in D42: the close keeps a handback naming the failure.
 - **#129** (later): gates re-run on a tree that has not changed since the last run.
 
@@ -109,8 +109,8 @@ Then batch the changes into one round:
   and someone must decide what a run does when the binary is missing. That is the owner's call. Done in D37: `plotplot redact`, fail closed, explicit `--no-redact`.
 - **#111:** a read-only auditor needs umbel#92.
 - **#117:** the typed-judge audit is a calibration experiment run elsewhere; no code yet.
-- **#70:** re-reading the plan mid-run conflicts with a run's plan being fixed. Design it after package 2,
-  whose journal would record the change.
+- **#70:** re-reading the plan mid-run. Done in D52: edits reach nodes that have not started, and a change
+  of shape is refused.
 
 ## Partly done (issue text needs updating)
 

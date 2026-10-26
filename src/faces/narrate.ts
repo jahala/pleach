@@ -115,6 +115,17 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
     }
     case 'acceptance-changed':
       return `↻ ${s(e.node)}: acceptance changed since its close — re-dispatching (was verified against a different gate)`;
+    case 'plan-reloaded': {
+      const applied = (Array.isArray(e.applied) ? e.applied : []).map(s);
+      const ignored = (Array.isArray(e.ignored) ? e.ignored : []).map(s);
+      const parts = [
+        applied.length > 0 ? `applied: ${applied.join(', ')}` : '',
+        ignored.length > 0 ? `ignored (already started): ${ignored.join(', ')}` : '',
+      ].filter((p) => p !== '');
+      return parts.length > 0 ? `↻ plan reloaded — ${parts.join('; ')}` : '↻ plan reloaded';
+    }
+    case 'plan-reload-refused':
+      return `✗ plan change refused — ${s(e.detail)}`;
     case 'acceptance-cascade':
       return `↻ ${s(e.node)}: rebuilding — its base ${s(e.via)} was re-dispatched, so this close embeds stale work`;
     case 'land-rebuild':

@@ -125,7 +125,10 @@ test('two runs back to back leave two copies, each exactly its own run-start to 
     `${firstId}.journal.jsonl`,
     `${secondId}.journal.jsonl`,
   ]);
-});
+  // The two runs drive real git worktrees end to end: the file measures ~7 s
+  // unloaded, so bun's 5 s default is exceeded the moment the machine is under
+  // load (issue #160). A timeout here catches a hang, never the work itself.
+}, 60_000);
 
 // ledger: D21 — the loss the copy exists for can happen mid-run. A journal
 // that no longer holds this run's run-start cannot be copied from it: a copy
@@ -171,4 +174,5 @@ test('a journal lost mid-run leaves no copy, a journal-copy-failed line after ru
   expect(failed[0]?.journalCopy).toBe(events[end]?.journalCopy);
   expect(failed[0]?.detail).toContain('run-start');
   expect(await readdir(join(pleachDir, 'receipts', 'runs')).catch(() => [])).toEqual([]);
-});
+  // Real git, same as the first test; a machine under load exceeds the default.
+}, 60_000);

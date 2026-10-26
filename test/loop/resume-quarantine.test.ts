@@ -444,7 +444,8 @@ describe('a resumed phased node keeps its handback (issue #109)', () => {
     const second = await runPlan(plan(), h.deps, OPTS);
     expect(second.closed).toEqual(['x']);
 
-    // The resumed close kept the handback of the attempt that closed it.
+    // The resumed close kept the handback of the attempt that closed it: the
+    // impl and green phases that ran, each under its own heading (issue #125).
     expect(h.journal.filter((e) => e.event === 'resumed-from-quarantine')).toHaveLength(1);
     const handbackEvents = h.journal.filter(
       (e) => e.event === 'gate-artifact' && e.gate === 'handback',
@@ -453,7 +454,7 @@ describe('a resumed phased node keeps its handback (issue #109)', () => {
     const receipt = h.receipts.get('x');
     const path = receipt?.artifacts?.handback;
     expect(path).toBeDefined();
-    expect(h.artifacts.get(path as string)).toBe(HANDBACK);
+    expect(h.artifacts.get(path as string)).toBe(`## impl\n${HANDBACK}\n## green\n${HANDBACK}`);
   });
 });
 

@@ -22,13 +22,14 @@ import {
   PlanInvalidError,
   WorkerSpawnError,
 } from '../core/errors.ts';
+import type { PhaseClosing } from '../core/handback.ts';
 import { checkDiffHygiene, type HygieneFailure } from '../core/hygiene.ts';
 import { type AuditResult, AuditResultSchema, type Node, type Verdict } from '../core/plan.ts';
 import { type AuditRecord, type GateRecord, sha256Hex } from '../core/receipt.ts';
 import { parseSarif } from '../core/sarif.ts';
 import { DEFAULT_WORKER_PROVIDER } from '../core/validate.ts';
 import type { ConductorDeps, ExecResult, Isolation, Worker, WorkerResult } from './deps.ts';
-import { guardedExec, runWork } from './run-work.ts';
+import { guardedExec, type RunWorkResult, runWork } from './run-work.ts';
 import { type SettleOutcome, settleWorkingTree } from './settle.ts';
 
 // ── run-node: the per-node ladder ────────────────────────────────────────────
@@ -129,6 +130,11 @@ export interface RunNodeResult {
   // the session it came from is killed moments later. Journal/settle material
   // only, like smokeStdout; absent when the attempt never got a result.
   handback?: string;
+  // The per-phase closing messages of the final attempt's {test, phases} ladder
+  // (issue #125), in order — settle assembles the node's handback from them, so
+  // the impl phase's message survives beside the last phase's. Absent for
+  // {prompt} and {command} work.
+  phaseClosings?: PhaseClosing[];
   // The runner could not read the worker's final message at a stop (issue
   // #109), carried like `handback` so settle keeps a handback naming the
   // failure instead of none. Absent when the read succeeded.
@@ -196,6 +202,7 @@ export async function runNode(
       ...(handback !== undefined ? { handback } : {}),
       ...(readFailure !== undefined ? { readFailure } : {}),
       ...(handbackEmpty !== undefined ? { handbackEmpty } : {}),
+      ...(phaseClosings !== undefined ? { phaseClosings } : {}),
       ...(redSealedAt !== undefined ? { redSealedAt } : {}),
       ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
       ...(result.stagedFiles === undefined && lastStaged !== undefined
@@ -280,6 +287,9 @@ export async function runNode(
   // message read back empty on a completed stop — both carried like `handback`.
   let readFailure: WorkerResult['readFailure'];
   let handbackEmpty: boolean | undefined;
+  // The final attempt's per-phase closing messages (issue #125), carried like
+  // `handback` so settle can assemble a phased node's handback from them.
+  let phaseClosings: PhaseClosing[] | undefined;
   // Where the attempt in flight stands on its ladder — the lane a surprise
   // names when it settles the node (D23).
   let lane: SeamLane = 'isolate';
@@ -295,6 +305,7 @@ export async function runNode(
       handback = undefined;
       readFailure = undefined;
       handbackEmpty = undefined;
+      phaseClosings = undefined;
       providerErrorWaits = 0;
       providerErrorDetail = undefined;
 
@@ -416,7 +427,7 @@ export async function runNode(
       // core/backoff's providerBackoff; once it is spent the attempt counts as
       // failed exactly as it does today, and the non-stop block below settles
       // it, carrying `providerErrorDetail` on the verdict's journal line.
-      let result: WorkerResult;
+      let result: RunWorkResult;
       let workEvidence = promptEvidence;
       for (;;) {
         let worker: Worker | null;
@@ -521,6 +532,7 @@ export async function runNode(
         await journalWorkerKilled(deps, node.id, worker);
         handback = result.finalMessage;
         readFailure = result.readFailure;
+        phaseClosings = result.phaseClosings;
         // A completed stop whose read succeeded but returned nothing is named
         // (issue #109), never treated as a worker that said nothing. A non-stop
         // end keeps nothing either way, so it does not set this; nor does a
@@ -924,6 +936,7 @@ export async function runNode(
         ...(handback !== undefined ? { handback } : {}),
         ...(readFailure !== undefined ? { readFailure } : {}),
         ...(handbackEmpty !== undefined ? { handbackEmpty } : {}),
+        ...(phaseClosings !== undefined ? { phaseClosings } : {}),
         ...(redSealedAt !== undefined ? { redSealedAt } : {}),
         ...(auditRecords !== undefined ? { audit: auditRecords } : {}),
       };

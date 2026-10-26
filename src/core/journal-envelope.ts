@@ -40,6 +40,8 @@ export const KINDS: Record<string, Kind> = {
   'journal-copy-failed': 'run.lifecycle',
   'run-aborted': 'run.lifecycle',
   'run-stopped': 'run.lifecycle',
+  'plan-reloaded': 'run.lifecycle',
+  'plan-reload-refused': 'run.lifecycle',
   'land-start': 'run.lifecycle',
   'land-setup': 'run.lifecycle',
   'land-bisect': 'run.lifecycle',

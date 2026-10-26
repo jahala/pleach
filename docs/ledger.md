@@ -608,6 +608,30 @@ checkpoint but have different lifetimes and trust domains.**
   `run-start`, refuses an unknown id before the lock (exit 2), and composes with `--land`. `pleach
   status` reads nodes outside the scope as `out-of-scope`. Tests: `test/unit/scope.test.ts`,
   `test/loop/run-only.test.ts`, `test/e2e/run-only.test.ts`, `test/unit/run-state.test.ts`.
+- **D52 ⚠ [field] A plan was read once, so fixing an unstarted node meant an abort and a resume.**
+  jahala/pleach#70 (plotplot's stem plan, 2026-09-09: an auditor recast around a codex outage). **Fix:**
+  the face hands the loop a re-read of the plan file, and the loop calls it before each launch decision.
+  `core/reload.ts` decides: a node that has not started takes the edited node, a started one keeps what
+  it started with (named as ignored), and any change of shape (node ids, `needs`, `source`) or an
+  invalid plan refuses the reload, once per distinct content, and the run carries on with the plan in
+  force. `plan-reloaded` and `plan-reload-refused` journal it, and receipts and `run --land` use the
+  merged plan. Tests: `test/unit/reload.test.ts`, `test/loop/plan-reload.test.ts`,
+  `test/e2e/plan-reload.test.ts`.
+- **D53 ◦ [field] A phased node's handback kept only its last phase's closing line.** jahala/pleach#125
+  (quadrat, `extractor.bots`): the impl phase's account and its Tried line were lost to the green
+  phase's "tests pass". **Fix:** the handback holds each phase that ran in the final attempt under its
+  own heading (`## red`, `## impl`, `## green`, an index added when a name repeats), each with its
+  closing message or D42's note. A prompt node's handback is unchanged. Tests:
+  `test/unit/handback.test.ts`, `test/loop/phase-handback.test.ts`.
+- **D54 ◦ [test] Integration tests flaked when several suites ran at once.** jahala/pleach#160. Slow
+  tests (two full runs, or spawned `pleach` processes) ran past bun's 5 s default; bun then removed
+  their temp repo while the run was still writing (the ENOENT). Two tests named temp paths with
+  `Date.now()` and collided across suites. **Fix:** those tests carry a 60 s bound that catches a hang
+  and never their work, and every temp path comes from `mkdtemp`. `scripts/load-flake.ts` reproduces
+  it under parallel load: 1 failure in 48 runs on master, 0 in 160 after. The issue's unclosed-node
+  failure never reproduced and has no fix here. Tests: `test/integration/run-journal-copy.test.ts`,
+  `test/integration/receipt-patch-id.test.ts`, `test/integration/clean.test.ts`,
+  `test/integration/journal.test.ts`, `test/e2e/land.test.ts`.
 
 ### Verified-sound (attacks refuted — do not relitigate)
 
