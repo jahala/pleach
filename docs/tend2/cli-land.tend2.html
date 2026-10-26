@@ -24,7 +24,7 @@ One command takes an operator from 'plan verified' to 'code on my branch'. There
 ## Tests
 - [x] (code) landPlan refuses when any plan node is not verified-closed, naming the unverified nodes; nothing reaches the git seam · test/loop/land.test.ts @ab0726f6abea3d · by cli
 - [x] (code) Conflicting sinks refuse to land and leave the repo byte-identical: branch tip unmoved, no merge in progress, no leaked worktree, error names the files · test/integration/land.test.ts @6d69175 · by cli
-- [x] (code) End-to-end through the real CLI: run then land puts the sink's tree (containing its dependency's work) on the checked-out branch; run --land does it in one invocation; a red run never lands · test/e2e/land.test.ts @c7e1f0a · by cli
+- [x] (code) End-to-end through the real CLI: run then land puts the sink's tree (containing its dependency's work) on the checked-out branch; run --land does it in one invocation; a red run never lands · test/e2e/land.test.ts @ac5f929ed94bf6 · by cli
 - [x] (code) An uncommitted overlapping edit blocks the fast-forward and survives untouched (fail-closed toward the user's work) · test/integration/land.test.ts @70c9d62 · by cli
 
 - [x] (code) A landing whose merge commit a repository hook refuses, with the branch moved past the node's base, throws `LandMergeRefusedError` carrying the hook's words, never a `LandConflictError` naming no files; the checkout is untouched and no worktree is left · test/integration/land-merge-refused.test.ts @880fb9f · by cli
