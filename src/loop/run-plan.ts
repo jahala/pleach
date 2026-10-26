@@ -5,6 +5,7 @@ import {
   QuarantineBusyError,
   RebuildRequiredError,
 } from '../core/errors.ts';
+import { assemblePhaseHandback, EMPTY_HANDBACK, readFailedHandback } from '../core/handback.ts';
 import { computeLocalOnly } from '../core/local-only.ts';
 import type { Node, Plan, Verdict } from '../core/plan.ts';
 import { rebuildRef } from '../core/rebuild.ts';
@@ -446,7 +447,7 @@ async function runUnderLock(
       });
     }
     const handback = await keepOrJournal(node, 'handback', 'handback', receipt.sha256, async () => {
-      const text = handbackText(outcome);
+      const text = handbackText(node, outcome);
       if (text === undefined) return null;
       const bytes = await deps.redact.redact(text);
       return { bytes, sha256: sha256Hex(bytes) };
@@ -1197,25 +1198,22 @@ function commitMessage(plan: Plan, node: Node, verdict: Verdict): string {
   return `pleach: ${node.id} verified (${verdict.status})\n\nsource: ${plan.source}\ngoal: ${plan.goal}`;
 }
 
-// ── the handback settle keeps (issue #109) ───────────────────────────────────
+// ── the handback settle keeps (issue #109, #125) ─────────────────────────────
 //
-// What a close keeps as its handback: the worker's message verbatim, a note
-// when the runner could not read it, a note when the message was empty, or
-// nothing when no worker handed the work back at all. The message is never
-// invented — the two notes name the failure or the emptiness, never stand in
-// for the words.
+// What a close keeps as its handback. A {prompt} node keeps the worker's
+// message verbatim, a note when the runner could not read it, a note when the
+// message was empty, or nothing when no worker handed the work back at all. A
+// {test, phases} node keeps every phase that ran in its final attempt, in
+// order, each under its own heading (issue #125) — the substance of a phased
+// node is said at the end of its impl phase, so the last phase's line alone
+// cannot hold it. The message is never invented — the notes name the failure or
+// the emptiness, never stand in for the words.
 
-const EMPTY_HANDBACK = "The worker's final message was empty.\n";
-
-function readFailedHandback(read: { exitCode: number; outputTail: string }): string {
-  const tail = read.outputTail.trim() === '' ? '(no output)' : read.outputTail;
-  return (
-    `The runner could not read the worker's final message (read exited ${read.exitCode}); ` +
-    `the handback is missing.\nRunner output: ${tail}\n`
-  );
-}
-
-function handbackText(outcome: RunNodeResult): string | undefined {
+function handbackText(node: Node, outcome: RunNodeResult): string | undefined {
+  if ('phases' in node.work) {
+    if (outcome.phaseClosings === undefined || outcome.phaseClosings.length === 0) return undefined;
+    return assemblePhaseHandback(outcome.phaseClosings);
+  }
   if (outcome.readFailure !== undefined) return readFailedHandback(outcome.readFailure);
   if (outcome.handback !== undefined && outcome.handback !== '') return outcome.handback;
   if (outcome.handbackEmpty === true) return EMPTY_HANDBACK;

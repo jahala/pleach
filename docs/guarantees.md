@@ -240,10 +240,14 @@ beside the receipts.
 ## A worker's handback is kept, or its absence is named
 
 The worker's final message carries its dated Tried line, and the close keeps it beside the
-receipt. When the runner cannot read that message (`umbel read` fails), the close keeps a handback
-that says so, with the runner's exit code and output. The journal records `handback-read-failed`,
-and the verdict's `detail` names the missing handback. A message that read back empty is kept as a
-note saying it was empty. pleach never puts other words in the worker's place.
+receipt. A phased node (red/impl/green) keeps every phase that ran in its final attempt, in
+order, each under its own heading (`## red`, `## impl`, `## green`): the substance of that work —
+what was built, what was scoped out, the Tried line — is said at the end of the impl phase, so
+the last phase's closing line alone cannot hold it. When the runner cannot read a message
+(`umbel read` fails), the close keeps a handback that says so, with the runner's exit code and
+output. The journal records `handback-read-failed`, and the verdict's `detail` names the missing
+handback. A message that read back empty is kept as a note saying it was empty. pleach never puts
+other words in the worker's place.
 
 ## A worker that writes BLOCKED.md has finished
 
