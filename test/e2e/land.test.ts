@@ -82,7 +82,7 @@ describe('pleach land — e2e over command plans', () => {
     // The sink's tree (which contains lib's work) is on the branch now.
     expect(await gitIn(repo, 'show', 'HEAD:lib.txt')).toBe('lib');
     expect(await gitIn(repo, 'show', 'HEAD:app.txt')).toBe('app');
-  });
+  }, 60_000);
 
   test('run --land: one invocation builds, verifies, and lands', async () => {
     const planPath = join(repo, 'plan.json');
@@ -97,7 +97,7 @@ describe('pleach land — e2e over command plans', () => {
     expect(out.closed.sort()).toEqual(['app', 'lib']);
     expect(out.land?.landed).toEqual(['app']);
     expect(await gitIn(repo, 'show', 'HEAD:app.txt')).toBe('app');
-  });
+  }, 60_000);
 
   test('land refuses while any node is unverified; run --land does not land a red run', async () => {
     const planPath = join(repo, 'plan.json');
@@ -115,5 +115,8 @@ describe('pleach land — e2e over command plans', () => {
     // Nothing landed: the branch still has only the initial commit's file.
     const files = await gitIn(repo, 'ls-tree', '--name-only', 'HEAD');
     expect(files.split('\n')).toEqual(['init.txt']);
-  });
+    // Each test here spawns two real `pleach` subprocesses (cold `bun` start
+    // plus git); under five parallel suites that exceeds bun's 5 s default
+    // (issue #160). The bound catches a hang, never the subprocesses' work.
+  }, 60_000);
 });
