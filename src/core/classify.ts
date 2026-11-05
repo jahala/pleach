@@ -117,8 +117,9 @@ function classifyError(error: Error): ClassifyResult {
   if (error instanceof LockHeldError) return 'terminal';
   if (error instanceof PlanInvalidError) return 'terminal';
   // A spawn the runner refused for a sign-in (exit 126) is blocked: no retry
-  // meets a different screen (issue #128). Any other spawn failure is terminal,
-  // as today.
+  // meets a different screen (issue #128). Any other spawn failure is the
+  // runner's, before any work: run-node retries it on the provider backoff
+  // without spending an attempt (issue #177).
   if (error instanceof WorkerSpawnError && spawnRefusalKind(error.exitCode) === 'needs-signin') {
     return 'blocked';
   }
