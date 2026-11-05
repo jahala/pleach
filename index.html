@@ -1,1309 +1,673 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<!-- pleach · its page in the garden's bed design, built from plotplot .brand/reference/product.html at v1.11.1 -->
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>pleach: agents produce; code decides</title>
-<meta name="description" content="pleach takes a plan, a DAG of agent tasks, runs each in its own git worktree, and publishes a node/id branch only for work that mechanically cleared its gates.">
-<meta name="theme-color" content="#FAF5E9">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23FAF5E9'/><g transform='translate(4 4)'><path d='M6.5 22 C6.5 17 16 15 12 10 C9 7.4 12 6.6 12 6' stroke='%234A9E3F' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' fill='none'/><path d='M17.5 22 C17.5 17 8 15 12 10 C15 7.4 12 6.6 12 6' stroke='%2397539B' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' fill='none'/><path d='M12 6 V2' stroke='%2397539B' stroke-width='2.6' stroke-linecap='round' fill='none'/></g></svg>">
+<title>pleach · the conductor · a plotplot garden tool</title>
+<meta name="description" content="pleach is a conductor for a plan of agent work. It builds each node of the plan in its own git worktree and keeps a branch only for work its gates verified.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='24' height='24' rx='5.5' fill='%23779C46'/%3E%3Cg transform='translate(3.36 3.36) scale(0.72)' fill='none'%3E%3Cpath d='M6 22 C6 17.2 18 16.4 12 10.6' stroke='%231C1610' stroke-width='2'/%3E%3Cpath d='M18 22 C18 17.2 6 16.4 12 10.6' stroke='%231C1610' stroke-width='2'/%3E%3Cpath d='M12 11.4 C9.8 9.4 9.6 5.8 12 2.4 C14.4 5.8 14.2 9.4 12 11.4 Z' fill='%231C1610'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Hanken+Grotesk:wght@400..800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<noscript><style>.reveal{opacity:1 !important;transform:none !important}</style></noscript>
+<link href="https://fonts.googleapis.com/css2?family=Protest+Riot&family=Hanken+Grotesk:wght@400..800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var s=localStorage.getItem('pp-theme');if(s)r.setAttribute('data-theme',s);else if(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)r.setAttribute('data-theme','dark');})();</script>
 <style>
-/* ── design tokens ────────────────────────────────────────────────────────── */
-:root {
-  /* family palette */
-  --pp-primary:      #357E2C;
-  --pp-primary-deep: #2C6B2A;
-  --pp-leaf:         #4A9E3F;
-  --pp-forest:       #214A2C;
-  --pp-accent:       #E89227;
-  --pp-amber-ink:    #A86518;
+  /* ── tokens and theme ── */
+  :root{
+    /* color: shared family palette */
+    --pp-primary:#357E2C; --pp-primary-deep:#2C6B2A; --pp-leaf:#4A9E3F; --pp-forest:#214A2C;
+    --pp-accent:#E89227; --pp-marigold:#F4B63A; --pp-amber-ink:#A86518;
+    --pp-text:#3A2718; --pp-text-soft:#786148;
+    --pp-bg:#FAF5E9; --pp-bg-band:#F2EAD6; --pp-bg-artifact:#FCFAF2; --pp-surface:#F5EEDD; --pp-border:#E2D8C0;
+    /* semantic */
+    --pp-healthy:#46913C; --pp-caution:#B0741C; --pp-error:#BC4126; --pp-info:#3F7186; --pp-muted:#9A8C72;
+    /* product blooms */
+    --pp-mull:#76D4FF; --pp-glean:#0096B3; --pp-cultivate:#09636B; --pp-graft:#FEAA68; --pp-petals:#CC6A37;
+    --pp-tend:#98D98D; --pp-pleach:#779C46; --pp-umbel:#545E05; --pp-tilth:#F7D4B7; --pp-mycelium:#C9A18D; --pp-weeder:#A37A6E; --pp-well:#4D5972;
+    --pp-coldframe:#4E5A48;
+    /* soil-night terminal (fixed in both themes) */
+    --pp-term-bg:#1C1610; --pp-term-surface:#262019; --pp-term-border:#403628;
+    --pp-term-green:#84C56A; --pp-term-sun:#F2A93B; --pp-term-text:#F3ECD9;
+    /* type */
+    --pp-font-heading:'Protest Riot',Georgia,serif;
+    --pp-font-body:'Hanken Grotesk',system-ui,sans-serif;
+    --pp-font-code:'JetBrains Mono',monospace;
+    /* space */
+    --pp-space-4xs:4px; --pp-space-3xs:8px; --pp-space-2xs:12px; --pp-space-xs:16px;
+    --pp-space-sm:24px; --pp-space-md:32px; --pp-space-lg:48px; --pp-space-xl:64px;
+    --pp-space-2xl:96px; --pp-space-3xl:128px;
+    --pp-container-max:1200px; --pp-gutter:32px;
+    /* radius */
+    --pp-radius-xs:3px; --pp-radius-sm:6px; --pp-radius-md:8px; --pp-radius-lg:10px;
+    --pp-radius-xl:12px; --pp-radius-full:999px;
+    /* shadow: ink-tinted */
+    --pp-shadow-rest:0 1px 0 #E2D8C0, 0 12px 40px -16px rgba(58,39,24,0.35);
+    --pp-shadow-lift:0 2px 4px rgba(58,39,24,0.05), 0 14px 32px rgba(58,39,24,0.08);
+    /* motion */
+    --pp-ease-petal:cubic-bezier(0.22,1,0.36,1);
 
-  --pp-text:         #3A2718;
-  --pp-text-soft:    #786148;
-  --pp-bg:           #FAF5E9;
-  --pp-bg-band:      #F2EAD6;
-  --pp-surface:      #F5EEDD;
-  --pp-border:       #E2D8C0;
+    /* allotment layer: aliases of palette tokens, no new values */
+    --sign-dark:var(--pp-term-bg);
+    --sign-light:var(--pp-term-text);
 
-  /* semantic */
-  --pp-healthy: #46913C;
-  --pp-caution: #B0741C;
-  --pp-error:   #BC4126;
-  --pp-info:    #3F7186;
-  --pp-muted:   #9A8C72;
-
-  /* product accent — plum is the one voice */
-  --pp-pleach:  #97539B;
-
-  /* garden siblings — used only in the family footer (shared umbrella accents,
-     canonical in plotplot's .brand/colors.md). Dots are decorative fills, so the
-     display-only accents (pollen, weeder on dark) are in their rated class here. */
-  --pp-tilth:  #4E88A6;
-  --pp-tend:   #D6502F;
-  --pp-petals: #E588A0;
-  --pp-umbel:  #E89227;
-  --pp-copeca: #1F8A7B;
-  --pp-pollen: #C8B330;
-  --pp-weeder: #8E3B5E;
-
-  /* terminal */
-  --pp-term-bg:      #1C1610;
-  --pp-term-surface: #262019;
-  --pp-term-border:  #403628;
-  --pp-term-green:   #84C56A;
-  --pp-term-sun:     #F2A93B;
-  --pp-term-text:    #F3ECD9;
-
-  /* type */
-  --font-heading: 'Fraunces', Georgia, serif;
-  --font-body:    'Hanken Grotesk', system-ui, sans-serif;
-  --font-code:    'JetBrains Mono', monospace;
-
-  /* type scale — 18px base */
-  --text-h1:    clamp(3.4rem, 6vw, 4.6rem);
-  --text-h2:    2.4rem;
-  --text-h3:    1.6rem;
-  --text-h4:    1.25rem;
-  --text-lead:  1.3rem;
-  --text-stat:  3.75rem;
-  --text-body:  1.0625rem;
-  --text-small: 0.9375rem;
-  --text-code:  0.95rem;
-
-  /* spacing — 4px grid */
-  --sp-4xs: 4px;  --sp-3xs: 8px;  --sp-2xs: 12px;
-  --sp-xs:  16px; --sp-sm:  24px; --sp-md:  32px;
-  --sp-lg:  48px; --sp-xl:  64px; --sp-2xl: 96px;
-  --sp-3xl: 128px;
-
-  /* layout */
-  --container-max: 1200px;
-  --gutter:        32px;
-
-  /* radius */
-  --r-sm:   6px;  --r-md:   8px;
-  --r-lg:   10px; --r-xl:   12px;
-  --r-full: 999px;
-
-  /* shadow — ink-tinted */
-  --shadow-rest:  0 1px 0 #E2D8C0, 0 12px 40px -16px rgba(58,39,24,0.35);
-  --shadow-lift:  0 2px 4px rgba(58,39,24,0.05), 0 14px 32px rgba(58,39,24,0.08);
-  --shadow-float: 0 2px 6px rgba(58,39,24,0.07), 0 18px 44px rgba(58,39,24,0.12);
-
-  /* motion */
-  --ease-petal:   cubic-bezier(0.22, 1, 0.36, 1);
-  --dur-unfold:   0.8s;
-  --dur-micro:    0.18s;
-  --stagger-step: 0.1s;
-}
-
-[data-theme="dark"] {
-  --pp-primary:   #84C56A;
-  --pp-primary-deep: #9FD08A;
-  --pp-leaf:      #9FD08A;
-  --pp-accent:    #F2A93B;
-  --pp-text:      #F3ECD9;
-  --pp-text-soft: #C9BBA0;
-  --pp-bg:        #1C1610;
-  --pp-bg-band:   #211A12;
-  --pp-surface:   #262019;
-  --pp-border:    #403628;
-}
-
-/* ── reset + base ─────────────────────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { font-size: 18px; scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
-
-@media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-delay: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+    /* the bed. its bloom, its bloom as a word (pleach has no ink of its own, so --pp-text with a bloom
+       underline on the live word), and the sign ink that reads on the bloom (Product Accents: ink) */
+    --bed:var(--pp-pleach); --bed-word:var(--pp-text); --bed-on:var(--sign-dark);
   }
-  .reveal { opacity: 1 !important; transform: none !important; }
-}
+  [data-theme="dark"]{
+    --pp-primary:#84C56A; --pp-accent:#F2A93B; --pp-leaf:#9FD08A;
+    --pp-text:#F3ECD9; --pp-text-soft:#C9BBA0;
+    --pp-bg:#1C1610; --pp-bg-band:#211A12; --pp-surface:#262019; --pp-border:#403628;
+    --pp-cultivate:#1E6F77; --pp-umbel:#5F6A18; --pp-well:#58647E; --pp-coldframe:#5A6853;
+    --pp-shadow-rest:0 1px 0 #403628, 0 12px 40px -16px rgba(8,6,4,0.6);
+    --pp-shadow-lift:0 2px 4px rgba(8,6,4,0.3), 0 14px 32px rgba(8,6,4,0.45);
+  }
 
-body {
-  font-family: var(--font-body);
-  font-size: var(--text-body);
-  font-weight: 400;
-  line-height: 1.65;
-  color: var(--pp-text);
-  background: var(--pp-bg);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
-}
+  /* ── base type (shared with the landing page) ── */
+  *{box-sizing:border-box}
+  html{font-size:18px;scroll-behavior:smooth}
+  body{margin:0;background:var(--pp-bg);color:var(--pp-text);
+    font-family:var(--pp-font-body);font-size:1.0625rem;line-height:1.65;
+    -webkit-font-smoothing:antialiased;transition:background .4s var(--pp-ease-petal),color .4s var(--pp-ease-petal)}
+  .wrap{max-width:var(--pp-container-max);margin:0 auto;padding:0 var(--pp-gutter)}
+  .g12{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:var(--pp-space-sm)}
+  .margin{grid-column:1 / span 3}
+  .content{grid-column:4 / -1}
+  h1,h2,h4{font-family:var(--pp-font-heading);margin:0;font-weight:520;text-wrap:balance}
+  h2{font-size:clamp(2.2rem,3.6vw,3rem);line-height:1.05;letter-spacing:-.015em}
+  p{margin:0;text-wrap:pretty}
+  a{color:var(--pp-primary);text-decoration:none}
+  code{font-family:var(--pp-font-code);color:var(--pp-text)}
+  :focus-visible{outline:2px solid var(--pp-primary);outline-offset:3px;border-radius:var(--pp-radius-xs)}
+  .label{font-family:var(--pp-font-code);font-size:.7rem;font-weight:500;text-transform:uppercase;
+    letter-spacing:.18em;color:var(--pp-text-soft)}
+  h2.label{line-height:1.65;padding-top:var(--pp-space-4xs)}
+  .lede{font-size:1.15rem;line-height:1.55;color:var(--pp-text-soft)}
+  .arrow{font-family:var(--pp-font-code);font-weight:500}
+  /* the pictogram sprite's one stroke */
+  .glyph{fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
 
-::selection { background: rgba(151,83,155,0.2); color: var(--pp-text); }
+  /* ── buttons: one coloured, one ghost ── */
+  .cta{display:flex;align-items:center;flex-wrap:wrap;gap:var(--pp-space-2xs);margin-top:var(--pp-space-lg)}
+  .btn{font-weight:600;font-size:1rem;border-radius:var(--pp-radius-sm);
+    padding:var(--pp-space-2xs) var(--pp-space-sm);display:inline-flex;align-items:center;gap:var(--pp-space-3xs);
+    transition:transform .18s ease-out,background .18s ease-out,box-shadow .18s ease-out}
+  .btn.sun{background:var(--pp-accent);color:var(--pp-term-bg)}
+  .btn.sun:hover{transform:translateY(-1px);box-shadow:var(--pp-shadow-lift)}
+  .btn.ghost{box-shadow:inset 0 0 0 1.5px var(--pp-border)}
+  .btn.ghost:hover{box-shadow:inset 0 0 0 1.5px var(--pp-primary);transform:translateY(-1px)}
+  .btn:active{transform:translateY(1px)}
 
-/* ── type ─────────────────────────────────────────────────────────────────── */
-h1, h2, h3, h4 {
-  font-family: var(--font-heading);
-  font-optical-sizing: auto;
-  color: var(--pp-text);
-  letter-spacing: -0.015em;
-  text-wrap: balance;
-}
-h1 {
-  font-size: var(--text-h1);
-  line-height: 1.04;
-  font-weight: 620;
-  font-variation-settings: 'SOFT' 40;
-  letter-spacing: -0.025em;
-}
-h2 {
-  font-size: var(--text-h2);
-  line-height: 1.12;
-  font-weight: 560;
-  font-variation-settings: 'SOFT' 24;
-}
-h3 { font-size: var(--text-h3); line-height: 1.2; font-weight: 560; }
-h4 { font-size: var(--text-h4); line-height: 1.3; font-weight: 560; }
+  /* ── header and inchworm ── */
+  .site{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--pp-bg) 88%,transparent);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--pp-border)}
+  .site > .wrap{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;
+    padding-top:var(--pp-space-xs);padding-bottom:var(--pp-space-xs)}
+  .brand{display:inline-flex;align-items:center;gap:var(--pp-space-3xs);color:var(--pp-text)}
+  .wordmark{font-family:var(--pp-font-heading);font-weight:600;font-size:1.4rem;letter-spacing:-.01em}
+  .wmark{width:28px;height:28px;flex:none}
+  .w-tile{fill:var(--bed)}
+  .w-ink{stroke:var(--bed-on)}
+  .w-ink-fill{fill:var(--bed-on)}
+  .nav{display:flex;align-items:center;gap:var(--pp-space-sm)}
+  .nav a{font-family:var(--pp-font-code);font-size:.72rem;font-weight:500;text-transform:uppercase;
+    letter-spacing:.16em;color:var(--pp-text-soft);transition:color .18s ease-out}
+  .nav a:hover{color:var(--pp-primary)}
+  .toggle{background:transparent;border:1px solid var(--pp-border);border-radius:var(--pp-radius-full);
+    width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;
+    color:var(--pp-text-soft);cursor:pointer;transition:color .18s ease-out,border-color .18s ease-out}
+  .toggle:hover{color:var(--pp-primary);border-color:var(--pp-primary)}
+  .toggle svg{width:18px;height:18px}
+  /* inchworm: walks the header's bottom line (ground = container y 40); body and head from the family green */
+  .inchworm{position:absolute;left:0;right:0;bottom:-4px;height:44px;overflow:hidden;pointer-events:none;z-index:0}
+  .inchworm svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+  .iw-body{stroke:var(--pp-primary);stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
+  .iw-rings{stroke:var(--pp-forest);stroke-width:5;stroke-dasharray:1 3.5;opacity:.35}
+  .iw-head{fill:var(--pp-primary)}
+  .iw-eye{fill:var(--pp-bg)}
 
-p { color: var(--pp-text); }
+  /* ── direction sign: back to the garden, this bed, the next bed ── */
+  .waysign{background:var(--bed);color:var(--bed-on)}
+  .waysign .wrap{display:grid;grid-template-columns:1fr auto 1fr;align-items:stretch}
+  .waysign :focus-visible{outline-color:var(--bed-on)}
+  .way{display:flex;align-items:center;gap:var(--pp-space-2xs);padding:var(--pp-space-2xs) 0;
+    font-family:var(--pp-font-code);font-size:.72rem;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--bed-on)}
+  a.way{transition:gap .2s ease-out}
+  a.way:hover{gap:var(--pp-space-xs)}
+  .way .big{font-size:1.1rem;letter-spacing:0}
+  .way.here{padding:var(--pp-space-2xs) var(--pp-space-md);border-left:1px solid color-mix(in srgb,var(--bed-on) 30%,transparent);border-right:1px solid color-mix(in srgb,var(--bed-on) 30%,transparent)}
+  .way.next{justify-content:flex-end}
+  .way .sep{opacity:.5}
+  .w-plate{height:30px;min-width:30px;border-radius:var(--pp-radius-sm);border:1.5px solid var(--bed-on);display:inline-flex;align-items:center;justify-content:center;font-weight:700;letter-spacing:0;padding:0 var(--pp-space-4xs)}
+  .pn{font-family:var(--pp-font-heading);font-weight:600;font-size:1.05rem;letter-spacing:0;text-transform:none}
+  .big-pn{font-size:1.5rem;font-style:italic;font-variation-settings:"SOFT" 100,"WONK" 1}
 
-a {
-  color: var(--pp-pleach);
-  text-decoration: underline;
-  text-decoration-color: rgba(151,83,155,0.4);
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 3px;
-  transition: color var(--dur-micro), text-decoration-color var(--dur-micro);
-}
-a:hover { text-decoration-color: var(--pp-pleach); }
-:focus-visible { outline: 2px solid var(--pp-pleach); outline-offset: 3px; border-radius: 3px; }
+  /* ── hero: title beside the pitch, then the product frame ── */
+  .hero{position:relative;z-index:2}
+  .hero .wrap{position:relative}
+  /* guide lines: one even 96px rhythm across the full width, centred, fading from the top down to nothing */
+  .hero::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
+    background-image:linear-gradient(to right,var(--pp-border) 0 1px,transparent 1px);
+    background-size:96px 100%;background-position:center top;background-repeat:repeat-x;
+    -webkit-mask-image:linear-gradient(to bottom,var(--pp-text),transparent);
+    mask-image:linear-gradient(to bottom,var(--pp-text),transparent)}
+  .hero-grid{position:relative;z-index:1;padding-top:var(--pp-space-xl);padding-bottom:0;row-gap:var(--pp-space-xl);align-items:start}
+  .hero-title{grid-column:1 / span 7;align-self:center}
+  .hero h1{font-size:clamp(3.4rem,7.2vw,6.4rem);line-height:.95;font-weight:640;letter-spacing:-.02em;
+    font-variation-settings:"SOFT" 20}
+  .hero h1 em{font-weight:560;color:var(--bed-word);font-variation-settings:"SOFT" 100,"WONK" 1;
+    text-decoration:underline;text-decoration-color:var(--bed);text-decoration-thickness:.11em;
+    text-underline-offset:.12em;text-decoration-skip-ink:none}
+  .hero-copy{grid-column:8 / span 5;align-self:start;padding-top:var(--pp-space-3xs)}
+  .sig{font-family:var(--pp-font-heading);font-style:italic;font-size:1.25rem;margin-bottom:var(--pp-space-sm);
+    display:flex;align-items:center;gap:var(--pp-space-2xs)}
+  .sig::before{content:"";width:32px;height:2px;background:var(--bed);flex:none}
+  /* the terminal: soil-night, fixed in both themes */
+  .hero-term{grid-column:1 / -1}
+  .term{background:var(--pp-term-bg);border:1px solid var(--pp-term-border);border-radius:var(--pp-radius-md);overflow:hidden}
+  .hero-term .term{color:var(--pp-term-text);box-shadow:var(--pp-shadow-rest);font-family:var(--pp-font-code)}
+  .term-bar{display:flex;align-items:center;gap:var(--pp-space-3xs);
+    padding:var(--pp-space-2xs) var(--pp-space-xs);background:var(--pp-term-surface);border-bottom:1px solid var(--pp-term-border)}
+  .tdot{width:11px;height:11px;border-radius:var(--pp-radius-full)}
+  .tdot.e{background:var(--pp-error)}
+  .tdot.c{background:var(--pp-caution)}
+  .tdot.k{background:var(--pp-healthy)}
+  .term-title{margin-left:var(--pp-space-3xs);font-size:.74rem;opacity:.6}
+  .term pre{margin:0;padding:var(--pp-space-md);font-family:var(--pp-font-code);font-size:.74rem;line-height:1.8;
+    white-space:pre-wrap;color:var(--pp-term-text);overflow-x:auto}
+  .hero-term pre{padding:var(--pp-space-sm);font-size:.76rem}
+  .t-prompt{color:var(--pp-term-green)}
+  .t-path{color:var(--pp-term-sun)}
+  .t-dim{opacity:.55}
+  .t-err{color:var(--pp-term-text);background:var(--pp-error);padding:0 var(--pp-space-4xs);border-radius:var(--pp-radius-xs);font-weight:700}
+  .t-rule{color:var(--pp-term-sun);font-weight:700}
+  .caption{display:flex;align-items:center;gap:var(--pp-space-3xs);margin-top:var(--pp-space-2xs);
+    font-family:var(--pp-font-code);font-size:.74rem;letter-spacing:.06em;color:var(--pp-text-soft)}
+  .caption b{color:var(--pp-text)}
+  .ldot{width:10px;height:10px;border-radius:var(--pp-radius-full);flex:none}
+  .ldot.err{background:var(--pp-error)}
 
-code {
-  font-family: var(--font-code);
-  font-size: 0.88em;
-  background: rgba(151,83,155,0.08);
-  border: 1px solid rgba(151,83,155,0.18);
-  border-radius: 4px;
-  padding: 1px 5px;
-  color: var(--pp-text);
-}
+  /* ── sections: label in the margin, content on the right ── */
+  .sec{padding-top:var(--pp-space-2xl);padding-bottom:var(--pp-space-2xl);border-top:1px solid var(--pp-border);row-gap:var(--pp-space-md)}
+  .sec.tight{border-top:0;padding-top:0}
+  .content > h2{margin-bottom:var(--pp-space-md)}
+  .body{font-size:1.1rem;color:var(--pp-text-soft);max-width:58ch}
+  .body strong{color:var(--pp-text);font-weight:600}
+  .body code{font-size:.86em;white-space:nowrap}
+  /* status dots: umbrella colours, never bramble */
+  .dot{width:9px;height:9px;border-radius:var(--pp-radius-full);flex:none;display:inline-block}
+  .dot.ok{background:var(--pp-healthy)}
+  .dot.err{background:var(--pp-error)}
+  .dot.cau{background:var(--pp-caution)}
 
-.kicker {
-  display: inline-block;
-  font-family: var(--font-code);
-  font-size: 0.72rem;
-  font-weight: 500;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--pp-pleach);
-  margin-bottom: var(--sp-2xs);
-}
+  /* what it refuses */
+  .refuses{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--pp-space-xs) var(--pp-space-lg)}
+  .refuses li{font-family:var(--pp-font-heading);font-size:1.4rem;line-height:1.25}
+  .refuses li{position:relative;padding-left:1.1em}
+  .refuses li::before{content:"*";position:absolute;left:0;top:.08em;font-family:var(--pp-font-heading);color:var(--bed-word)}
 
-/* ── layout ───────────────────────────────────────────────────────────────── */
-.container {
-  width: 100%;
-  max-width: var(--container-max);
-  margin: 0 auto;
-  padding: 0 var(--gutter);
-}
+  /* faces */
+  .faces{list-style:none;margin:0;padding:0}
+  .face{display:grid;grid-template-columns:2rem minmax(0,11rem) minmax(0,1fr);column-gap:var(--pp-space-sm);align-items:baseline;
+    padding-top:var(--pp-space-sm);padding-bottom:var(--pp-space-sm);border-bottom:1px solid var(--pp-border)}
+  .face:first-child{padding-top:0}
+  .face:last-child{border-bottom:0;padding-bottom:0}
+  .face .n{font-family:var(--pp-font-code);font-size:.78rem;color:var(--pp-text-soft)}
+  .face .cmd{font-family:var(--pp-font-code);font-weight:700;font-size:1.02rem}
+  .face .cmd span{font-weight:400;color:var(--pp-text-soft)}
+  .face .what{color:var(--pp-text-soft);max-width:52ch}
 
-/* ── scroll reveal ────────────────────────────────────────────────────────── */
-.reveal {
-  opacity: 0;
-  transform: translateY(30px);
-  transition:
-    opacity var(--dur-unfold) var(--ease-petal),
-    transform var(--dur-unfold) var(--ease-petal);
-}
-.reveal.in { opacity: 1; transform: translateY(0); }
-.reveal.d1 { transition-delay: 0.1s; }
-.reveal.d2 { transition-delay: 0.2s; }
-.reveal.d3 { transition-delay: 0.3s; }
-.reveal.d4 { transition-delay: 0.4s; }
-.reveal.d5 { transition-delay: 0.5s; }
+  /* proof band: forest under the frame's lower edge, the map's own numbers as sign numerals */
+  .proofband{position:relative;z-index:1;background:var(--pp-forest);color:var(--pp-term-text);
+    margin-top:calc(-1 * var(--pp-space-3xl));padding-top:calc(var(--pp-space-3xl) + var(--pp-space-xl));padding-bottom:var(--pp-space-xl)}
+  .proofband .label{color:var(--pp-term-text);opacity:.78}
+  .pb-at{opacity:.7}
+  .figures{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:var(--pp-space-sm) 0 0;border-top:1px solid rgba(243,236,217,.18)}
+  .figures div{display:flex;flex-direction:column-reverse;justify-content:flex-end;gap:var(--pp-space-3xs);
+    padding:var(--pp-space-sm) var(--pp-space-sm) 0;border-left:1px solid rgba(243,236,217,.18)}
+  .figures div:first-child{border-left:0;padding-left:0}
+  .figures dd{margin:0;font-family:var(--pp-font-heading);font-weight:600;font-size:clamp(3rem,6.4vw,5.4rem);line-height:.95;
+    letter-spacing:-.02em;font-variant-numeric:lining-nums tabular-nums}
+  .figures div:nth-child(3) dd{color:var(--pp-term-green)}
+  .figures dt{font-family:var(--pp-font-code);font-size:.68rem;font-weight:500;text-transform:uppercase;letter-spacing:.16em;opacity:.78}
 
-/* ── sticky nav ───────────────────────────────────────────────────────────── */
-.nav {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: rgba(250,245,233,0.92);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--pp-border);
-  transition: background var(--dur-micro), border-color var(--dur-micro);
-}
-[data-theme="dark"] .nav { background: rgba(28,22,16,0.92); }
+  .sec.first{border-top:0}
 
-.nav-inner {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-md);
-  height: 56px;
-}
+  /* signs: a row of tiles, hairline seams */
+  .signs{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+    border:1px solid var(--pp-border);border-radius:var(--pp-radius-md);overflow:hidden}
+  .signs li{background:var(--pp-surface);outline:1px solid var(--pp-border);padding:var(--pp-space-sm);display:flex;flex-direction:column;gap:var(--pp-space-3xs)}
+  .signs b{font-family:var(--pp-font-heading);font-weight:560;font-size:1.45rem;line-height:1.15}
+  .signs li > span:last-child{color:var(--pp-text-soft);font-size:.95rem;line-height:1.45}
+  .sg-n{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--pp-radius-sm);
+    background:var(--bed);color:var(--bed-on);font-family:var(--pp-font-code);font-weight:700;font-size:.82rem;margin-bottom:var(--pp-space-3xs)}
+  .signs.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .states li{border-top:6px solid var(--st)}
+  .st-dot{width:14px;height:14px;border-radius:var(--pp-radius-full);background:var(--st);margin-bottom:var(--pp-space-3xs)}
+  .st-done{--st:var(--pp-healthy)} .st-fail{--st:var(--pp-error)} .st-needs{--st:var(--pp-caution)} .st-open{--st:var(--pp-muted)}
 
-.nav-lockup {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3xs);
-  text-decoration: none;
-  flex-shrink: 0;
-}
-.nav-mark { width: 24px; height: 24px; flex-shrink: 0; }
+  .after{margin-top:var(--pp-space-md);font-family:var(--pp-font-heading);font-style:italic;font-size:1.6rem;line-height:1.2}
 
-.nav-wordmark {
-  font-family: var(--font-heading);
-  font-size: 1.1rem;
-  font-weight: 560;
-  color: var(--pp-text);
-  letter-spacing: -0.01em;
-  text-decoration: none;
-}
-.nav-lockup:hover .nav-wordmark { text-decoration: none; }
+  /* allowances */
+  .allow-list{list-style:none;margin:var(--pp-space-sm) 0 0;padding:0;display:grid;row-gap:var(--pp-space-3xs)}
+  .allow-list li{display:grid;grid-template-columns:minmax(0,17rem) minmax(0,1fr);column-gap:var(--pp-space-sm);align-items:baseline}
+  .allow-list code{font-size:.84rem}
+  .allow-list span{font-size:.95rem;color:var(--pp-text-soft)}
+  .note{margin-top:var(--pp-space-sm)}
 
-.nav-links {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-sm);
-  margin-left: auto;
-  list-style: none;
-}
-.nav-links a {
-  font-family: var(--font-body);
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--pp-text-soft);
-  text-decoration: none;
-  transition: color var(--dur-micro);
-}
-.nav-links a:hover { color: var(--pp-text); text-decoration: none; }
+  /* install */
+  .install .term{margin-top:var(--pp-space-md)}
+  .then{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--pp-space-2xs);margin-top:var(--pp-space-sm);color:var(--pp-text-soft)}
+  .then code{font-size:.9rem}
 
-.nav-pill {
-  font-family: var(--font-code);
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: var(--pp-pleach);
-  background: rgba(151,83,155,0.09);
-  border: 1px solid rgba(151,83,155,0.25);
-  border-radius: var(--r-full);
-  padding: 4px 14px;
-  text-decoration: none;
-  transition: background var(--dur-micro), border-color var(--dur-micro);
-  white-space: nowrap;
-}
-.nav-pill:hover { background: rgba(151,83,155,0.16); text-decoration: none; }
+  /* where it sits: entries in the index style */
+  .sits{list-style:none;margin:0;padding:0;display:grid;row-gap:var(--pp-space-md)}
+  .sit{display:grid;grid-template-columns:44px minmax(0,1fr);column-gap:var(--pp-space-sm);align-items:center;color:var(--pp-text)}
+  .plate{width:44px;height:44px;border-radius:var(--pp-radius-sm);background:var(--bloom);
+    display:flex;align-items:center;justify-content:center;font-family:var(--pp-font-code);font-weight:700;font-size:.95rem;color:var(--on)}
+  .plate.soon{background:transparent;box-shadow:inset 0 0 0 2px var(--bloom);color:var(--pp-text)}
+  .sit b{display:block;font-family:var(--pp-font-heading);font-weight:520;font-size:1.35rem;line-height:1.2;transition:color .18s ease-out}
+  a.sit:hover b{color:var(--pp-primary)}
+  .sit .label{display:block;margin-top:var(--pp-space-4xs)}
 
-.nav-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: transparent;
-  border: 1px solid var(--pp-border);
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  color: var(--pp-text-soft);
-  font-size: 14px;
-  transition: border-color var(--dur-micro), color var(--dur-micro);
-  flex-shrink: 0;
-}
-.nav-toggle:hover { border-color: var(--pp-pleach); color: var(--pp-pleach); }
+  /* ── footer: the garden footer, the family's shared surface (components.md) ── */
+  .gf{background:var(--pp-forest);color:var(--pp-term-text)}
+  .gf-wrap{max-width:var(--pp-container-max);margin:0 auto;padding:var(--pp-space-xl) var(--pp-gutter) var(--pp-space-lg)}
+  .gf a{color:var(--pp-term-green)}
+  .gf a:hover{color:var(--pp-term-text)}
+  .gf h4{font-size:1.05rem;margin:0 0 var(--pp-space-xs)}
+  .gf .wordmark{color:var(--pp-term-text)}
+  .gf .mark{width:28px;height:28px;flex:none}
+  .gf .m-stem{fill:none;stroke:var(--pp-term-green);stroke-width:2;stroke-linecap:round}
+  .gf .m-leaf{fill:var(--pp-term-green)}
+  .gf .m-bloom{fill:var(--pp-marigold)}
+  .gf-plot{display:flex;flex-wrap:wrap;align-items:center;gap:var(--pp-space-2xs) var(--pp-space-md);
+    padding-bottom:var(--pp-space-md);margin-bottom:var(--pp-space-lg);
+    border-bottom:1px solid rgba(243,236,217,.14)}
+  .gf-plotbrand{display:inline-flex;align-items:center;gap:var(--pp-space-3xs)}
+  .gf-plotbrand .wordmark{font-size:1.45rem}
+  .gf-plotline{flex:1;min-width:18ch;opacity:.8;font-size:1rem}
+  .gf-plotlink{font-family:var(--pp-font-code);font-size:.82rem;white-space:nowrap}
+  .gf-grid{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:var(--pp-space-xl)}
+  .gf-soft{margin-top:var(--pp-space-2xs);opacity:.78;font-size:.95rem;max-width:42ch}
+  .gf-garden{display:flex;flex-wrap:wrap;gap:var(--pp-space-3xs)}
+  .gf-garden a,.gf-garden > span{display:inline-flex;align-items:center;gap:var(--pp-space-4xs);
+    font-family:var(--pp-font-code);font-size:.82rem;color:var(--pp-term-text);
+    padding:var(--pp-space-4xs) var(--pp-space-2xs);
+    border-radius:var(--pp-radius-full);background:rgba(243,236,217,.07)}
+  .gf-garden a:hover{background:rgba(243,236,217,.14)}
+  .gf-garden a.is-current{background:color-mix(in srgb,var(--bloom) 18%,transparent)}
+  .gf-dot{width:8px;height:8px;border-radius:var(--pp-radius-full);background:var(--bloom);flex:none}
+  .gf-bottom{margin-top:var(--pp-space-xl);padding-top:var(--pp-space-sm);
+    border-top:1px solid rgba(243,236,217,.14);display:flex;flex-wrap:wrap;
+    gap:var(--pp-space-3xs);justify-content:space-between;
+    font-family:var(--pp-font-code);font-size:.74rem;opacity:.72}
+  .gf :focus-visible{outline-color:var(--pp-term-green)}
 
-/* ── hero ─────────────────────────────────────────────────────────────────── */
-.hero {
-  padding: var(--sp-3xl) 0 var(--sp-2xl);
-  background: linear-gradient(180deg, rgba(151,83,155,0.05) 0%, transparent 480px), var(--pp-bg);
-}
-.hero-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--sp-xl);
-  align-items: center;
-}
-.hero-lead {
-  font-size: var(--text-lead);
-  line-height: 1.5;
-  color: var(--pp-text-soft);
-  max-width: 52ch;
-  margin-top: var(--sp-sm);
-}
-.hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-3xs);
-  margin-top: var(--sp-sm);
-}
-.accent-plum { color: var(--pp-pleach); }
+  /* ── motion: progressive enhancement, gated on .js ── */
+  .js .rise{opacity:0;transform:translateY(20px);transition:opacity .9s var(--pp-ease-petal),transform .9s var(--pp-ease-petal)}
+  .js .hero .rise{transform:translateY(30px);transition:opacity .8s var(--pp-ease-petal),transform .8s var(--pp-ease-petal)}
+  .js .rise.in{opacity:1;transform:none}
+  /* this bed blooms in on the map */
+  @keyframes bloom{from{opacity:0;transform:scale(.6) rotate(-14deg)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion: reduce){
+    html{scroll-behavior:auto}
+    .js .rise{opacity:1!important;transform:none!important;transition:none!important}
+      .inchworm{display:none}
+  }
 
-/* ── buttons ──────────────────────────────────────────────────────────────── */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-body);
-  font-size: var(--text-small);
-  font-weight: 600;
-  border-radius: var(--r-sm);
-  padding: 10px 20px;
-  cursor: pointer;
-  text-decoration: none;
-  border: none;
-  transition: background var(--dur-micro), color var(--dur-micro), transform 80ms;
-}
-.btn:active { transform: translateY(1px); }
+  /* ── breakpoints: the brand's two ── */
+  @media (max-width:880px){
+    html{font-size:17px}
+    .margin,.content,.hero-title,.hero-copy,.hero-term{grid-column:1 / -1}
+    .waysign .wrap{grid-template-columns:1fr 1fr}
+    .way.here{grid-column:1 / -1;grid-row:1;padding-left:0;padding-right:0;
+      border:0;border-bottom:1px solid color-mix(in srgb,var(--bed-on) 30%,transparent)}
+    .sec{row-gap:var(--pp-space-sm)}
+    .figures{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .figures div:nth-child(3){border-left:0;padding-left:0}
+    .signs,.signs.three{grid-template-columns:1fr}
+    .gf-grid{grid-template-columns:1fr;gap:var(--pp-space-lg)}
+  }
+  @media (max-width:520px){
+    html{font-size:16px}
+    .wrap,.gf-wrap{padding-left:var(--pp-space-xs);padding-right:var(--pp-space-xs)}
+    .nav{gap:var(--pp-space-xs)}
+    .nav .lbl,.way .sub{display:none}
+    .way{letter-spacing:.1em}
+      .term pre{padding:var(--pp-space-xs);font-size:.64rem;overflow-wrap:anywhere}
+    .hero-term pre{font-size:.7rem}
+    .refuses{grid-template-columns:1fr}
+    .refuses li{font-size:1.25rem}
+    .face{grid-template-columns:1.5rem minmax(0,1fr);row-gap:var(--pp-space-4xs)}
+    .face .what{grid-column:2}
+    .allow-list li{grid-template-columns:1fr}
+  }
+  /* Protest Riot has one weight and no italic, so every heading-face element uses it as drawn, never faked */
+  html{font-synthesis:none}
+  .hero h1,
+  .big-pn,
+  .figures dd,
+  .hero h1 em,
+  .lf-step,
+  .pains b,
+  .pn,
+  .sig,
+  .signs b,
+  .sit b,
+  .wordmark,
+  h1,
+  h2,
+  h4{font-weight:400!important;font-style:normal!important;font-variation-settings:normal!important;letter-spacing:0!important}
+  /* the script's loops need room between lines */
+  .hero h1{line-height:1.1!important}
+  h2{line-height:1.25!important}
 
-.btn-primary { background: var(--pp-primary); color: var(--pp-bg); }
-.btn-primary:hover { background: var(--pp-primary-deep); color: var(--pp-bg); text-decoration: none; }
-
-.btn-ghost {
-  background: transparent;
-  color: var(--pp-pleach);
-  border: 1.5px solid rgba(151,83,155,0.35);
-}
-.btn-ghost:hover { background: rgba(151,83,155,0.07); text-decoration: none; }
-
-/* ── node-verdict card ────────────────────────────────────────────────────── */
-.verdict-card {
-  background: var(--pp-term-bg);
-  border: 1px solid var(--pp-term-border);
-  border-radius: var(--r-lg);
-  overflow: hidden;
-  box-shadow: var(--shadow-rest);
-  font-family: var(--font-code);
-}
-.verdict-titlebar {
-  background: var(--pp-term-surface);
-  border-bottom: 1px solid var(--pp-term-border);
-  padding: 10px var(--sp-sm);
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3xs);
-}
-.macos-dots { display: flex; gap: 6px; flex-shrink: 0; }
-.macos-dot { width: 12px; height: 12px; border-radius: 50%; }
-.dot-close { background: #BC4126; }
-.dot-min   { background: #B0741C; }
-.dot-max   { background: #46913C; }
-.verdict-title {
-  margin-left: var(--sp-2xs);
-  font-size: 0.8rem;
-  color: var(--pp-term-text);
-  opacity: 0.7;
-  font-weight: 400;
-}
-.verdict-body { padding: var(--sp-sm); }
-
-.gate-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--sp-3xs);
-  padding: 6px 0;
-  border-bottom: 1px solid rgba(64,54,40,0.5);
-  font-size: 0.82rem;
-  color: var(--pp-term-text);
-  line-height: 1.4;
-}
-.gate-row:last-of-type { border-bottom: none; }
-.gate-check { color: var(--pp-term-green); font-weight: 700; flex-shrink: 0; margin-top: 1px; }
-
-.verdict-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: var(--sp-sm);
-  padding-top: var(--sp-sm);
-  border-top: 1px solid rgba(64,54,40,0.5);
-}
-.verified-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(151,83,155,0.2);
-  color: #97539B;
-  border: 1px solid rgba(151,83,155,0.35);
-  border-radius: var(--r-full);
-  padding: 3px 12px;
-  font-size: 0.76rem;
-  font-weight: 500;
-  font-family: var(--font-code);
-}
-.verified-dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: var(--pp-pleach);
-  flex-shrink: 0;
-}
-.verdict-sha {
-  font-size: 0.76rem;
-  color: var(--pp-term-text);
-  opacity: 0.5;
-}
-.verdict-tagline {
-  font-size: 0.72rem;
-  color: var(--pp-term-text);
-  opacity: 0.35;
-  margin-top: var(--sp-3xs);
-  text-align: right;
-  font-style: italic;
-  font-family: var(--font-body);
-}
-
-/* ── section ──────────────────────────────────────────────────────────────── */
-.section { padding: var(--sp-2xl) 0; }
-.section-band { background: var(--pp-bg-band); }
-.section-head { max-width: 62ch; margin-bottom: var(--sp-md); }
-.section-lede {
-  font-size: var(--text-lead);
-  color: var(--pp-text-soft);
-  line-height: 1.5;
-  max-width: 58ch;
-  margin-top: var(--sp-3xs);
-}
-
-/* ── problem cols ─────────────────────────────────────────────────────────── */
-.problem-cols {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--sp-sm);
-  margin-top: var(--sp-md);
-}
-.problem-col {
-  background: var(--pp-surface);
-  border: 1px solid var(--pp-border);
-  border-radius: var(--r-lg);
-  padding: var(--sp-sm);
-}
-.col-bad  { border-color: rgba(188,65,38,0.3); }
-.col-good { border-color: rgba(70,145,60,0.3); }
-
-.problem-col-label {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3xs);
-  font-family: var(--font-code);
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  margin-bottom: var(--sp-2xs);
-}
-.col-bad  .problem-col-label { color: var(--pp-error); }
-.col-good .problem-col-label { color: var(--pp-healthy); }
-.problem-col p { font-size: var(--text-small); color: var(--pp-text-soft); line-height: 1.6; }
-
-/* ── loop beats ───────────────────────────────────────────────────────────── */
-.loop-beats {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2xs);
-  margin-top: var(--sp-md);
-}
-.loop-beat {
-  display: grid;
-  grid-template-columns: 44px 1fr;
-  gap: var(--sp-sm);
-  align-items: start;
-  padding: var(--sp-sm);
-  background: var(--pp-surface);
-  border: 1px solid var(--pp-border);
-  border-radius: var(--r-lg);
-  transition: border-color var(--dur-micro), box-shadow var(--dur-micro);
-}
-.loop-beat:hover { border-color: rgba(151,83,155,0.3); box-shadow: var(--shadow-lift); }
-
-.beat-num {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px; height: 36px;
-  border-radius: 50%;
-  background: rgba(151,83,155,0.12);
-  color: var(--pp-pleach);
-  font-family: var(--font-code);
-  font-size: 0.85rem;
-  font-weight: 700;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.beat-title {
-  font-family: var(--font-code);
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--pp-pleach);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: var(--sp-4xs);
-}
-.beat-desc { font-size: var(--text-small); color: var(--pp-text); line-height: 1.55; }
-.beat-cmd {
-  display: inline-block;
-  font-family: var(--font-code);
-  font-size: 0.75rem;
-  color: var(--pp-term-green);
-  background: var(--pp-term-bg);
-  border: 1px solid var(--pp-term-border);
-  border-radius: var(--r-sm);
-  padding: 3px 10px;
-  margin-top: var(--sp-2xs);
-}
-
-/* ── gates ────────────────────────────────────────────────────────────────── */
-.gates-layout {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--sp-xl);
-  align-items: start;
-  margin-top: var(--sp-md);
-}
-.gates-prose p {
-  font-size: var(--text-small);
-  color: var(--pp-text-soft);
-  line-height: 1.6;
-  margin-bottom: var(--sp-3xs);
-}
-.gates-prose strong { color: var(--pp-text); font-weight: 600; }
-
-.audit-note {
-  background: var(--pp-surface);
-  border: 1px solid var(--pp-border);
-  border-left: 3px solid var(--pp-pleach);
-  border-radius: 0 var(--r-md) var(--r-md) 0;
-  padding: var(--sp-2xs) var(--sp-sm);
-  margin-top: var(--sp-sm);
-  font-size: var(--text-small);
-  color: var(--pp-text-soft);
-  line-height: 1.6;
-}
-.audit-note strong { color: var(--pp-text); font-weight: 600; }
-
-.dag-wrap {
-  background: var(--pp-surface);
-  border: 1px solid var(--pp-border);
-  border-radius: var(--r-lg);
-  padding: var(--sp-sm);
-  box-shadow: var(--shadow-lift);
-}
-.dag-caption {
-  font-family: var(--font-code);
-  font-size: 0.68rem;
-  color: var(--pp-text-soft);
-  text-align: center;
-  margin-top: var(--sp-4xs);
-  opacity: 0.75;
-}
-.dag-node { cursor: pointer; }
-.dag-edge { transition: stroke var(--dur-micro), stroke-opacity var(--dur-micro); }
-.dag-edge.hl { stroke: #97539B !important; stroke-opacity: 0.9 !important; }
-
-/* ── stats ────────────────────────────────────────────────────────────────── */
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: var(--sp-sm);
-  margin-top: var(--sp-md);
-}
-.stat-card {
-  background: var(--pp-surface);
-  border: 1px solid var(--pp-border);
-  border-radius: var(--r-lg);
-  padding: var(--sp-sm) var(--sp-xs);
-  text-align: center;
-}
-.stat-num {
-  display: block;
-  font-family: var(--font-heading);
-  font-size: var(--text-stat);
-  font-weight: 700;
-  line-height: 1.0;
-  color: var(--pp-pleach);
-  font-variation-settings: 'SOFT' 0;
-}
-.stat-label {
-  display: block;
-  font-family: var(--font-code);
-  font-size: 0.68rem;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--pp-text-soft);
-  margin-top: var(--sp-4xs);
-}
-.proof-note {
-  margin-top: var(--sp-sm);
-  font-size: var(--text-small);
-  color: var(--pp-text-soft);
-  max-width: 70ch;
-  line-height: 1.6;
-}
-
-/* ── honest scope ─────────────────────────────────────────────────────────── */
-.scope-cols {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--sp-sm);
-  margin-top: var(--sp-md);
-}
-.scope-col {
-  background: var(--pp-surface);
-  border: 1px solid var(--pp-border);
-  border-radius: var(--r-lg);
-  padding: var(--sp-sm);
-}
-.scope-col-title {
-  font-family: var(--font-code);
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  margin-bottom: var(--sp-2xs);
-}
-.scope-for .scope-col-title { color: var(--pp-healthy); }
-.scope-not .scope-col-title { color: var(--pp-error); }
-
-.scope-list { list-style: none; display: flex; flex-direction: column; gap: var(--sp-4xs); }
-.scope-list li {
-  display: flex;
-  gap: var(--sp-3xs);
-  font-size: var(--text-small);
-  color: var(--pp-text-soft);
-  line-height: 1.5;
-}
-.scope-list li::before { flex-shrink: 0; width: 16px; font-family: var(--font-code); font-size: 0.8rem; }
-.scope-for .scope-list li::before { content: "✓"; color: var(--pp-healthy); }
-.scope-not .scope-list li::before { content: "—"; color: var(--pp-error); }
-
-/* ── start band ───────────────────────────────────────────────────────────── */
-.start-band {
-  background: var(--pp-pleach);
-  padding: var(--sp-2xl) 0;
-}
-.start-band .kicker {
-  color: rgba(250,245,233,0.65);
-  display: inline-block;
-  font-family: var(--font-code);
-  font-size: 0.72rem;
-  font-weight: 500;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  margin-bottom: var(--sp-2xs);
-}
-.start-band h2 { color: #FAF5E9; }
-.start-band .section-lede { color: rgba(250,245,233,0.72); }
-
-.cmd-block {
-  background: rgba(0,0,0,0.28);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: var(--r-md);
-  padding: var(--sp-sm);
-  margin: var(--sp-sm) 0;
-  max-width: 44ch;
-}
-.cmd-line {
-  font-family: var(--font-code);
-  font-size: 0.88rem;
-  color: #FAF5E9;
-  line-height: 1.9;
-}
-.cmd-line::before { content: "$ "; opacity: 0.45; }
-
-.start-family {
-  font-size: var(--text-small);
-  color: rgba(250,245,233,0.6);
-  margin-top: var(--sp-sm);
-  max-width: 60ch;
-  font-style: italic;
-  line-height: 1.6;
-}
-.start-actions { display: flex; gap: var(--sp-3xs); flex-wrap: wrap; margin-top: var(--sp-sm); }
-
-.btn-cream {
-  background: rgba(250,245,233,0.12);
-  color: #FAF5E9;
-  border: 1.5px solid rgba(250,245,233,0.35);
-}
-.btn-cream:hover { background: rgba(250,245,233,0.22); color: #FAF5E9; text-decoration: none; }
-
-.start-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-3xs);
-  margin-top: var(--sp-md);
-  font-family: var(--font-code);
-  font-size: 0.68rem;
-  color: rgba(250,245,233,0.45);
-  border: 1px solid rgba(250,245,233,0.18);
-  border-radius: var(--r-full);
-  padding: 4px 12px;
-}
-
-/* ── footer / the garden ──────────────────────────────────────────────────── */
-.footer { background: var(--pp-forest); color: var(--pp-term-text); padding: var(--sp-2xl) 0 var(--sp-lg); }
-.footer a { color: var(--pp-term-green); text-decoration: none; transition: color var(--dur-micro); }
-.footer a:hover { color: var(--pp-bg); }
-.footer h4 {
-  color: var(--pp-bg);
-  font-family: var(--font-heading);
-  font-size: var(--text-h4);
-  margin-bottom: var(--sp-xs);
-}
-.gf-plot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 32px; padding-bottom: 28px; margin-bottom: 40px; border-bottom: 1px solid rgba(250,245,233,0.12); }
-.gf-plotbrand { display: inline-flex; align-items: center; gap: 10px; }
-.gf-plotword { font-family: var(--font-heading); font-weight: 600; font-size: 1.45rem; letter-spacing: -0.01em; color: var(--pp-bg); }
-.gf-plotmark { width: 28px; height: 28px; flex: none; }
-.ppm-stem { fill: none; stroke: var(--pp-term-green); stroke-width: 2; stroke-linecap: round; }
-.ppm-leaf { fill: var(--pp-term-green); }
-.ppm-bloom { fill: #E89227; }
-.gf-plotline { margin: 0; flex: 1; min-width: 18ch; color: rgba(250,245,233,0.62); font-size: 1rem; }
-.gf-plotlink { font-family: var(--font-code); font-size: 0.85rem; white-space: nowrap; }
-.foot-grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: var(--sp-lg); }
-.foot-soft { color: rgba(250,245,233,0.62); font-size: var(--text-small); line-height: 1.6; }
-.garden { display: flex; flex-wrap: wrap; gap: var(--sp-2xs); margin-top: var(--sp-4xs); }
-.garden a {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-3xs);
-  font-family: var(--font-code);
-  font-size: var(--text-small);
-  padding: var(--sp-3xs) var(--sp-2xs);
-  border-radius: var(--r-full);
-  background: rgba(250,245,233,0.06);
-  color: var(--pp-term-text);
-}
-.garden a:hover { background: rgba(250,245,233,0.12); color: var(--pp-bg); }
-.garden a.is-self { background: rgba(151,83,155,0.20); }
-/* A bed that exists but is not published yet: same chip, no link to a 404. */
-.garden .soon {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-3xs);
-  font-family: var(--font-code);
-  font-size: var(--text-small);
-  padding: var(--sp-3xs) var(--sp-2xs);
-  border-radius: var(--r-full);
-  background: rgba(250,245,233,0.03);
-  color: rgba(250,245,233,0.45);
-}
-.garden .soon .dot { opacity: 0.45; }
-.garden .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.foot-bottom {
-  margin-top: var(--sp-xl);
-  padding-top: var(--sp-sm);
-  border-top: 1px solid rgba(250,245,233,0.12);
-  display: flex;
-  justify-content: space-between;
-  gap: var(--sp-xs);
-  flex-wrap: wrap;
-  color: rgba(250,245,233,0.62);
-  font-size: var(--text-small);
-}
-@media (max-width: 880px) { .foot-grid { grid-template-columns: 1fr; gap: var(--sp-md); } }
-
-/* ── responsive ───────────────────────────────────────────────────────────── */
-@media (max-width: 880px) {
-  html { font-size: 17px; }
-  :root { --text-h2: 2rem; --text-h3: 1.4rem; }
-  .hero-grid { grid-template-columns: 1fr; }
-  .problem-cols { grid-template-columns: 1fr; }
-  .gates-layout { grid-template-columns: 1fr; }
-  .scope-cols { grid-template-columns: 1fr; }
-  .stats-row { grid-template-columns: repeat(3, 1fr); }
-  .nav-links { display: none; }
-}
-
-@media (max-width: 520px) {
-  html { font-size: 16px; }
-  :root { --gutter: 20px; }
-  .stats-row { grid-template-columns: repeat(2, 1fr); }
-  .hero { padding: var(--sp-xl) 0 var(--sp-lg); }
-  .section { padding: var(--sp-xl) 0; }
-}
+  /* under construction (components.md): a ribbon across the hero's top-right corner on a bed page
+     whose product is planted but not yet shipping. hazard tape in sunlight and soil; it scrolls
+     with the page and takes no clicks; the hero copy stops short of it */
+  .wip{position:absolute;top:0;right:0;width:240px;height:240px;overflow:hidden;z-index:30;pointer-events:none}
+  .wip span{position:absolute;top:68px;right:-74px;width:340px;transform:rotate(45deg);
+    display:flex;align-items:center;justify-content:center;
+    padding:var(--pp-space-3xs) 0;background:var(--pp-accent);color:var(--pp-term-bg);
+    font-family:var(--pp-font-code);font-size:.64rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;
+    box-shadow:var(--pp-shadow-lift)}
+  .wip span::before,.wip span::after{content:"";position:absolute;left:0;right:0;height:6px;
+    background:repeating-linear-gradient(-45deg,var(--pp-term-bg) 0 6px,var(--pp-accent) 6px 12px)}
+  .wip span::before{top:-6px}
+  .wip span::after{bottom:-6px}
+  .hero:has(.wip) .hero-copy{padding-right:clamp(0px,calc(190px - max(var(--pp-gutter),(100vw - var(--pp-container-max)) / 2 + var(--pp-gutter))),160px)}
+  @media (max-width:880px){
+    .hero:has(.wip) .hero-copy{padding-right:0}
+    .wip{position:relative;width:auto;height:auto;overflow:visible}
+    .wip span{position:relative;top:auto;right:auto;width:auto;transform:none;margin:6px 0;padding:var(--pp-space-4xs) 0;font-size:.6rem}
+  }
 </style>
 </head>
-<body>
+<body id="top">
 
-<!-- ═══ sticky nav ═══════════════════════════════════════════════════════════ -->
-<nav class="nav" aria-label="Main navigation">
-  <div class="container">
-    <div class="nav-inner">
+<!-- pictogram sprite: same stroke and grid as the landing page -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="g-no" viewBox="0 0 24 24"><g class="glyph"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></g></symbol>
+  <symbol id="g-map" viewBox="0 0 24 24"><g class="glyph"><path d="M3 6.5 9 4.5l6 2 6-2v13l-6 2-6-2-6 2z"/><path d="M9 4.5v13M15 6.5v13"/></g></symbol>
+  <symbol id="g-gate" viewBox="0 0 24 24"><g class="glyph"><path d="M4 3v18M20 3v18M4 7.5h16M4 16.5h16M4 16.5 20 7.5"/></g></symbol>
+  <symbol id="g-commit" viewBox="0 0 24 24"><g class="glyph"><circle cx="12" cy="12" r="3.5"/><path d="M2.5 12h6M15.5 12h6"/></g></symbol>
+  <symbol id="g-pr" viewBox="0 0 24 24"><g class="glyph"><circle cx="6" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="19" r="2.2"/><path d="M6 7.2v9.6M18 16.8V10a3 3 0 0 0-3-3h-4"/><path d="M13 4.5 10.5 7l2.5 2.5"/></g></symbol>
+</svg>
 
-      <a class="nav-lockup" href="#" aria-label="pleach home">
-        <!-- exact SVG from .brand/products/pleach/assets/logo.svg -->
-        <svg class="nav-mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round" role="img" aria-hidden="true">
-          <path d="M6.5 22 C6.5 17 16 15 12 10 C9 7.4 12 6.6 12 6" stroke="#4A9E3F" stroke-width="2.2"/>
-          <path d="M17.5 22 C17.5 17 8 15 12 10 C15 7.4 12 6.6 12 6" stroke="#97539B" stroke-width="2.2"/>
-          <path d="M12 6 V2" stroke="#97539B" stroke-width="2.6"/>
-        </svg>
-        <span class="nav-wordmark">pleach</span>
-      </a>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="pleach home">
+      <svg class="wmark" viewBox="0 0 24 24" aria-hidden="true">
+        <rect class="w-tile" width="24" height="24" rx="5.5"/>
+        <g transform="translate(3.36 3.36) scale(0.72)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path class="w-ink" stroke-width="2" d="M6 22 C6 17.2 18 16.4 12 10.6"/>
+          <path class="w-ink" stroke-width="2" d="M18 22 C18 17.2 6 16.4 12 10.6"/>
+          <path class="w-ink-fill" d="M12 11.4 C9.8 9.4 9.6 5.8 12 2.4 C14.4 5.8 14.2 9.4 12 11.4 Z"/>
+        </g>
+      </svg>
+      <span class="wordmark">pleach</span>
+    </a>
+    <nav class="nav" aria-label="page">
+      <a href="#why" class="lbl">why</a>
+      <a href="#how" class="lbl">gates</a>
+      <a href="#install" class="lbl">install</a>
+      <a href="https://github.com/jahala/pleach">source ↗</a>
+      <button class="toggle" id="theme" type="button" aria-label="Toggle soil-night">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21 13.2A9 9 0 1 1 10.8 3 7 7 0 0 0 21 13.2z"/></svg>
+      </button>
+    </nav>
+  </div>
+  <!-- inchworm: a looper walking the header line. static worm without JS; hidden under reduced motion -->
+  <div class="inchworm" aria-hidden="true">
+    <svg fill="none">
+      <path class="iw-body" d="M22 37.5 C23.5 16, 42.5 16, 44 37.5"/>
+      <path class="iw-rings" d="M22 37.5 C23.5 16, 42.5 16, 44 37.5"/>
+      <circle class="iw-head" cx="45.5" cy="36" r="3.4"/>
+      <circle class="iw-eye" cx="46.8" cy="35" r="1"/>
+    </svg>
+  </div>
+</header>
 
-      <ul class="nav-links" role="list">
-        <li><a href="#why">why</a></li>
-        <li><a href="#loop">the loop</a></li>
-        <li><a href="#gates">gates</a></li>
-        <li><a href="#proof">proof</a></li>
-        <li><a href="#start">start</a></li>
-      </ul>
-
-      <a class="nav-pill" href="docs/tend2/pleach.tend2.html">see the garden</a>
-
-      <button class="nav-toggle" id="theme-toggle" aria-label="Switch to dark mode" title="Toggle dark mode">☽</button>
-
-    </div>
+<nav class="waysign" aria-label="where pleach sits in the garden">
+  <div class="wrap">
+    <a class="way back" href="https://plotplot.ai"><span class="big" aria-hidden="true">←</span><b class="pn">plotplot</b> <span class="sub"><span class="sep">·</span> the garden</span></a>
+    <span class="way here" aria-current="page">C build <span class="sep">/</span> <span class="w-plate">07</span><b class="pn big-pn">pleach</b></span>
+    <a class="way next" href="https://jahala.github.io/umbel/">08 <b class="pn">umbel</b> <span class="sub"><span class="sep">·</span> fan out agent CLIs</span><span class="big" aria-hidden="true">→</span></a>
   </div>
 </nav>
 
-<!-- ═══ hero ═════════════════════════════════════════════════════════════════ -->
-<section class="hero" aria-labelledby="hero-heading">
-  <div class="container">
-    <div class="hero-grid">
-
-      <div>
-        <p class="kicker reveal">the deterministic conductor for verified agent work</p>
-        <h1 id="hero-heading" class="reveal d1">
-          agents produce;<br>
-          <span class="accent-plum">code decides.</span>
-        </h1>
-        <p class="hero-lead reveal d2">
-          pleach takes a plan, a DAG of agent tasks. It runs each one in its own git worktree and
-          publishes a <code>node/&lt;id&gt;</code> branch only for work that mechanically cleared its
-          gates. So a swarm of agents can build unattended without garbage reaching the trunk.
-        </p>
-        <div class="hero-actions reveal d3">
-          <a class="btn btn-primary" href="https://github.com/jahala/pleach" target="_blank" rel="noopener">read the README</a>
-          <a class="btn btn-ghost" href="docs/tend2/pleach.tend2.html">see it prove itself →</a>
+<main>
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap">
+      <div class="hero-grid g12">
+        <div class="hero-title rise">
+          <h1 id="hero-title">Only verified work <em>lands</em>.</h1>
         </div>
-      </div>
 
-      <!-- node-verdict card: a real HTML replica, not an image -->
-      <div class="reveal d4" aria-label="Example: verified node verdict for node/checkout-api">
-        <div class="verdict-card">
-          <div class="verdict-titlebar">
-            <div class="macos-dots" aria-hidden="true">
-              <span class="macos-dot dot-close"></span>
-              <span class="macos-dot dot-min"></span>
-              <span class="macos-dot dot-max"></span>
-            </div>
-            <span class="verdict-title">node/checkout-api</span>
-          </div>
-          <div class="verdict-body">
-            <div class="gate-row" style="color:var(--pp-text-soft)">
-              <span aria-hidden="true" style="opacity:.55">▸</span>
-              <span>worker <strong>claude</strong> built this node</span>
-            </div>
-            <div class="gate-row">
-              <span class="gate-check" aria-hidden="true">✓</span>
-              <span>setup: worktree from verified deps</span>
-            </div>
-            <div class="gate-row">
-              <span class="gate-check" aria-hidden="true">✓</span>
-              <span>conflict-markers clean</span>
-            </div>
-            <div class="gate-row">
-              <span class="gate-check" aria-hidden="true">✓</span>
-              <span>smoke: bun test passed (12 assertions)</span>
-            </div>
-            <div class="gate-row">
-              <span class="gate-check" aria-hidden="true">✓</span>
-              <span>cross-provider audit (codex): independent pass</span>
-            </div>
-            <div class="verdict-footer">
-              <span class="verified-pill">
-                <span class="verified-dot" aria-hidden="true"></span>
-                verified
-              </span>
-              <span class="verdict-sha" aria-label="commit sha">a1b2c3…</span>
-            </div>
-            <p class="verdict-tagline">agents produce; code decides.</p>
+        <div class="hero-copy rise">
+          <p class="sig">agents produce; code decides.</p>
+          <p class="lede"><strong>pleach is a conductor for a plan of agent work.</strong> The plan is a graph of nodes. pleach builds each node in its own git worktree, on the verified branches of the nodes it needs, then runs the gates: a conflict-marker scan, the node's own test, and an audit by a model from another vendor. Only a node that clears them all gets a <code>node/&lt;id&gt;</code> branch, and only those branches land.</p>
+          <div class="cta">
+            <a class="btn sun" href="#install">Install pleach <span class="arrow" aria-hidden="true">↓</span></a>
+            <a class="btn ghost" href="https://github.com/jahala/pleach">View source <span class="arrow" aria-hidden="true">↗</span></a>
           </div>
         </div>
-      </div>
 
-    </div>
-  </div>
-</section>
-
-<!-- ═══ the problem ═══════════════════════════════════════════════════════════ -->
-<section class="section section-band" id="why" aria-labelledby="why-heading">
-  <div class="container">
-    <div class="section-head reveal">
-      <p class="kicker">why pleach</p>
-      <h2 id="why-heading">you can't trust an agent's "done"</h2>
-      <p class="section-lede">
-        An agent grades its own work green. Reviewing every diff defeats the point of delegating.
-        The only honest answer is mechanically enforced gates, run by code the agent did not write.
-      </p>
-    </div>
-
-    <div class="problem-cols">
-      <div class="problem-col col-bad reveal d1" role="region" aria-label="Without pleach">
-        <div class="problem-col-label">
-          <span aria-hidden="true">✗</span>
-          without pleach
-        </div>
-        <p>
-          A node agent declares its work done. Its branch is merged by downstream nodes.
-          A broken implementation propagates down the DAG: wrong logic, unchecked conflict
-          markers, a red smoke suite the agent quietly ignored. By the time anyone notices,
-          3 dependent nodes have built on top of garbage.
-        </p>
-      </div>
-      <div class="problem-col col-good reveal d2" role="region" aria-label="With pleach">
-        <div class="problem-col-label">
-          <span aria-hidden="true">✓</span>
-          with pleach
-        </div>
-        <p>
-          Gates run before any branch is published. A node that fails conflict-marker scan,
-          smoke, or cross-provider audit is quarantined: no branch, no dependents built on it.
-          Only verified work reaches the next layer of the DAG.
-          Garbage stays isolated at the point of production.
-        </p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══ the loop ══════════════════════════════════════════════════════════════ -->
-<section class="section" id="loop" aria-labelledby="loop-heading">
-  <div class="container">
-    <div class="section-head reveal">
-      <p class="kicker">the loop, walked</p>
-      <h2 id="loop-heading">5 deterministic beats per node</h2>
-      <p class="section-lede">
-        Every node in the plan passes through the same fixed ladder. The agent touches only beat 2, and everything else is code.
-      </p>
-    </div>
-
-    <div class="loop-beats" role="list" aria-label="The 5 loop beats">
-
-      <div class="loop-beat reveal d1" role="listitem">
-        <div class="beat-num" aria-hidden="true">1</div>
-        <div>
-          <div class="beat-title">isolate</div>
-          <p class="beat-desc">
-            A detached git worktree is created from the verified branches of every upstream dependency.
-            The agent starts from a clean, merged baseline, never from trunk directly.
-          </p>
-          <span class="beat-cmd" aria-label="git worktree example">git worktree add --detach node/&lt;id&gt;</span>
-        </div>
-      </div>
-
-      <div class="loop-beat reveal d2" role="listitem">
-        <div class="beat-num" aria-hidden="true">2</div>
-        <div>
-          <div class="beat-title">work</div>
-          <p class="beat-desc">
-            The configured runner drives the worker inside the worktree: one unit of agent work, isolated, observable.
-            This is the only beat the agent controls. Two runners ship in the box: umbel drives interactive agent CLIs in tmux;
-            direct-cli needs only the claude and codex CLIs on PATH. A <code>pleach.config.ts</code> swaps in any other.
-          </p>
-          <span class="beat-cmd" aria-label="runner flag example">pleach run plan.json --runner direct-cli</span>
-        </div>
-      </div>
-
-      <div class="loop-beat reveal d3" role="listitem">
-        <div class="beat-num" aria-hidden="true">3</div>
-        <div>
-          <div class="beat-title">gates</div>
-          <p class="beat-desc">
-            Conflict-marker scan catches unresolved merges. Smoke runs the node's declared test command.
-            Cross-provider audit re-runs the plan's check command in a fresh session from a different vendor.
-            If claude built the node, codex audits, so no model grades its own work.
-          </p>
-        </div>
-      </div>
-
-      <div class="loop-beat reveal d4" role="listitem">
-        <div class="beat-num" aria-hidden="true">4</div>
-        <div>
-          <div class="beat-title">commit before emit</div>
-          <p class="beat-desc">
-            The <code>node/&lt;id&gt;</code> branch is written to git before the ledger is notified.
-            The source of truth is the git object store, not an API response that could fail mid-flight.
-          </p>
-        </div>
-      </div>
-
-      <div class="loop-beat reveal d5" role="listitem">
-        <div class="beat-num" aria-hidden="true">5</div>
-        <div>
-          <div class="beat-title">publish</div>
-          <p class="beat-desc">
-            Only verified nodes publish a <code>node/&lt;id&gt;</code> branch.
-            Dependents build from that branch, and <code>pleach land</code> merges the verified
-            result onto your working branch. A failed node publishes no node branch. Its final
-            tree is kept on <code>quarantine/&lt;id&gt;</code> as evidence, and its dependents are
-            skipped, not built on a bad base.
-          </p>
-        </div>
-      </div>
-
-    </div>
-  </div>
-</section>
-
-<!-- ═══ gates ════════════════════════════════════════════════════════════════ -->
-<section class="section section-band" id="gates" aria-labelledby="gates-heading">
-  <div class="container">
-    <div class="section-head reveal">
-      <p class="kicker">gates</p>
-      <h2 id="gates-heading">no model grades its own work</h2>
-    </div>
-
-    <div class="gates-layout">
-
-      <div class="gates-prose reveal d1">
-        <p>3 gates run in order. Each must pass before the next begins.</p>
-
-        <p>
-          <strong>Conflict-marker scan.</strong> A literal string search for <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>
-          in every tracked file. No parse, no heuristic. A marker present means the node is quarantined immediately.
-        </p>
-
-        <p>
-          <strong>Smoke.</strong> The node's declared test command runs inside the worktree.
-          The test suite the agent itself wrote must pass.
-          A red suite means the node never had a credible claim to done in the first place.
-        </p>
-
-        <p>
-          <strong>Cross-provider audit.</strong> An agent from a different vendor re-runs the
-          plan's check command in a fresh session and relays its machine-parsed verdict.
-          If claude built the node, codex audits. The auditor executes; it does not opine:
-          and pleach refuses to run a gate the builder edited, so a node cannot rewrite its
-          own audit. This is the gate that makes the others honest.
-        </p>
-
-        <div class="audit-note">
-          <strong>Quarantine.</strong>
-          A failed node publishes no node branch. Its final tree is kept on
-          <code>quarantine/&lt;id&gt;</code> so the evidence survives. Its dependents are skipped,
-          they are not built on a bad base, and they are not marked failed either. They wait
-          until the upstream is resolved.
-        </div>
-      </div>
-
-      <!-- inline SVG DAG -->
-      <div class="reveal d2">
-        <div class="dag-wrap">
-          <svg
-            id="dag-svg"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 320 346"
-            width="100%"
-            aria-label="DAG: root node leads to node/alpha (verified) and node/beta (quarantined). node/gamma builds from alpha. node/delta is skipped because beta was quarantined."
-            role="img"
-          >
-            <!-- edges — behind nodes -->
-            <line class="dag-edge" id="e-rv" x1="160" y1="69" x2="90"  y2="172" stroke="#E2D8C0" stroke-width="2" stroke-opacity="0.7"/>
-            <line class="dag-edge" id="e-rf" x1="160" y1="69" x2="230" y2="172" stroke="#E2D8C0" stroke-width="2" stroke-opacity="0.7"/>
-            <line class="dag-edge" id="e-vd" x1="90"  y1="213" x2="90"  y2="275" stroke="#E2D8C0" stroke-width="2" stroke-opacity="0.7"/>
-            <line class="dag-edge" id="e-fs" x1="230" y1="213" x2="230" y2="275" stroke="#E2D8C0" stroke-width="1.5" stroke-opacity="0.35" stroke-dasharray="5,4"/>
-
-            <!-- root -->
-            <g class="dag-node" data-edges="e-rv,e-rf" tabindex="0" aria-label="root: plan entry node">
-              <rect x="116" y="28" width="88" height="42" rx="8" fill="#F5EEDD" stroke="#E2D8C0" stroke-width="1.5"/>
-              <text x="160" y="46" font-family="'JetBrains Mono',monospace" font-size="10" fill="#3A2718" text-anchor="middle" font-weight="500">plan</text>
-              <text x="160" y="61" font-family="'JetBrains Mono',monospace" font-size="8.5" fill="#786148" text-anchor="middle">entry</text>
-            </g>
-
-            <!-- verified node/alpha -->
-            <g class="dag-node" data-edges="e-rv,e-vd" tabindex="0" aria-label="node/alpha: verified">
-              <rect x="46" y="172" width="88" height="42" rx="8" fill="rgba(151,83,155,0.1)" stroke="#97539B" stroke-width="1.5"/>
-              <text x="90" y="189" font-family="'JetBrains Mono',monospace" font-size="9" fill="#97539B" text-anchor="middle">node/alpha</text>
-              <text x="90" y="205" font-family="'JetBrains Mono',monospace" font-size="8.5" fill="#46913C" font-weight="700" text-anchor="middle">● verified</text>
-            </g>
-
-            <!-- failed node/beta -->
-            <g class="dag-node" data-edges="e-rf,e-fs" tabindex="0" aria-label="node/beta: quarantined">
-              <rect x="186" y="172" width="88" height="42" rx="8" fill="rgba(188,65,38,0.07)" stroke="#BC4126" stroke-width="1.5"/>
-              <text x="230" y="189" font-family="'JetBrains Mono',monospace" font-size="9" fill="#BC4126" text-anchor="middle">node/beta</text>
-              <text x="230" y="205" font-family="'JetBrains Mono',monospace" font-size="8.5" fill="#BC4126" font-weight="700" text-anchor="middle">✗ quarantined</text>
-            </g>
-
-            <!-- node/gamma: builds from alpha -->
-            <g class="dag-node" data-edges="e-vd" tabindex="0" aria-label="node/gamma: builds from verified node/alpha">
-              <rect x="46" y="275" width="88" height="42" rx="8" fill="rgba(70,145,60,0.07)" stroke="#46913C" stroke-width="1.5"/>
-              <text x="90" y="292" font-family="'JetBrains Mono',monospace" font-size="9" fill="#46913C" text-anchor="middle">node/gamma</text>
-              <text x="90" y="308" font-family="'JetBrains Mono',monospace" font-size="8.5" fill="#46913C" text-anchor="middle">builds from alpha</text>
-            </g>
-
-            <!-- node/delta: skipped -->
-            <g class="dag-node" data-edges="e-fs" tabindex="0" aria-label="node/delta: skipped because node/beta was quarantined">
-              <rect x="186" y="275" width="88" height="42" rx="8" fill="rgba(154,140,114,0.07)" stroke="#9A8C72" stroke-width="1.5" stroke-dasharray="5,3"/>
-              <text x="230" y="292" font-family="'JetBrains Mono',monospace" font-size="9" fill="#9A8C72" text-anchor="middle">node/delta</text>
-              <text x="230" y="308" font-family="'JetBrains Mono',monospace" font-size="8.5" fill="#9A8C72" text-anchor="middle">skipped</text>
-            </g>
-          </svg>
-          <p class="dag-caption">hover or focus a node to highlight its dependency edges</p>
-        </div>
-      </div>
-
-    </div>
-  </div>
-</section>
-
-<!-- ═══ built with itself ═════════════════════════════════════════════════════ -->
-<section class="section" id="proof" aria-labelledby="proof-heading">
-  <div class="container">
-    <div class="section-head reveal">
-      <p class="kicker">built with itself</p>
-      <h2 id="proof-heading">pleach is tracked in its own tend2 garden</h2>
-      <p class="section-lede">
-        The same gates that decide what lands in any other project decided what landed in pleach.
-        The garden is real; the numbers are current.
-      </p>
-    </div>
-
-    <!-- Recompute before editing these; a stale number here is a lie on the front page.
-         loops    ls docs/tend2/*.tend2.html | grep -v pleach.tend2 | wc -l
-         verified loops whose checks are all [x]
-         checks   grep -hcE '^- \[[ x]\] \(' docs/tend2/*.tend2.html | paste -sd+ | bc
-         tests    bun test  (passing count)
-         Last recomputed 2026-11-05. -->
-    <div class="stats-row" aria-label="Project statistics">
-      <div class="stat-card reveal d1">
-        <span class="stat-num" data-target="31" aria-label="31 loops">0</span>
-        <span class="stat-label">loops</span>
-      </div>
-      <div class="stat-card reveal d2">
-        <span class="stat-num" data-target="24" aria-label="24 fully verified">0</span>
-        <span class="stat-label">fully verified</span>
-      </div>
-      <div class="stat-card reveal d3">
-        <span class="stat-num" data-target="197" aria-label="197 checks">0</span>
-        <span class="stat-label">checks</span>
-      </div>
-      <div class="stat-card reveal d4">
-        <span class="stat-num" data-target="1088" aria-label="1088 tests passing">0</span>
-        <span class="stat-label">tests passing</span>
-      </div>
-      <div class="stat-card reveal d5">
-        <span class="stat-num" data-target="0" aria-label="0 garbage propagated">0</span>
-        <span class="stat-label">garbage propagated</span>
+        <figure class="hero-term rise" style="margin:0">
+          <div class="term">
+            <div class="term-bar"><span class="tdot e"></span><span class="tdot c"></span><span class="tdot k"></span><span class="term-title">the tic-tac-toe example plan · claude builds, codex audits</span></div>
+<pre class="term-body"><span class="t-prompt">$</span> pleach validate plan.json | jq -c .waves
+[["ttt.s1","ttt.s2"],["ttt"]]
+<span class="t-prompt">$</span> pleach run plan.json &gt; summary.json
+<span class="t-dim">pleach: running 3 node(s) — Build a PLAYABLE WEB tic-tac-toe game — a self-contained index.html you open in a browser and play.</span>
+▶ ttt.s1: building
+▶ ttt.s2: building
+▸ ttt.s1: setup passed <span class="t-dim">(1.4s)</span>
+▸ ttt.s2: setup passed <span class="t-dim">(1.5s)</span>
+▸ ttt.s2: settle passed <span class="t-dim">(2.0s)</span>
+▸ ttt.s2: marker passed <span class="t-dim">(0.0s)</span>
+▸ ttt.s2: hygiene passed <span class="t-dim">(0.1s)</span>
+▸ ttt.s2: smoke passed <span class="t-dim">(0.4s)</span>
+<span class="t-prompt">✓</span> ttt.s2: verified on local branch <span class="t-path">node/ttt.s2</span> @ 8c41e07
+▸ ttt.s1: settle passed <span class="t-dim">(2.0s)</span>
+▸ ttt.s1: marker passed <span class="t-dim">(0.0s)</span>
+▸ ttt.s1: hygiene passed <span class="t-dim">(0.1s)</span>
+▸ ttt.s1: smoke passed <span class="t-dim">(0.4s)</span>
+<span class="t-prompt">✓</span> ttt.s1: verified on local branch <span class="t-path">node/ttt.s1</span> @ 3b5d9a2
+▶ ttt: building
+▸ ttt: setup passed <span class="t-dim">(1.3s)</span>
+▸ ttt: settle passed <span class="t-dim">(2.0s)</span>
+<span class="t-err">✗</span> ttt: <span class="t-rule">marker refused</span> (attempt 1)
+Conflict markers remain in:
+<span class="t-rule">↻</span> ttt: attempt 2
+▸ ttt: setup passed <span class="t-dim">(0.9s)</span>
+▸ ttt: settle passed <span class="t-dim">(2.0s)</span>
+▸ ttt: marker passed <span class="t-dim">(0.0s)</span>
+▸ ttt: hygiene passed <span class="t-dim">(0.1s)</span>
+▸ ttt: smoke passed <span class="t-dim">(1.2s)</span>
+· ttt: audit ttt: pass
+▸ ttt: audit passed <span class="t-dim">(52.6s)</span>
+<span class="t-prompt">✓</span> ttt: verified on local branch <span class="t-path">node/ttt</span> @ e19f4c0
+<span class="t-dim">pleach: run complete — 3 closed · 0 failed · 0 skipped · 0 blocked · 0 already verified</span>
+⚠ 3 verified node branch(es) exist only on this machine — push them to keep the work
+</pre>
+          </div>
+        </figure>
       </div>
     </div>
+  </section>
 
-    <p class="proof-note reveal">
-      The proof run reaches a full verified close: built, cross-provider audited, verified,
-      published, no human reviewing diffs. It also conducts outside this repo and outside
-      TypeScript. plotplot's stem, a released Rust binary, was built from
-      <a href="https://github.com/jahala/plotplot/tree/master/docs/dogfood" target="_blank" rel="noopener">pleach plans</a>.
-    </p>
-
-    <div style="margin-top: var(--sp-sm);" class="reveal">
-      <a class="btn btn-ghost" href="docs/tend2/pleach.tend2.html">open the garden →</a>
+  <section class="proofband" aria-labelledby="proof-title">
+    <div class="wrap">
+      <h2 class="label" id="proof-title">pleach on master, as bunx runs it <span class="pb-at">· commit abf36df · 5 nov 2026</span></h2>
+      <dl class="figures">
+        <div><dt>test files</dt><dd>172</dd></div>
+        <div><dt>commands</dt><dd>11</dd></div>
+        <div><dt>checks in its own garden</dt><dd>197</dd></div>
+        <div><dt>models that grade their own work</dt><dd>0</dd></div>
+      </dl>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- ═══ honest scope ══════════════════════════════════════════════════════════ -->
-<section class="section section-band" id="fit" aria-labelledby="fit-heading">
-  <div class="container">
-    <div class="section-head reveal">
-      <p class="kicker">honest scope</p>
-      <h2 id="fit-heading">when to reach for pleach, and when not to</h2>
+  <section class="wrap" id="why" aria-labelledby="why-title"><div class="sec first g12">
+    <p class="label margin">why</p>
+    <div class="content rise">
+      <h2 id="why-title">An agent always calls its own work green.</h2>
+      <p class="body">Hand a plan to a crowd of agents and each one reports success. Reading every diff yourself defeats the point of handing the work over, and in a plan a bad node does more harm: the nodes after it build on top of it. <strong>pleach puts code between the agents and your branch.</strong> Isolation, gates, quarantine and retries are deterministic code paths. What an agent says is parsed as evidence and never taken as a verdict.</p>
+      <p class="body note">Two products have been built this way, plan to landed code, with no human reviewing diffs: a six-feature PDF unifier, and the stem of <a href="https://github.com/jahala/plotplot">plotplot</a>, a released Rust binary in another repository and another language. <a href="https://github.com/jahala/plotplot/tree/master/docs/dogfood">Its plans are public</a>.</p>
     </div>
+  </div></section>
 
-    <div class="scope-cols">
-      <div class="scope-col scope-for reveal d1" role="region" aria-labelledby="scope-for-label">
-        <div class="scope-col-title" id="scope-for-label">for</div>
-        <ul class="scope-list" role="list">
-          <li>Unattended multi-step agent builds where gates decide what lands</li>
-          <li>A concrete plan: a real DAG of nodes, not a vague list (tend2, the bundled pleach-plan skill, or any planner)</li>
-          <li>Work you will not review diff-by-diff yourself</li>
-          <li>Projects where a bad node silently poisoning its dependents is not acceptable</li>
-          <li>Teams that need audit evidence, not just a green suite</li>
-        </ul>
+  <section class="wrap" aria-labelledby="refuse-title"><div class="sec tight g12">
+    <h2 class="label margin" id="refuse-title">what it refuses</h2>
+    <ul class="refuses content rise">
+      <li>an audit by the builder's own vendor</li>
+      <li>a gate the builder edited</li>
+      <li>conflict markers</li>
+      <li>a plan with a bare shell operator</li>
+      <li>a landing with an unverified node</li>
+      <li>a run that cannot redact secrets</li>
+    </ul>
+  </div></section>
+
+  <section class="wrap" id="how" aria-labelledby="how-title"><div class="sec g12">
+    <p class="label margin">the gates</p>
+    <div class="content rise">
+      <h2 id="how-title">One ladder for every node</h2>
+      <ol class="faces">
+        <li class="face"><span class="n" aria-hidden="true">1</span><p class="cmd">isolate</p><p class="what">a detached worktree for the node alone, merged from the verified branches of the nodes it needs.</p></li>
+        <li class="face"><span class="n" aria-hidden="true">2</span><p class="cmd">setup</p><p class="what">the node's own provisioning command, such as <code>bun install</code>.</p></li>
+        <li class="face"><span class="n" aria-hidden="true">3</span><p class="cmd">work</p><p class="what">the one rung an agent touches: a worker builds the node inside the worktree.</p></li>
+        <li class="face"><span class="n" aria-hidden="true">4</span><p class="cmd">marker scan</p><p class="what">a search for conflict markers in every file. One found fails closed.</p></li>
+        <li class="face"><span class="n" aria-hidden="true">5</span><p class="cmd">stage</p><p class="what">stages the change and scans it. An empty diff, a secret or a bulk deletion goes back to the worker.</p></li>
+        <li class="face"><span class="n" aria-hidden="true">6</span><p class="cmd">smoke</p><p class="what">the node's declared test command, run in the worktree.</p></li>
+        <li class="face"><span class="n" aria-hidden="true">7</span><p class="cmd">audit</p><p class="what">the plan's check, run in a fresh session by a model from a different vendor. pleach reads the verdict block it prints, never its prose.</p></li>
+        <li class="face"><span class="n" aria-hidden="true">8</span><p class="cmd">commit</p><p class="what">writes <code>node/&lt;id&gt;</code> to git before the ledger hears of it.</p></li>
+      </ol>
+    </div>
+  </div></section>
+
+  <section class="wrap" aria-labelledby="ends-title"><div class="sec tight g12">
+    <h2 class="label margin" id="ends-title">how a node ends</h2>
+    <div class="content rise">
+      <ul class="signs states">
+        <li class="st-done"><span class="st-dot" aria-hidden="true"></span><b>verified</b><span>every gate passed; its branch is written</span></li>
+        <li class="st-fail"><span class="st-dot" aria-hidden="true"></span><b>failed</b><span>no branch; its tree is kept in quarantine for you to read</span></li>
+        <li class="st-needs"><span class="st-dot" aria-hidden="true"></span><b>blocked</b><span>the worker stopped at a prompt only a person can answer</span></li>
+        <li class="st-open"><span class="st-dot" aria-hidden="true"></span><b>skipped</b><span>a node it needs was not verified, so it never builds on a bad base</span></li>
+      </ul>
+      <p class="after">Work is never silently lost, and a verdict is never invented.</p>
+    </div>
+  </div></section>
+
+  <section class="wrap" aria-labelledby="verbs-title"><div class="sec tight g12">
+    <h2 class="label margin" id="verbs-title">the commands</h2>
+    <div class="content rise">
+      <ul class="allow-list">
+        <li><code>pleach validate plan.json</code><span>parse and check the plan, and print the order it runs in.</span></li>
+        <li><code>pleach run plan.json</code><span>conduct the plan. Re-run it and verified nodes are skipped.</span></li>
+        <li><code>pleach status plan.json</code><span>the run's state, as JSON and as a table; <code>wait</code> blocks until it ends.</span></li>
+        <li><code>pleach land plan.json</code><span>merge the plan's verified <code>node/&lt;id&gt;</code> branches onto the branch you have checked out.</span></li>
+        <li><code>pleach audit plan.json &lt;node&gt;</code><span>re-run only the audit on a quarantined node.</span></li>
+        <li><code>pleach clean</code><span>sweep the locks, worktrees and sessions a killed run left behind.</span></li>
+      </ul>
+      <p class="body note">And stop, receipt, schema and audit-wrap. <code>pleach --help</code> carries every flag, default and exit code.</p>
+    </div>
+  </div></section>
+
+  <section class="wrap" id="install" aria-labelledby="install-title"><div class="sec install g12">
+    <div class="content rise">
+      <h2 id="install-title">Install</h2>
+      <p class="body">A Bun CLI that needs git 2.38 or later. It runs without cloning. pleach redacts secrets with the <code>plotplot</code> binary before anything reaches disk, and refuses to run without it unless you pass <code>--no-redact</code>.</p>
+      <div class="term">
+<pre><span class="t-prompt">cargo</span> install --locked --git https://github.com/jahala/plotplot
+<span class="t-prompt">bunx</span> github:jahala/pleach validate plan.json
+<span class="t-prompt">bunx</span> github:jahala/pleach run plan.json</pre>
       </div>
-      <div class="scope-col scope-not reveal d2" role="region" aria-labelledby="scope-not-label">
-        <div class="scope-col-title" id="scope-not-label">not for</div>
-        <ul class="scope-list" role="list">
-          <li>A single quick edit you'll review before merging</li>
-          <li>Interactive pairing sessions where you're guiding each step</li>
-          <li>Anything you'll hand-review anyway; the gates add overhead for no benefit</li>
-          <li>Projects without a concrete plan first, though the bundled pleach-plan skill will write one with you</li>
-        </ul>
-      </div>
+      <p class="body note">The default runner drives workers through tmux and <a href="https://jahala.github.io/umbel/">umbel</a>. With <code>--runner direct-cli</code> it needs only the <code>claude</code> and <code>codex</code> CLIs. To import the adapters from a <code>pleach.config.ts</code>, add it as a dependency: <code>bun add -d github:jahala/pleach</code>.</p>
+      <p class="then">Then write a plan with the bundled <a href="https://github.com/jahala/pleach/blob/master/.claude/skills/pleach-plan/SKILL.md"><code>pleach-plan</code></a> skill, or from <code>pleach schema</code>.</p>
     </div>
-  </div>
-</section>
+  </div></section>
 
-<!-- ═══ start ════════════════════════════════════════════════════════════════ -->
-<section class="start-band" id="start" aria-labelledby="start-heading">
-  <div class="container">
-    <p class="kicker reveal">start</p>
-    <h2 id="start-heading" class="reveal d1" style="max-width: 22ch;">run a plan, land only what's verified</h2>
-
-    <div class="cmd-block reveal d2" aria-label="pleach CLI usage">
-      <div class="cmd-line">pleach validate plan.json</div>
-      <div class="cmd-line">pleach run plan.json --runner direct-cli</div>
-      <div class="cmd-line">pleach land plan.json</div>
+  <section class="wrap" aria-labelledby="read-title"><div class="sec tight g12">
+    <h2 class="label margin" id="read-title">read on</h2>
+    <div class="content rise">
+      <ul class="allow-list">
+        <li><a href="https://github.com/jahala/pleach/blob/master/docs/guarantees.md"><code>docs/guarantees.md</code></a><span>what pleach does when things go wrong, one section each.</span></li>
+        <li><a href="https://github.com/jahala/pleach/blob/master/docs/contract/plan-schema.md"><code>the plan contract</code></a><span>what a planner emits. This repository is its home.</span></li>
+        <li><a href="https://github.com/jahala/pleach/blob/master/docs/adapters.md"><code>the adapters guide</code></a><span>bring your own runner and ledger.</span></li>
+        <li><a href="https://github.com/jahala/pleach/blob/master/ENGINEERING.md"><code>ENGINEERING.md</code></a><span>the binding doctrine.</span></li>
+        <li><a href="docs/tend2/pleach.tend2.html"><code>the garden</code></a><span>pleach's own development, loop by loop, with its checks.</span></li>
+      </ul>
     </div>
+  </div></section>
 
-    <p class="start-family reveal d3">
-      Part of the plotplot garden. pleach runs standalone on git + any agent tool. With the claude and codex CLIs on PATH, <code>--runner direct-cli</code> needs nothing else; the bundled examples run on git + bun alone, no agent and no API keys; and your own code can drive the conductor with <code>import { runPlan } from 'pleach'</code>. tend2 and umbel are the batteries-included reference adapters; swap either via <code>pleach.config.ts</code>. <a href="docs/adapters.md" style="color:rgba(250,245,233,0.75)">Read the adapters guide →</a>
-    </p>
+  <section class="wrap" aria-labelledby="sits-title"><div class="sec g12">
+    <h2 class="label margin" id="sits-title">where it sits</h2>
+    <ul class="sits content rise">
+      <li><div class="sit"><span class="plate soon" style="--bloom:var(--pp-tend)">06</span><span><b>tend decides what verified means</b><span class="label">C build · plan and verify</span></span></div></li>
+      <li><a class="sit" href="https://jahala.github.io/umbel/"><span class="plate" style="--bloom:var(--pp-umbel);--on:var(--sign-light)">08</span><span><b>umbel runs each worker</b><span class="label">C build · fan out agent CLIs</span></span></a></li>
+      <li><a class="sit" href="https://jahala.github.io/weeder/"><span class="plate" style="--bloom:var(--pp-weeder);--on:var(--sign-dark)">11</span><span><b>weeder can be a node's smoke gate</b><span class="label">the shed · the judge of the diff</span></span></a></li>
+      <li><div class="sit"><span></span><span><b>on git, on your machine</b><span class="label">node/&lt;id&gt; branches · nothing pushed for you</span></span></div></li>
+    </ul>
+  </div></section>
+</main>
 
-    <div class="start-actions reveal d4">
-      <a class="btn btn-cream" href="https://github.com/jahala/pleach" target="_blank" rel="noopener">read the README</a>
-    </div>
+<!-- garden footer · shared family surface. swap ONLY: (1) the identity column, (2) the .is-current pill, (3) the repo links -->
+<footer class="gf">
+  <div class="gf-wrap">
 
-    <span class="start-badge reveal d5" role="status">✓ this page passes /petals check</span>
-  </div>
-</section>
-
-<!-- ═══ footer / the garden ═══════════════════════════════════════════════════ -->
-<footer class="footer" role="contentinfo">
-  <div class="container">
-    <div class="gf-plot reveal">
+    <div class="gf-plot">
       <a class="gf-plotbrand" href="https://plotplot.ai" aria-label="plotplot home">
-        <svg class="gf-plotmark" viewBox="0 0 28 28" aria-hidden="true">
-          <path class="ppm-stem" d="M14 26 V12"/>
-          <path class="ppm-leaf" d="M14 18.5 C9 17.5 6 13.5 6.6 9 C11 9.8 14 13.2 14 18.5 Z"/>
-          <path class="ppm-leaf" d="M14 15.5 C19 14.5 22 10.5 21.4 6 C17 6.8 14 10.2 14 15.5 Z"/>
-          <circle class="ppm-bloom" cx="14" cy="8" r="3"/>
+        <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+          <path class="m-stem" d="M12 22 V8"/>
+          <path class="m-leaf" d="M12 17.6 C7.8 16.8 5.2 13.6 5.6 9.8 C9.3 10.4 12 13.2 12 17.6 Z"/>
+          <path class="m-leaf" d="M12 14.6 C16.2 13.8 18.8 10.6 18.4 6.8 C14.7 7.4 12 10.2 12 14.6 Z"/>
+          <circle class="m-bloom" cx="12" cy="4.6" r="2.5"/>
         </svg>
-        <span class="gf-plotword">plotplot</span>
+        <span class="wordmark">plotplot</span>
       </a>
       <p class="gf-plotline">a garden of small, sharp tools for building with AI.</p>
-      <a class="gf-plotlink" href="https://plotplot.ai">plotplot.ai &rarr;</a>
+      <a class="gf-plotlink" href="https://plotplot.ai">plotplot.ai →</a>
     </div>
-    <div class="foot-grid">
-      <div class="reveal">
+
+    <div class="gf-grid">
+
+      <div class="gf-col">
         <h4>pleach</h4>
-        <p class="foot-soft">the deterministic conductor for verified agent work. It runs a plan's nodes in isolated git worktrees and publishes a <code>node/&lt;id&gt;</code> branch only for work that mechanically cleared its gates.</p>
-        <p class="foot-soft" style="margin-top:var(--sp-xs)"><a href="https://github.com/jahala/pleach" target="_blank" rel="noopener">github →</a> &nbsp;·&nbsp; MIT licensed &nbsp;·&nbsp; <a href="https://github.com/jahala/pleach/blob/master/CONTRIBUTING.md" target="_blank" rel="noopener">contributing</a></p>
+        <p class="gf-soft">the conductor. builds a plan of agent work in isolated git worktrees and keeps only what its gates verified.</p>
+        <p class="gf-soft"><a href="https://github.com/jahala/pleach">github →</a> &nbsp;·&nbsp; MIT &nbsp;·&nbsp; <a href="https://github.com/jahala/pleach/blob/master/CONTRIBUTING.md">contributing</a></p>
       </div>
-      <div class="reveal">
+
+      <div class="gf-col">
         <h4>the plotplot garden</h4>
-        <div class="garden">
-          <a href="https://github.com/jahala/tilth" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-tilth)"></span>tilth</a>
-          <a href="https://github.com/jahala/weeder" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-weeder)"></span>weeder</a>
-          <a href="https://github.com/jahala/umbel" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-umbel)"></span>umbel</a>
-          <a href="https://github.com/jahala/copeca" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-copeca)"></span>copeca</a>
-          <a href="https://github.com/jahala/pollen" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-pollen)"></span>pollen</a>
-          <a class="is-self" href="https://github.com/jahala/pleach" target="_blank" rel="noopener"><span class="dot" style="background:var(--pp-pleach)"></span>pleach</a>
-          <span class="soon"><span class="dot" style="background:var(--pp-tend)"></span>tend2</span>
-          <span class="soon"><span class="dot" style="background:var(--pp-petals)"></span>petals</span>
-        </div>
-        <p class="foot-soft" style="margin-top:var(--sp-xs)">small, sharp tools for building with agents. The
-          dimmed two are built and not yet public. The umbrella (brand, law and contracts) is
-          <a href="https://github.com/jahala/plotplot" target="_blank" rel="noopener">plotplot</a>.</p>
+        <nav class="gf-garden" aria-label="the garden">
+          <span style="--bloom:var(--pp-mull)"><span class="gf-dot"></span>mull</span>
+          <span style="--bloom:var(--pp-glean)"><span class="gf-dot"></span>glean</span>
+          <span style="--bloom:var(--pp-cultivate)"><span class="gf-dot"></span>cultivate</span>
+          <span style="--bloom:var(--pp-graft)"><span class="gf-dot"></span>graft</span>
+          <a href="https://jahala.github.io/petals/" style="--bloom:var(--pp-petals)"><span class="gf-dot"></span>petals</a>
+          <span style="--bloom:var(--pp-tend)"><span class="gf-dot"></span>tend</span>
+          <a href="#top" style="--bloom:var(--pp-pleach)" class="is-current" aria-current="page"><span class="gf-dot"></span>pleach</a>
+          <a href="https://jahala.github.io/umbel/" style="--bloom:var(--pp-umbel)"><span class="gf-dot"></span>umbel</a>
+          <a href="https://jahala.github.io/tilth/" style="--bloom:var(--pp-tilth)"><span class="gf-dot"></span>tilth</a>
+          <a href="https://jahala.github.io/mycelium/" style="--bloom:var(--pp-mycelium)"><span class="gf-dot"></span>mycelium</a>
+          <a href="https://jahala.github.io/weeder/" style="--bloom:var(--pp-weeder)"><span class="gf-dot"></span>weeder</a>
+          <a href="https://jahala.github.io/well/" style="--bloom:var(--pp-well)"><span class="gf-dot"></span>well</a>
+          <a href="https://jahala.github.io/coldframe/" style="--bloom:var(--pp-coldframe)"><span class="gf-dot"></span>coldframe</a>
+        </nav>
+        <p class="gf-soft">small, sharp tools for building with agents.</p>
       </div>
-      <div class="reveal">
-        <h4>read on</h4>
-        <p class="foot-soft">
-          <a href="ENGINEERING.md">the doctrine</a>: the binding rules.<br>
-          <a href="docs/contract/plan-schema.md">the plan contract</a>: what a planner emits.<br>
-          <a href="docs/adapters.md">the adapters guide</a>: bring your own runner + ledger.
-        </p>
-        <p class="foot-soft" style="margin-top:var(--sp-xs)"><a href="docs/tend2/pleach.tend2.html">see the garden prove itself →</a></p>
+
+      <div class="gf-col">
+        <h4>nearby</h4>
+        <p class="gf-soft"><a href="https://github.com/jahala/mrkd">mrkd</a>, a native markdown viewer for macOS.</p>
+        <p class="gf-soft"><a href="https://buymeacoffee.com/jahala">buy me a coffee →</a></p>
       </div>
+
     </div>
-    <div class="foot-bottom">
+    <div class="gf-bottom">
       <span>© 2026 · a plotplot garden tool · MIT</span>
       <span>agents produce; code decides.</span>
     </div>
@@ -1311,105 +675,78 @@ code {
 </footer>
 
 <script>
-(function () {
-  'use strict';
-
-  /* ── dark-mode ────────────────────────────────────────────────────────────── */
-  var html = document.documentElement;
-  var btn  = document.getElementById('theme-toggle');
-
-  function applyTheme(dark) {
-    html.setAttribute('data-theme', dark ? 'dark' : 'light');
-    btn.textContent = dark ? '☀' : '☽';
-    btn.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
-  }
-
-  var stored      = localStorage.getItem('pp-theme');
-  var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  var isDark      = stored ? stored === 'dark' : prefersDark;
-  applyTheme(isDark);
-
-  btn.addEventListener('click', function () {
-    isDark = !isDark;
-    localStorage.setItem('pp-theme', isDark ? 'dark' : 'light');
-    applyTheme(isDark);
-  });
-
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function (e) {
-    if (!localStorage.getItem('pp-theme')) {
-      isDark = e.matches;
-      applyTheme(isDark);
-    }
-  });
-
-  /* ── reduced-motion guard ───────────────────────────────────────────────── */
-  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  /* ── scroll-reveal ──────────────────────────────────────────────────────── */
-  var revealEls = document.querySelectorAll('.reveal');
-
-  if (reduced) {
-    revealEls.forEach(function (el) { el.classList.add('in'); });
-  } else {
-    var revealIO = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (!entry.isIntersecting) return;
-        entry.target.classList.add('in');
-        revealIO.unobserve(entry.target);
-      });
-    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
-
-    revealEls.forEach(function (el) { revealIO.observe(el); });
-  }
-
-  /* ── count-up stats ─────────────────────────────────────────────────────── */
-  if (!reduced) {
-    var statNums = document.querySelectorAll('[data-target]');
-    var statIO   = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (!entry.isIntersecting) return;
-        var el     = entry.target;
-        var target = parseInt(el.getAttribute('data-target'), 10);
-        var start  = null;
-        var dur    = 1100;
-
-        function tick(ts) {
-          if (!start) start = ts;
-          var pct    = Math.min((ts - start) / dur, 1);
-          var eased  = 1 - Math.pow(1 - pct, 3);
-          el.textContent = Math.round(eased * target);
-          if (pct < 1) requestAnimationFrame(tick);
-        }
-        requestAnimationFrame(tick);
-        statIO.unobserve(el);
-      });
-    }, { threshold: 0.6 });
-
-    statNums.forEach(function (n) { statIO.observe(n); });
-  }
-
-  /* ── DAG edge highlight ─────────────────────────────────────────────────── */
-  var dagSvg = document.getElementById('dag-svg');
-  if (dagSvg) {
-    var dagNodes = dagSvg.querySelectorAll('.dag-node');
-
-    function setEdges(ids, on) {
-      if (!ids) return;
-      ids.split(',').forEach(function (id) {
-        var edge = dagSvg.querySelector('#' + id.trim());
-        if (edge) edge.classList[on ? 'add' : 'remove']('hl');
-      });
-    }
-
-    dagNodes.forEach(function (node) {
-      var edges = node.getAttribute('data-edges');
-      node.addEventListener('mouseenter', function () { setEdges(edges, true); });
-      node.addEventListener('mouseleave', function () { setEdges(edges, false); });
-      node.addEventListener('focus',      function () { setEdges(edges, true); });
-      node.addEventListener('blur',       function () { setEdges(edges, false); });
-    });
-  }
-
+(function(){
+  var root=document.documentElement;
+  var t=document.getElementById('theme');
+  if(t){t.addEventListener('click',function(){
+    var dark=root.getAttribute('data-theme')==='dark';
+    root.setAttribute('data-theme',dark?'light':'dark');
+    localStorage.setItem('pp-theme',dark?'light':'dark');
+  });}
+  var items=document.querySelectorAll('.rise');
+  function show(el){el.classList.add('in');}
+  if(!('IntersectionObserver' in window)){Array.prototype.forEach.call(items,show);return;}
+  var io=new IntersectionObserver(function(es){es.forEach(function(e){
+    if(e.isIntersecting){show(e.target);io.unobserve(e.target);}
+  });},{threshold:0,rootMargin:'0px 0px -6% 0px'});
+  Array.prototype.forEach.call(items,function(el){io.observe(el);});
+})();
+</script>
+<script>
+// inchworm: a looper on the header line. two-anchor gait with a constant body length: the rear is
+// drawn up into an arch, then the front reaches forward. every few strides it rears up and sways,
+// looking about; if a pointer comes close it finishes its step and goes stiff as a twig until the
+// pointer leaves. walks off the right edge, waits, walks in again. honours reduced motion.
+(function(){
+  var box=document.querySelector('.inchworm'); if(!box) return;
+  if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var svg=box.querySelector('svg'), header=box.parentNode;
+  var body=svg.querySelector('.iw-body'), rings=svg.querySelector('.iw-rings');
+  var head=svg.querySelector('.iw-head'), eye=svg.querySelector('.iw-eye');
+  var G=40, base=G-2.5, L=34, Lmin=10, DRAW=560, REACH=640, SENSE=2800, RISE=420;
+  var W=box.clientWidth; window.addEventListener('resize',function(){W=box.clientWidth;});
+  var rear, front, phase='away', tp=0, wait=1400, strides=0, nextSense=0, hover=false, left=0, angle=0;
+  function begin(){front=-30;rear=front-L;phase='draw';tp=0;strides=0;nextSense=4+Math.floor(Math.random()*5);}
+  function ease(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
+  // cubic from rear to front; find the arch height that keeps the body length at L
+  function archLen(xr,xf,h){var k=(xf-xr)*.08,x0=xr,y0=0,len=0,i,t,u,x,y;
+    for(i=1;i<=16;i++){t=i/16;u=1-t;x=u*u*u*xr+3*u*u*t*(xr+k)+3*u*t*t*(xf-k)+t*t*t*xf;y=-(3*u*u*t+3*u*t*t)*h;
+      len+=Math.sqrt((x-x0)*(x-x0)+(y-y0)*(y-y0));x0=x;y0=y;} return len;}
+  function arch(xr,yr,xf,yf){var lo=0,hi=L,h,i;for(i=0;i<14;i++){h=(lo+hi)/2;if(archLen(xr,xf,h)<L)lo=h;else hi=h;}
+    var k=(xf-xr)*.08;return 'M'+xr.toFixed(1)+' '+yr.toFixed(1)+' C'+(xr+k).toFixed(1)+' '+(yr-h).toFixed(1)+', '+(xf-k).toFixed(1)+' '+(yf-h).toFixed(1)+', '+xf.toFixed(1)+' '+yf.toFixed(1);}
+  // rear half flat on the line, front half raised at angle a (degrees) from a soft bend
+  function raised(a){var r=a*Math.PI/180,p=rear+L*.45,s=L*.55-4,bx=p+4*Math.cos(r),by=base-4*Math.sin(r);
+    var fx=bx+s*Math.cos(r),fy=by-s*Math.sin(r);
+    return {d:'M'+rear.toFixed(1)+' '+base+' L'+(p-4).toFixed(1)+' '+base+' Q'+p.toFixed(1)+' '+base+' '+bx.toFixed(1)+' '+by.toFixed(1)+' L'+fx.toFixed(1)+' '+fy.toFixed(1),fx:fx,fy:fy,r:r};}
+  function draw(d,fx,fy,tilt){
+    body.setAttribute('d',d);rings.setAttribute('d',d);
+    var hx=fx+1.5*Math.cos(tilt)+1*Math.sin(tilt), hy=fy-1.5*Math.sin(tilt)-1*Math.cos(tilt)+0;
+    head.setAttribute('cx',hx.toFixed(1));head.setAttribute('cy',hy.toFixed(1));
+    eye.setAttribute('cx',(hx+1.3*Math.cos(tilt)+.4).toFixed(1));eye.setAttribute('cy',(hy-1-1.3*Math.sin(tilt)).toFixed(1));}
+  header.addEventListener('mousemove',function(e){var b=box.getBoundingClientRect(),x=e.clientX-b.left;
+    hover=phase!=='away'&&Math.abs(x-(rear+front)/2)<80;if(hover)left=0;});
+  header.addEventListener('mouseleave',function(){hover=false;});
+  var last=0;
+  function frame(ts){
+    var dt=last?Math.min(80,ts-last):16;last=ts;tp+=dt;var t,fy=base,ry=base,p;
+    if(phase==='away'){box.style.visibility='hidden';if(tp>=wait){begin();box.style.visibility='visible';}requestAnimationFrame(frame);return;}
+    if(phase==='draw'){t=Math.min(1,tp/DRAW);rear=(front-L)+(L-Lmin)*ease(t);ry=base-Math.sin(t*Math.PI)*2.5;
+      draw(arch(rear,ry,front,base),front,base,0);if(t>=1){phase='reach';tp=0;}}
+    else if(phase==='reach'){t=Math.min(1,tp/REACH);front=(rear+Lmin)+(L-Lmin)*ease(t);fy=base-Math.sin(t*Math.PI)*2.5;
+      draw(arch(rear,base,front,fy),front,fy,0);
+      if(t>=1){strides++;tp=0;phase=hover?'twig':(strides>=nextSense?'sense':'draw');}}
+    else if(phase==='sense'){t=tp/SENSE;
+      if(t<.25)angle=50*ease(t/.25);else if(t<.78)angle=50+9*Math.sin((t-.25)/.53*Math.PI*4);else angle=50*(1-ease(Math.min(1,(t-.78)/.22)));
+      p=raised(angle);draw(p.d,p.fx,p.fy,p.r);
+      if(t>=1){phase='draw';tp=0;strides=0;nextSense=4+Math.floor(Math.random()*5);}}
+    else if(phase==='twig'){ // rigid, straight, like a twig; holds while the pointer is near
+      if(!hover)left+=dt;
+      if(hover||left<900)angle=Math.min(38,angle+38*dt/RISE);else angle=Math.max(0,angle-38*dt/RISE);
+      p=raised(angle);draw(p.d,p.fx,p.fy,p.r);
+      if(!hover&&left>=900&&angle<=0){phase='draw';tp=0;left=0;}}
+    if(rear>W+30){phase='away';tp=0;wait=3000+Math.random()*4000;}
+    requestAnimationFrame(frame);}
+  requestAnimationFrame(frame);
 })();
 </script>
 </body>
