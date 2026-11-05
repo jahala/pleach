@@ -141,4 +141,80 @@ describe('pleach land + rebuild — e2e (issue #116)', () => {
     expect(shared).toBe('A\nB');
     expect(shared).not.toContain('<<<<<<<');
   });
+
+  test('three siblings are pinned together and rebuilt in one run (issue #175)', async () => {
+    const planPath = join(repo, 'plan.json');
+    const three = {
+      goal: 'three siblings edit the same file; the conflicting two rebuild together',
+      source: 'e2e-land-rebuild-group',
+      nodes: [
+        { id: 'a', work: { prompt: 'write A into shared.txt' } },
+        { id: 'b', work: { prompt: 'write B into shared.txt' } },
+        { id: 'c', work: { prompt: 'write C into shared.txt' } },
+      ],
+    };
+    await writeFile(planPath, JSON.stringify(three));
+    const before = await gitIn(repo, 'rev-parse', 'HEAD');
+
+    // 1. Run: all three siblings verify.
+    const run1 = await pleach(
+      [
+        'run',
+        '--no-redact',
+        planPath,
+        '--config',
+        CONFIG,
+        '--repo-root',
+        repo,
+        '--max-concurrency',
+        '3',
+      ],
+      repo,
+    );
+    expect(run1.code).toBe(0);
+    expect(JSON.parse(run1.stdout.trim()).closed.sort()).toEqual(['a', 'b', 'c']);
+
+    // 2. Land: b and c both conflict with a, and both are pinned at the one stack.
+    const land1 = await pleach(
+      ['land', '--no-redact', planPath, '--config', CONFIG, '--repo-root', repo],
+      repo,
+    );
+    expect(land1.code).toBe(1);
+    expect(land1.stderr).toContain('conflict');
+    const conflicts = (await journalLines()).filter((e) => e.event === 'land-conflict');
+    expect(conflicts.map((c) => c.node).sort()).toEqual(['b', 'c']);
+    const stackSha = conflicts[0]?.stackSha as string;
+    expect(conflicts.every((c) => c.stackSha === stackSha)).toBe(true);
+    expect(await gitIn(repo, 'rev-parse', 'refs/pleach/rebuild/b')).toBe(stackSha);
+    expect(await gitIn(repo, 'rev-parse', 'refs/pleach/rebuild/c')).toBe(stackSha);
+    // The stack is the target plus A's work; the target branch is untouched.
+    expect(await gitIn(repo, 'show', `${stackSha}:shared.txt`)).toBe('A');
+    expect(await gitIn(repo, 'rev-parse', 'HEAD')).toBe(before);
+
+    // 3. Run again: b and c rebuild in plan order, in one cycle.
+    const run2 = await pleach(
+      ['run', '--no-redact', planPath, '--config', CONFIG, '--repo-root', repo],
+      repo,
+    );
+    expect(run2.code).toBe(0);
+    expect(JSON.parse(run2.stdout.trim()).closed.sort()).toEqual(['b', 'c']);
+
+    const lines = await journalLines();
+    const rebuilds = lines.filter((e) => e.event === 'land-rebuild');
+    expect(rebuilds.map((e) => e.node)).toEqual(['b', 'c']);
+    expect(rebuilds.find((e) => e.node === 'c')).toMatchObject({ onto: stackSha, after: ['b'] });
+    expect(lines.some((e) => e.event === 'land-rebuild-done' && e.node === 'b')).toBe(true);
+    expect(lines.some((e) => e.event === 'land-rebuild-done' && e.node === 'c')).toBe(true);
+
+    // 4. Land again: all three land, and the file holds all three changes.
+    const land2 = await pleach(
+      ['land', '--no-redact', planPath, '--config', CONFIG, '--repo-root', repo],
+      repo,
+    );
+    expect(land2.code).toBe(0);
+    expect(JSON.parse(land2.stdout.trim()).landed.sort()).toEqual(['a', 'b', 'c']);
+    const shared = await gitIn(repo, 'show', 'HEAD:shared.txt');
+    expect(shared).toBe('A\nB\nC');
+    expect(shared).not.toContain('<<<<<<<');
+  });
 });

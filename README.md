@@ -99,6 +99,7 @@ tree on `quarantine/<id>` and writes a receipt.
 | A provider is down | `--fallback-provider` re-casts on another vendor; an outage is never paid twice |
 | The provider needs a person to sign in | Spawn exit 126 settles `blocked`, never retried on that provider; sign in once outside the conductor, then re-run |
 | The network or the provider errors | Waits and retries inside the same attempt; a short outage costs no attempts |
+| A worker fails to spawn | Waits and re-spawns inside the same attempt; a spawn error before any work costs no attempts |
 | A worker's background job is still writing | Gates wait until the tree is still; one that never settles fails the attempt, naming the paths |
 | The plan holds a bare shell operator | Refused at `validate`, before a worker costs anything |
 | A gate command cannot start | Node settles once; no attempt spent, no worker re-prompted |
@@ -107,7 +108,7 @@ tree on `quarantine/<id>` and writes a receipt.
 | A worker is stuck | It writes `BLOCKED.md` and is not asked again |
 | A git hook refuses the commit | Gate verdict like any other; tree kept on a snapshot no hook can refuse |
 | A git hook changes the commit | The node fails; nothing a gate did not judge is published |
-| A landing conflicts | The conflicting sink is pinned at `refs/pleach/rebuild/<id>` and rebuilt on the landed stack by the next `pleach run`, never merged by hand |
+| A landing conflicts | Every conflicting sink is pinned at `refs/pleach/rebuild/<id>` and rebuilt on the landed stack by the next `pleach run` — as one group, in plan order — never merged by hand |
 | A seam throws mid-node | Settles under `seam:<lane>`; the verdict names the next step |
 | The journal loses lines | Reported as `journal-gap` at the next run; each run keeps its own copy |
 | A worker or gate prints a secret | Redacted (`[REDACTED]`) before it reaches the journal, the log or a receipt |

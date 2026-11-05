@@ -185,7 +185,11 @@ blocked, and says so by its exit code"). pleach settles that node `blocked` at o
 message and "sign in to `<provider>` once, outside the conductor, then re-run" as the next step, the
 tree kept in quarantine — it is never retried on that provider, because a retry meets the same
 sign-in screen. `--fallback-provider` re-casts it once, audit diversity re-checked, exactly as it
-re-casts a `dead` attempt. Any other non-zero spawn keeps today's behaviour: the node settles failed.
+re-casts a `dead` attempt. Any other non-zero spawn failed before any work started (no tree, no
+tokens spent), so it is retried inside the same attempt on the provider-error backoff
+(`--provider-backoff-ms`) and never costs an attempt; only once the waits are spent does the node
+settle failed, the verdict's `detail` naming the cause and its next step pointing at the runner
+(issue #177).
 
 **Runner post-condition (verified from `src/loop/run-node.ts:191–194`).** When `wait()`
 returns `reason: 'stop'`, the runner is expected to have populated the working tree with

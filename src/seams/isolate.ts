@@ -7,13 +7,14 @@ import {
   CommitAlteredError,
   IsolateCatastrophicError,
   LandBlockedError,
+  type LandConflict,
   LandConflictError,
   LandMergeRefusedError,
 } from '../core/errors.ts';
 import type { BranchUpstream, LocalOnlyFacts, LocalOnlyNodeBranch } from '../core/local-only.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, IsolateSeam, Isolation } from '../loop/deps.ts';
-import { resolveGitDir } from './gitdir.ts';
+import { worktreeHomeFor } from './worktree-home.ts';
 
 // Where the friction ledger writes inside a worktree, as path segments
 // (docs/plans/friction-ledger.md §5).
@@ -79,7 +80,11 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
   }
 
   async function worktreeBase(root: string): Promise<string> {
-    const base = join(resolveGitDir(root), 'pleach', 'worktrees');
+    // Node worktrees and land stacks live OUTSIDE `.git/` (issue #174): tools
+    // like Biome turn their React rules off under `.git/`, so a tree under
+    // <git-dir>/pleach/worktrees/ would get a weaker gate than the branch. The
+    // home is one per-repo directory under $PLEACH_WORKTREE_HOME (or the cache).
+    const base = await worktreeHomeFor(root);
     await mkdir(base, { recursive: true });
     return base;
   }
@@ -91,9 +96,10 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
       throw new IsolateCatastrophicError('', 'baseRefs must not be empty');
     }
 
-    // Worktrees live under the git dir (D12) — findable by `pleach clean`,
-    // and never in the OS temp reaper's shadow. mkdtemp gives the unique base;
-    // git worktree add needs a non-existent sub-path.
+    // Worktrees live under the per-repo worktree home, outside `.git/` (issue
+    // #174) — findable by `pleach clean`, and never in the OS temp reaper's
+    // shadow. mkdtemp gives the unique base; git worktree add needs a
+    // non-existent sub-path.
     const tmpBase = await mkdtemp(join(await worktreeBase(repoRoot), 'wt-'));
 
     // git worktree add --detach uses the path we give it; mkdtemp already
@@ -820,6 +826,11 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
       // land gate's `{base}` resolves to, and the only moment it is knowable.
       const baseSha = await gitMust(exec, worktreePath, 'rev-parse', 'HEAD');
 
+      // issue #175: land composes everything it can. A conflicting merge is
+      // aborted and recorded, then the remaining sinks still merge, so every
+      // clean sink lands and only the conflicts refuse. Nothing here is
+      // published — the conflicts abort the whole landing below.
+      const conflicts: LandConflict[] = [];
       for (const ref of refs) {
         const verify = await git(
           exec,
@@ -834,7 +845,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
         }
         const merge = await git(exec, worktreePath, 'merge', '-m', `pleach: land ${ref}`, ref);
         if (merge.exitCode !== 0) {
-          // A conflict must NEVER land — collect the files, abort, refuse
+          // A conflict must NEVER land — collect the files, abort, record it
           // (the marker-keeping path of isolate() is for node builds only).
           const diff = await git(exec, worktreePath, 'diff', '--name-only', '--diff-filter=U');
           const files = diff.output
@@ -842,11 +853,6 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
             .split('\n')
             .map((l) => l.trim())
             .filter(Boolean);
-          // The stack's HEAD before the abort: the target tip plus every sink
-          // merged before this one — the commit the node must rebuild on
-          // (issue #116). Read while the merge is still in progress, when HEAD
-          // is the pre-merge commit.
-          const stackSha = await gitMust(exec, worktreePath, 'rev-parse', 'HEAD');
           await git(exec, worktreePath, 'merge', '--abort');
           if (files.length === 0) {
             // No unmerged files: git refused the merge without a conflict. Most
@@ -855,8 +861,15 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
             // the cause either way (D28).
             throw new LandMergeRefusedError(ref, merge.output);
           }
-          throw new LandConflictError(ref, files, stackSha);
+          conflicts.push({ ref, files });
         }
+      }
+      if (conflicts.length > 0) {
+        // The stack the conflicts are pinned at: the target tip plus every sink
+        // that merged cleanly (every conflicting merge was aborted). One commit
+        // for the whole group, so the next run rebuilds them all against it.
+        const stackSha = await gitMust(exec, worktreePath, 'rev-parse', 'HEAD');
+        throw new LandConflictError(conflicts, stackSha);
       }
       // The stack is built and unpublished; the loop gates it in `cwd`, then
       // publishes or disposes. Publish is the ONLY touch on the user's

@@ -47,15 +47,17 @@ Landing is deterministic and fail-closed. It refuses unless every plan node is
 verified, builds the merges in a throwaway worktree, and touches your checkout only
 via a final fast-forward. A conflict aborts with the repo untouched.
 
-A conflict is never merged by hand. pleach pins the conflicting sink: it writes
-`refs/pleach/rebuild/<id>` at the stack commit (the target tip plus the sinks that
-landed before it) and journals `land-conflict` with the node, that stack commit and
-the files. The next `pleach run` rebuilds that node on the stack — its own verified
-branch merged on top with the conflict markers in the tree — so a worker integrates
-the sibling's change and the whole gate ladder judges the result. The close records
-`facts.base.kind: 'land-rebuild'`, and on publish the pin is cleared with
-`land-rebuild-done`; any other verdict keeps the pin for the next run. Nothing is
-published that a gate did not judge.
+A conflict is never merged by hand. pleach pins every conflicting sink: it writes
+`refs/pleach/rebuild/<id>` for each, all at the one final clean stack commit (the
+target tip plus every sink that merged cleanly) and journals one `land-conflict`
+line per sink with the node, that stack commit and the files. The next `pleach
+run` rebuilds the whole group on that stack, in plan order — each later rebuild
+merges the earlier ones' newly rebuilt `node/<id>` branches, then its own
+verified branch on top with the conflict markers in the tree — so a worker
+integrates the sibling's change and the whole gate ladder judges the result. The
+close records `facts.base.kind: 'land-rebuild'`, and on publish the pin is
+cleared with `land-rebuild-done`; any other verdict keeps the pin for the next
+run. Nothing is published that a gate did not judge.
 
 It holds a lock of its own beside the run's, so it never queues behind gates it has
 no stake in. Settled work lands while the run is still building the rest, two
@@ -76,7 +78,11 @@ pleach land plan.json \
 ```
 
 A non-zero exit refuses the landing as `land-gate-refused`, with the command's output
-tail on stderr and the repository untouched. Both flags shape `pleach run --land` too:
+tail on stderr and the repository untouched. The sinks' own smokes are the same
+deal: when one goes red on the composition, the refusal names the culprit sink and
+prints that smoke's output tail on stderr (one tail per culprit), and a setup that
+fails prints its output the same way — the operator reads why the gate said no, not
+only that it did. Both flags shape `pleach run --land` too:
 the landing a run performs is the same landing.
 
 ## Work that exists only on this machine is named
@@ -133,6 +139,12 @@ A provider error is different: the session worked, then the provider or the netw
 attempt, on the same tree, with the provider's words in the prompt: 15 s, then doubling, five
 waits in all (`--provider-backoff-ms` sets the first). Only when the waits are spent does the
 error cost an attempt, and the verdict's `detail` names the cause.
+
+A spawn that fails before any work started is the same shape: the runner could not start a
+worker at all (a transient lock, a listing that failed), so nothing ran and nothing is spent.
+The node waits and re-spawns inside the same attempt on the same backoff; a spawn error never
+costs an attempt. Only when the waits are spent does the node settle failed, the verdict's
+`detail` naming how many spawns failed and why, and its `nextStep` pointing at the runner.
 
 ## A spawn that needs a person settles blocked
 
@@ -315,6 +327,18 @@ error during the search is reported as an error, never as an orphan. A receipt
 written before this change has no patch-id and verifies exactly as it did.
 
 ## Two operational facts
+
+**Worktrees live outside `.git/`.** A gate must check the same rules wherever it
+runs, and tools treat paths under `.git/` differently — Biome turns its React rules off
+there, so a node whose smoke passed in a worktree under the git dir could fail on the
+branch. Node worktrees and land stacks therefore live under
+`$PLEACH_WORKTREE_HOME` when it is set, else `$XDG_CACHE_HOME/pleach/worktrees`, else
+`~/.cache/pleach/worktrees` — one directory per repository, named
+`<repo-basename>-<first 12 hex of sha256 of the git dir's realpath>`. `pleach clean`
+still sweeps the older homes (`<git-dir>/pleach/worktrees/…` and the legacy OS-temp
+`pleach-*/wt`) so leftovers from earlier versions keep getting cleaned up.
+A worktree there is a checkout of its own. It finds no `node_modules` of the main checkout by
+walking up the folders, so a node whose gates need packages installs them in its `setup`.
 
 **Claude Code workers need the repo trusted.** Trust follows the main checkout
 (`~/.claude.json`) rather than the worktree, and pleach's temporary worktrees inherit it. An

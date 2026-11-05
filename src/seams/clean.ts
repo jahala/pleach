@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path';
 import type { ExecFn } from '../loop/deps.ts';
 import { resolveGitDir } from './gitdir.ts';
 import { isAlive, readPid } from './lock.ts';
+import { worktreeHomeFor } from './worktree-home.ts';
 
 // <git-dir>/pleach-<12 hex>.lock and its landing twin `.lock.land` (D18) —
 // dead holder → unlink; live holder → reported, never touched (a live lock
@@ -42,19 +43,21 @@ export async function sweepStaleLocks(
   return { removed: removed.sort(), live: live.sort() };
 }
 
-// Worktrees pleach owns: under <git-dir>/pleach/worktrees/ (the current home)
-// or the legacy mkdtemp shape <os-tmpdir>/pleach-*/wt — ANCHORED to the OS
-// temp dir, because a bare /pleach-*/wt suffix would also match a human's
-// checkout that happens to live in a directory named pleach-something.
-// Removal goes through git (never a bare rm of a checkout); the mkdtemp base
-// dir — provably pleach-created by the same match — is cleared after. Ends
-// with a prune so entries whose directories vanished (the temp reaper) clear too.
-// The ownership decision, pure: current-home prefix, or the legacy mkdtemp
+// Worktrees pleach owns: under the per-repo worktree home (issue #174 — the
+// current home, outside `.git/`), under <git-dir>/pleach/worktrees/ (the home
+// it moved away from), or the legacy mkdtemp shape <os-tmpdir>/pleach-*/wt —
+// ANCHORED to the OS temp dir, because a bare /pleach-*/wt suffix would also
+// match a human's checkout that happens to live in a directory named
+// pleach-something. Removal goes through git (never a bare rm of a checkout);
+// the mkdtemp base dir — provably pleach-created by the same match — is
+// cleared after. Ends with a prune so entries whose directories vanished (the
+// temp reaper) clear too.
+// The ownership decision, pure: any own-base prefix, or the legacy mkdtemp
 // shape ANCHORED under the OS temp dir. Exported for its unit tests — this
 // predicate is the only thing standing between the sweep and a human's
 // checkout that happens to live in a directory named pleach-something.
-export function ownsWorktree(path: string, ownBase: string, tmpBase: string): boolean {
-  if (path.startsWith(ownBase)) return true;
+export function ownsWorktree(path: string, ownBases: readonly string[], tmpBase: string): boolean {
+  if (ownBases.some((base) => path.startsWith(base))) return true;
   return path.startsWith(tmpBase) && /\/pleach-[^/]+\/wt$/.test(path);
 }
 
@@ -66,7 +69,14 @@ export async function sweepOrphanWorktrees(
   // git lists canonical paths (macOS: /private/var/…); canonicalize our side
   // too or the ownership prefix never matches under /var → /private/var.
   const rootReal = await realpath(repoRoot).catch(() => repoRoot);
-  const ownBase = join(resolveGitDir(rootReal), 'pleach', 'worktrees');
+  // The new per-repo home (outside `.git/`, issue #174) and the old git-dir
+  // home both count as pleach's own — a sweep keeps healing leftovers from
+  // earlier versions. git lists canonical paths (macOS: /private/var/… for a
+  // home that `os.tmpdir()` names /var/…), so the new home is canonicalised the
+  // same way before it becomes an ownership prefix.
+  const newHomeRaw = await worktreeHomeFor(repoRoot);
+  const newHome = await realpath(newHomeRaw).catch(() => newHomeRaw);
+  const ownBases = [newHome, join(resolveGitDir(rootReal), 'pleach', 'worktrees')];
   const tmpReal = await realpath(tmpdir()).catch(() => tmpdir());
   const list = await exec(['git', '-C', repoRoot, 'worktree', 'list', '--porcelain'], {
     cwd: repoRoot,
@@ -78,7 +88,7 @@ export async function sweepOrphanWorktrees(
 
   const removed: string[] = [];
   for (const p of paths) {
-    if (!ownsWorktree(p, ownBase, tmpReal)) continue;
+    if (!ownsWorktree(p, ownBases, tmpReal)) continue;
     // dryRun lists the owned worktrees without removing them (issue #115's
     // `--dry-run`); the real sweep goes through git, never a bare rm.
     if (opts.dryRun) {
@@ -95,6 +105,11 @@ export async function sweepOrphanWorktrees(
   }
   if (!opts.dryRun) {
     await exec(['git', '-C', repoRoot, 'worktree', 'prune'], { cwd: repoRoot });
+    // The per-repo directory the sweep emptied is removed, so an empty home
+    // does not accumulate one dir per retired repository.
+    if ((await readdir(newHome).catch(() => [] as string[])).length === 0) {
+      await rm(newHome, { recursive: true, force: true });
+    }
   }
   return removed.sort();
 }

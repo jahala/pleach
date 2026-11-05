@@ -1,7 +1,7 @@
 # pleach roadmap: the open issues as work packages
 
-**You are here (2026-10-26).** v1.0.0 is released. The audit fixes (D24–D27) and the first P1 batch
-(D28 #98, D29 #147, D30 #148) the second batch (D31 #114, D32 #131, D33 #149) the third (D34 #151, D35 #127, D36 #146 with #126) the fourth (D37 #107, D38 #152, D39 #154, D40 #128) the fifth (D41 #106, D42 #109, D43 #115, D44 #123, D45 #100) the sixth (D47 #63, D48 #116, D49 #105, D50 #130, D51 #85) and the seventh (D52 #70, D53 #125, D54 #160) are merged, and CI runs the umbel suites. Every open issue carries a
+**You are here (2026-11-05).** v1.0.0 is released. The audit fixes (D24–D27) and the first P1 batch
+(D28 #98, D29 #147, D30 #148) the second batch (D31 #114, D32 #131, D33 #149) the third (D34 #151, D35 #127, D36 #146 with #126) the fourth (D37 #107, D38 #152, D39 #154, D40 #128) the fifth (D41 #106, D42 #109, D43 #115, D44 #123, D45 #100) the sixth (D47 #63, D48 #116, D49 #105, D50 #130, D51 #85) the seventh (D52 #70, D53 #125, D54 #160) and the eighth (D55 #174, D56 #177, D57 #175, D58 #124) are merged, and CI runs the umbel suites. Every open issue carries a
 priority label: P1 loses work or blocks a run, P2 costs time or misleads, P3 is polish. This page groups
 the open issues into work packages that share code and need one design, in the order to build them.
 Each package becomes a tend2 loop when work starts, with a ledger item for each defect.
@@ -13,7 +13,7 @@ Each package becomes a tend2 loop when work starts, with a ledger item for each 
 | 1 | Nothing unjudged, nothing unrecorded | #129 next; #125 done (D53); #131, #127, #109 done (D32, D35, D42) | Work that no gate judged, or that the record lost, can reach a verified branch. This is the prime invariant. |
 | 2 | The operator's seat | #86 #71 #87; #114, #115, #63 done (D31, D43, D47) | The largest field pain: 806 `tail` polls across 25 sessions, and sessions killed by hand. |
 | 3 | Casting and the config | #149, #146, #126, #128 done (D33, D36, D40) | Found dogfooding on cfanalytics: one plan cannot reach two endpoints of one CLI, and an ordinary audit command costs a whole build before it fails. |
-| 4 | Landing that finishes the job | #124; #116, #85, #130 done (D48, D51, D50) | One small honesty fix left: the land gate's refusal hides its output. |
+| 4 | Landing that finishes the job | #176 next; #116, #85, #130, #175, #124 done (D48, D51, D50, D57, D58) | Next: an integration attempt when nodes pass alone and fail together. |
 | 5 | Contract v1.2, one round with tend2 | #104 (with #113) #90; #123, #106 done (D44, D41) | Schema changes batched into one conversation once tend2 is public. The receipt version fence is decided (D46). |
 | 6 | Umbrella fit | #108 #112 | Small, and they need plotplot's contracts. |
 | — | Blocked or parked | #111 (umbel#92) · #117 (an experiment outside this repo); #107, #70 done (D37, D52) | See below. |
@@ -73,7 +73,10 @@ store.
 
 **Code:** `loop/land.ts`, `seams/isolate.ts` (`landStack`, `publish`), `core/errors.ts`.
 
-- **#124 (S):** a land-gate refusal names the command but drops the output tail it already journals.
+- **#124 (S):** a land-gate refusal names the command but drops the output tail it already journals. Done in D58.
+- **#175:** one shared file made land conflicts cascade, one rebuild per sibling. Done in D57: one land
+  pins every conflicting node, and one run rebuilds the group.
+- **#176:** nodes that pass alone and fail together. Next: an integration attempt recorded as its own node.
 - **#116 (L):** a land conflict stops pleach and a person merges by hand. Done in D48: land pins the
   composed stack, and the next run rebuilds the node on it under every gate. A replay of the node's
   commits was tried first (2026-10-22) and rejected, because it could drop a sibling's verified line.

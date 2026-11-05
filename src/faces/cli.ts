@@ -92,13 +92,16 @@ Usage:
   pleach --version
 
 Flags (run):
-  --repo-root PATH        Git repo the worktrees and node/<id> branches live in (default: cwd)
+  --repo-root PATH        Git repo the node/<id> branches live in (default: cwd). Worktrees
+                          live in the worktree home ($PLEACH_WORKTREE_HOME, else the cache),
+                          outside this repo.
   --max-concurrency N     Parallel node cap (default: plan.maxConcurrency, else CPU cores − 2)
   --timeout-ms N          Default per-attempt timeout when a node omits policy.timeoutMs (default: 30m)
   --idle-ms N             End a worker's wait after this long with no activity (default: 10m).
-  --provider-backoff-ms N First wait after a provider or network error (default: 15000). Five
-                          waits, each double the last, run inside the same attempt; only once
-                          they are spent does the error cost an attempt.
+  --provider-backoff-ms N First wait after a provider or network error, or a worker spawn
+                          that failed (default: 15000). Five waits, each double the last, run
+                          inside the same attempt; a provider error costs an attempt only
+                          once they are spent.
   --settle-ms N           After a worker stops, wait until the tree is unchanged for this long
                           before any gate reads it (default: 2000, or $PLEACH_SETTLE_MS; 0 turns
                           it off). A tree still changing after 60 s fails the attempt, naming
@@ -189,10 +192,11 @@ Flags (clean):
 Landing: verified work is published as node/<id> branches; \`pleach land\` merges
 the plan's sinks onto the branch checked out in --repo-root. It refuses unless
 EVERY plan node is verified (with --sinks, unless every named one is). A merge
-conflict aborts with the repo untouched and pins the conflicting sink at
-refs/pleach/rebuild/<id> — the next \`pleach run\` rebuilds it on the landed
-stack (a worker integrates the sibling's change, the gates judge it), then
-\`pleach land\` again. A non-fast-forward aborts with the repo untouched.
+conflict aborts with the repo untouched and pins every conflicting sink at
+refs/pleach/rebuild/<id> — the next \`pleach run\` rebuilds the whole group on the
+landed stack in plan order (each later rebuild merges the earlier ones; a worker
+integrates the sibling's change, the gates judge it), then \`pleach land\` again.
+A non-fast-forward aborts with the repo untouched.
 
 Resuming is automatic: re-running a plan skips nodes already verified in the
 ledger (their node/<id> branch exists) — only unbuilt or previously-failed

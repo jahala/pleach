@@ -4,13 +4,14 @@ import type { RunnerSeam, WorkerResult } from 'pleach';
 import { gitLedger } from 'pleach/adapters/git';
 import type { PleachConfig } from 'pleach/config';
 
-// issue #116 — a real, deterministic RunnerSeam with no LLM, no keys, no
-// network. A build worker writes its own line into shared.txt on a first build;
-// when the tree already holds conflict markers (the node re-run on the landed
-// stack, its own verified branch merged on top), it resolves them by keeping
-// both sides, exactly what a worker integrating a sibling's change must do.
-// The marker branch is what distinguishes the rebuild from the first build:
-// a first build writes one line, a rebuild produces both.
+// issue #116 (widened by #175) — a real, deterministic RunnerSeam with no LLM,
+// no keys, no network. A build worker writes its own line into shared.txt on a
+// first build (the line's letter is read from the prompt); when the tree
+// already holds conflict markers (the node re-run on the landed stack, its own
+// verified branch merged on top), it resolves them by keeping both sides,
+// exactly what a worker integrating a sibling's change must do. The marker
+// branch is what distinguishes the rebuild from the first build: a first build
+// writes one line, a rebuild produces all of them.
 
 const FILE = 'shared.txt';
 
@@ -49,9 +50,9 @@ function runner(): RunnerSeam {
             await writeFile(abs, resolveMarkers(current));
             return stop('resolved shared.txt keeping both changes', [FILE]);
           }
-          const line = lastPrompt.includes('write A') ? 'A\n' : 'B\n';
-          await writeFile(abs, line);
-          return stop(`wrote ${line.trim()}`, [FILE]);
+          const line = /write ([A-Z]) into/.exec(lastPrompt)?.[1] ?? 'X';
+          await writeFile(abs, `${line}\n`);
+          return stop(`wrote ${line}`, [FILE]);
         },
         kill: () => Promise.resolve(),
       };
