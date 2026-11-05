@@ -632,6 +632,38 @@ checkpoint but have different lifetimes and trust domains.**
   failure never reproduced and has no fix here. Tests: `test/integration/run-journal-copy.test.ts`,
   `test/integration/receipt-patch-id.test.ts`, `test/integration/clean.test.ts`,
   `test/integration/journal.test.ts`, `test/e2e/land.test.ts`.
+- **D55 ⚠ [field] A gate checked fewer rules in pleach's worktrees than on the branch.** jahala/pleach#174
+  (a conducted repo, 2026-11-05): Biome turns its React rules off for paths under `.git/`, so two nodes
+  whose `biome check .` smoke passed in `<git-dir>/pleach/worktrees/` failed lint on the branch.
+  **Fix:** node worktrees and land stacks live in `$PLEACH_WORKTREE_HOME`, else
+  `$XDG_CACHE_HOME/pleach/worktrees`, else `~/.cache/pleach/worktrees`, one folder per repository
+  (`core/worktree-home.ts`). That is outside `.git/` and outside the repository, and still a home only
+  pleach writes, so `pleach clean` keeps owning it, and it is out of the OS temp cleaner's reach (D12's
+  reasons for the old home). Claude Code opens there without a trust prompt (checked on the real
+  binary). `pleach clean` still sweeps the two older homes. The test preload points the home at a temp
+  folder, and a scan holds every test that starts the CLI to passing its env. Tests:
+  `test/unit/worktree-home.test.ts`, `test/integration/worktree-home.test.ts`,
+  `test/integration/clean.test.ts`, `test/unit/spawned-cli-env.test.ts`.
+- **D56 ⚠ [field] A worker spawn that failed before any work ended the node on its first attempt.**
+  jahala/pleach#177 (a transient umbel lock, 2026-11-05; the plan was rerun with `--fresh`). **Fix:** a
+  `WorkerSpawnError` other than the sign-in refusal (D40) is retried inside the attempt on the
+  provider-error backoff (D34), journaled as `spawn-retry`, and spends no attempt. Once the waits are
+  spent the node settles failed with the spawn error named, and an abort during a wait settles aborted.
+  Tests: `test/loop/spawn-error-retry.test.ts`.
+- **D57 ⚠ [field] Land conflicts on one shared file cascaded, one rebuild per sibling.**
+  jahala/pleach#175 (a conducted overnight build, 2026-11-05: three rebuilds of one node, then a hand
+  merge). D48 pinned only the first conflicting sink. **Fix:** `landStack` tries every sink, setting
+  aside each that conflicts, and `pleach land` pins every conflicting sink at the one stack that holds
+  all the clean ones. The next run rebuilds the pinned group in plan order, each on the stack plus the
+  group members rebuilt before it, so a single cycle lands them all. Nothing lands while a pin is
+  open. Tests: `test/integration/land-rebuild.test.ts`, `test/loop/land-rebuild.test.ts`,
+  `test/e2e/land-rebuild.test.ts`.
+- **D58 ◦ [field] A land refusal named the failing command and hid what it printed.** jahala/pleach#124
+  and #176 (twice, a conductor merged the stack by hand to read the error). **Fix:** every culprit,
+  land setup and incoherent-diagnosis refusal prints its output tail under the line that names it.
+  The bisect keeps the red that incriminated each culprit, so several culprits show their own output.
+  The journal already carried the tails. Tests: `test/unit/narrate.test.ts`,
+  `test/loop/land-gate.test.ts`, `test/e2e/land.test.ts`.
 
 ### Verified-sound (attacks refuted — do not relitigate)
 

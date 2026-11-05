@@ -22,6 +22,10 @@ Entries carry the defect-ledger id where one exists (`D8`, `D21`, ...); the ledg
 - `pleach audit-wrap -- <check>` turns any check into the `tend-audit-result` block an audit command must print (D33).
 
 ### Fixed
+- Gates check the same rules in pleach's worktrees as on the branch: worktrees moved out of `.git/` to `~/.cache/pleach/worktrees` (or `$PLEACH_WORKTREE_HOME`). A node whose gates need packages installs them in `setup` (D55).
+- A worker spawn that fails before any work is retried without spending an attempt (D56).
+- One land pins every conflicting node, and one run rebuilds them all, so siblings that share a file land in one cycle (D57).
+- A land refusal shows what the failing command printed (D58).
 - A phased node's handback keeps every phase's closing message, each under its own heading (D53).
 - Integration tests no longer flake when several suites run on one machine (D54).
 - A close keeps a handback even when the runner could not read the worker's final message: it names the failure, and the journal says `handback-read-failed`. An empty final message is named too (D42).
