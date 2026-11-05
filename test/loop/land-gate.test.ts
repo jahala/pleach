@@ -143,6 +143,32 @@ describe('the land gate (§A)', () => {
       h.journal.some((e) => e.event === 'land-integrity-failed' || e.event === 'land-culprit'),
     ).toBe(true);
   });
+
+  test('several culprits: each is named with its own output tail', async () => {
+    // a's smoke red when b is in the stack; b's smoke red when a is in the
+    // stack. Each passes alone (its own verification tree) and fails on the
+    // composition, so the bisect names both — and each culprit line must carry
+    // the tail that incriminated it, not the last red the bisect happened to see.
+    const h = closedHarness(['a', 'b'], (argv, cwd) => {
+      if (argv[0] === 'test-a' && cwd.includes('node/b')) {
+        return { output: 'RED: A', exitCode: 1 };
+      }
+      if (argv[0] === 'test-b' && cwd.includes('node/a')) {
+        return { output: 'RED: B', exitCode: 1 };
+      }
+      return { output: '', exitCode: 0 };
+    });
+    const plan = sinkPlan({ a: 'test-a', b: 'test-b' });
+
+    await expect(landPlan(plan, h.deps, OPTS)).rejects.toThrow(LandBlockedError);
+
+    const culprits = h.journal.filter((e) => e.event === 'land-culprit');
+    expect(culprits.map((c) => c.node).sort()).toEqual(['a', 'b']);
+    const tailOf = new Map(culprits.map((c) => [c.node, String(c.outputTail)]));
+    expect(tailOf.get('a')).toContain('RED: B');
+    expect(tailOf.get('b')).toContain('RED: A');
+    expect(h.log.of('land').length).toBe(0);
+  });
 });
 
 // ── §A field gap (decker wave 1, ledger D9): the stack needs provisioning ────

@@ -306,3 +306,36 @@ describe('narration — a refused landing merge (D28)', () => {
     expect(line).not.toContain('conflict');
   });
 });
+
+// issue #124 — a land refusal that ran a command and went red prints that
+// command's output tail under the line naming the culprit, so the operator
+// reads WHY the gate said no, not just that it did.
+describe('narration — a land refusal shows the failing command output', () => {
+  test('a culprit line prints the failing smoke output tail', () => {
+    const line = narrateEvent({
+      event: 'land-culprit',
+      node: 'extractor.c12',
+      command: "bash -lc 'tend2 verify …'",
+      outputTail: 'c0 error — payload drift: file of record is 89800c78681c',
+    });
+    expect(line).toContain('extractor.c12');
+    expect(line).toContain('fails when it lands with the others');
+    expect(line).toContain('payload drift');
+  });
+
+  test('a culprit line without a tail stays one line', () => {
+    const line = narrateEvent({ event: 'land-culprit', node: 'a', command: 'test-a' });
+    expect(line).toBe("✗ culprit: a — 'test-a' fails when it lands with the others");
+  });
+
+  test('a land setup failure prints the setup command output tail', () => {
+    const line = narrateEvent({
+      event: 'land-setup-failed',
+      command: 'install-deps',
+      exitCode: 1,
+      outputTail: 'npm ERR! registry down',
+    });
+    expect(line).toContain('install-deps');
+    expect(line).toContain('registry down');
+  });
+});

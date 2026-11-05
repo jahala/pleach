@@ -76,7 +76,11 @@ pleach land plan.json \
 ```
 
 A non-zero exit refuses the landing as `land-gate-refused`, with the command's output
-tail on stderr and the repository untouched. Both flags shape `pleach run --land` too:
+tail on stderr and the repository untouched. The sinks' own smokes are the same
+deal: when one goes red on the composition, the refusal names the culprit sink and
+prints that smoke's output tail on stderr (one tail per culprit), and a setup that
+fails prints its output the same way — the operator reads why the gate said no, not
+only that it did. Both flags shape `pleach run --land` too:
 the landing a run performs is the same landing.
 
 ## Work that exists only on this machine is named

@@ -158,8 +158,15 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       return `landing verified work — ${firstSentence(e.goal)}`;
     case 'land-setup':
       return `provisioning the stack: ${len(e.commands)} setup command(s)`;
-    case 'land-setup-failed':
-      return `✗ land refused: '${s(e.command)}' failed provisioning the stack — environment, not composition; no culprit`;
+    case 'land-setup-failed': {
+      // The tail rides the line: a setup that failed is an environment answer,
+      // and the operator must read what the command said to fix it (issue #124).
+      const why = typeof e.outputTail === 'string' ? e.outputTail.trim() : '';
+      const head =
+        `✗ land refused: '${s(e.command)}' failed provisioning the stack — environment, ` +
+        'not composition; no culprit';
+      return why === '' ? head : `${head}\n${why}`;
+    }
     case 'land-gate':
       return `land gate: ${len(e.commands)} check(s) on the merged stack`;
     case 'land-gate-refused': {
@@ -173,8 +180,14 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       return `land gate red once — retrying ${s(e.command)} (flaky screen)`;
     case 'land-bisect':
       return `bisecting the stack to name the culprit…`;
-    case 'land-culprit':
-      return `✗ culprit: ${s(e.node)} — '${s(e.command)}' fails when it lands with the others`;
+    case 'land-culprit': {
+      // The tail rides the line: the culprit's whole command was already the
+      // refusal's only detail; the operator must read WHY it went red on the
+      // composition, not just that it did (issue #124).
+      const why = typeof e.outputTail === 'string' ? e.outputTail.trim() : '';
+      const head = `✗ culprit: ${s(e.node)} — '${s(e.command)}' fails when it lands with the others`;
+      return why === '' ? head : `${head}\n${why}`;
+    }
     case 'land-integrity-failed':
       return `✗ land diagnosis incoherent — the culprit-free stack also fails; nothing lands`;
     case 'land-blocked':

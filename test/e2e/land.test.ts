@@ -52,6 +52,27 @@ const BROKEN_PLAN = {
   ],
 };
 
+// Two sinks whose smokes each pass alone (a has only a.txt, b has only b.txt)
+// but fail on the composed stack (each sees the other's file). The refusal must
+// name both culprits, each with its own smoke's output, so the operator reads
+// why the gate said no instead of only that it did (issue #124).
+const INCOMPATIBLE_PLAN = {
+  goal: 'two sinks that cannot land together',
+  source: 'e2e-land-incompatible',
+  nodes: [
+    {
+      id: 'a',
+      work: { command: 'bash -lc "echo a > a.txt"' },
+      accept: { smoke: 'bash -lc \'if [ -f b.txt ]; then echo "RED: A"; exit 1; fi\'' },
+    },
+    {
+      id: 'b',
+      work: { command: 'bash -lc "echo b > b.txt"' },
+      accept: { smoke: 'bash -lc \'if [ -f a.txt ]; then echo "RED: B"; exit 1; fi\'' },
+    },
+  ],
+};
+
 describe('pleach land — e2e over command plans', () => {
   let repo = '';
   let cleanup: () => Promise<void> = () => Promise.resolve();
@@ -119,4 +140,26 @@ describe('pleach land — e2e over command plans', () => {
     // plus git); under five parallel suites that exceeds bun's 5 s default
     // (issue #160). The bound catches a hang, never the subprocesses' work.
   }, 60_000);
+
+  // issue #124 — a land refusal that ran a command and went red must print
+  // that command's output tail, not just its command. Two incompatible sinks
+  // name two culprits, and each culprit line carries its own smoke's words.
+  test('a land refusal prints each culprit sink with its smoke output tail', async () => {
+    const planPath = join(repo, 'plan.json');
+    await writeFile(planPath, JSON.stringify(INCOMPATIBLE_PLAN));
+
+    const run = await pleach(['run', '--no-redact', planPath, '--repo-root', repo], repo);
+    expect(run.code).toBe(0);
+
+    const land = await pleach(['land', '--no-redact', planPath, '--repo-root', repo], repo);
+    expect(land.code).toBe(1);
+    // Each culprit's own smoke output reaches stderr under its culprit line.
+    expect(land.stderr).toContain('RED: A');
+    expect(land.stderr).toContain('RED: B');
+    expect(land.stderr).toContain('culprit');
+
+    // Nothing landed: the branch still has only the initial commit's file.
+    const files = await gitIn(repo, 'ls-tree', '--name-only', 'HEAD');
+    expect(files.split('\n')).toEqual(['init.txt']);
+  }, 120_000);
 });
