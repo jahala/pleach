@@ -446,18 +446,35 @@ async function refuseWithDiagnosis(
       plan,
       subset.map((r) => sinkByRef.get(r) as string),
     );
-  const culprits: string[] = [];
-  let culpritEvidence = fullRed;
+  // A culprit keeps the evidence that incriminated it — the red a probe of ITS
+  // subset reported — so several culprits read one tail each, never the last
+  // red the bisect happened to see (issue #124/#176).
+  interface Culprit {
+    node: string;
+    command: string;
+    outputTail: string;
+  }
+  const culprits: Culprit[] = [];
 
   if (refs.length === 1) {
-    culprits.push(sinks[0] as string);
+    culprits.push({
+      node: sinks[0] as string,
+      command: fullRed.command,
+      outputTail: fullRed.outputTail,
+    });
   } else {
     const knownGood: string[] = [];
-    // Iterative halving over the remaining candidates.
-    async function bisect(cands: readonly string[]): Promise<void> {
+    // Iterative halving over the remaining candidates. `evidence` is the red
+    // that justified narrowing into this subset — carried down so a single
+    // remaining candidate is named with the run that caught it, not its parent's.
+    async function bisect(cands: readonly string[], evidence: GateFailure): Promise<void> {
       if (cands.length === 0) return;
       if (cands.length === 1) {
-        culprits.push(sinkByRef.get(cands[0] as string) as string);
+        culprits.push({
+          node: sinkByRef.get(cands[0] as string) as string,
+          command: evidence.command,
+          outputTail: evidence.outputTail,
+        });
         return;
       }
       const mid = Math.ceil(cands.length / 2);
@@ -472,27 +489,25 @@ async function refuseWithDiagnosis(
       const leftRed = await probe(deps, repoRoot, leftProbe, gate, setupsFor(leftProbe));
       if (leftRed === null) {
         knownGood.push(...left);
-        await bisect(right);
+        await bisect(right, evidence);
         return;
       }
-      culpritEvidence = leftRed;
-      await bisect(left);
+      await bisect(left, leftRed);
       // The right half gets its own combined test in known-good context — a
       // left culprit does not exonerate the right half.
       const rightProbe = [...knownGood, ...right];
       const rightRed = await probe(deps, repoRoot, rightProbe, gate, setupsFor(rightProbe));
       if (rightRed !== null) {
-        culpritEvidence = rightRed;
-        await bisect(right);
+        await bisect(right, rightRed);
       } else {
         knownGood.push(...right);
       }
     }
-    await bisect(refs);
+    await bisect(refs, fullRed);
 
     // Terminal coherence check: the good subset alone must pass, or the
     // diagnosis cannot be trusted — say so instead of naming names.
-    const goodRefs = refs.filter((r) => !culprits.includes(sinkByRef.get(r) as string));
+    const goodRefs = refs.filter((r) => !culprits.some((c) => c.node === sinkByRef.get(r)));
     const recheck = await probe(deps, repoRoot, goodRefs, gate, setupsFor(goodRefs));
     if (recheck !== null) {
       await deps.journal.append({
@@ -510,13 +525,13 @@ async function refuseWithDiagnosis(
   for (const culprit of culprits) {
     await deps.journal.append({
       event: 'land-culprit',
-      node: culprit,
-      command: culpritEvidence.command,
-      outputTail: culpritEvidence.outputTail,
+      node: culprit.node,
+      command: culprit.command,
+      outputTail: culprit.outputTail,
     });
   }
   throw new LandBlockedError(
-    `land gate failed on the composition — culprit sink(s): ${culprits.join(', ')} ` +
-      `('${culpritEvidence.command}' red on the stack); nothing lands`,
+    `land gate failed on the composition — culprit sink(s): ${culprits.map((c) => c.node).join(', ')} ` +
+      `('${fullRed.command}' red on the stack); nothing lands`,
   );
 }
