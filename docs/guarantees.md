@@ -325,6 +325,8 @@ branch. Node worktrees and land stacks therefore live under
 `<repo-basename>-<first 12 hex of sha256 of the git dir's realpath>`. `pleach clean`
 still sweeps the older homes (`<git-dir>/pleach/worktrees/…` and the legacy OS-temp
 `pleach-*/wt`) so leftovers from earlier versions keep getting cleaned up.
+A worktree there is a checkout of its own. It finds no `node_modules` of the main checkout by
+walking up the folders, so a node whose gates need packages installs them in its `setup`.
 
 **Claude Code workers need the repo trusted.** Trust follows the main checkout
 (`~/.claude.json`) rather than the worktree, and pleach's temporary worktrees inherit it. An
