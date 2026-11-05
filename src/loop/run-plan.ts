@@ -196,7 +196,13 @@ async function runUnderLock(
   // so the start line stays the run's first line and the re-dispatch stays
   // inside the run's own journal copy (D21).
   const redispatch: Record<string, unknown>[] = [];
-  const rebuildOnto = await applyAcceptanceEvolution(plan, deps, closed, redispatch, opts.repoRoot);
+  const { rebuildOnto, rebuildPredecessors } = await applyAcceptanceEvolution(
+    plan,
+    deps,
+    closed,
+    redispatch,
+    opts.repoRoot,
+  );
 
   // Nodes the ledger directly reported closed, captured before seedClosure
   // implies ancestors — surfaced as alreadyVerified (skipped, not re-run), and
@@ -259,7 +265,8 @@ async function runUnderLock(
   const inflight = new Map<string, Promise<void>>();
 
   // A node is schedulable when pending, not yet failed/blocked/aborted/partial/
-  // inflight, and all its needs are closed.
+  // inflight, and all its needs — plus every group member it rebuilds after
+  // (issue #175) — are closed.
   function ready(): Node[] {
     const out: Node[] = [];
     for (const node of currentPlan.nodes) {
@@ -273,7 +280,10 @@ async function runUnderLock(
       )
         continue;
       if (inflight.has(node.id)) continue;
-      if (node.needs.every((d) => closed.has(d))) out.push(node);
+      if (!node.needs.every((d) => closed.has(d))) continue;
+      const predecessors = rebuildPredecessors.get(node.id);
+      if (predecessors !== undefined && !predecessors.every((p) => closed.has(p))) continue;
+      out.push(node);
     }
     return out;
   }
@@ -379,7 +389,14 @@ async function runUnderLock(
         rebuildRedSealedAt = redSealedAt;
       }
     }
-    const baseRefs = baseRefsFor(node, baseRefForClosed, resumed?.sha, onto, opts.fresh);
+    const baseRefs = baseRefsFor(
+      node,
+      baseRefForClosed,
+      resumed?.sha,
+      onto,
+      opts.fresh,
+      rebuildPredecessors.get(node.id),
+    );
     await deps.journal.append({ event: 'node-start', node: node.id });
     const startedAt = Date.now();
 
@@ -974,10 +991,15 @@ async function runUnderLock(
 // after run-start (the start line stays the run's first line, and the
 // re-dispatch stays inside the run's own journal copy — D21).
 //
-// § land-rebuild (issue #116): a node pinned by a land conflict rebuilds on the
-// landed stack. Each plan node's rebuild ref is read; a ledger-closed node with
-// one is re-dispatched this run, and the stack it must rebuild on is returned
-// by node id. Only sinks are ever pinned, so no dependents need a cascade, but
+// § land-rebuild (issue #116, widened by #175): a node pinned by a land
+// conflict rebuilds on the landed stack. Pinned nodes that share a stack sha
+// form one group: the run rebuilds them in plan order, each on the stack plus
+// the newly rebuilt `node/<id>` branches of the group members before it, so one
+// run resolves what used to take N-1 run-and-land cycles. Each plan node's
+// rebuild ref is read; a ledger-closed node with one is re-dispatched this run.
+// The stack each group must rebuild on is returned by node id, and the group's
+// implied order (the earlier members a later one must wait for) is returned
+// beside it. Only sinks are ever pinned, so no dependents need a cascade, but
 // the cascade below keeps that correct if one ever is.
 async function applyAcceptanceEvolution(
   plan: Plan,
@@ -985,7 +1007,7 @@ async function applyAcceptanceEvolution(
   closed: Map<string, string | null>,
   lines: Record<string, unknown>[],
   repoRoot: string,
-): Promise<Map<string, string>> {
+): Promise<{ rebuildOnto: Map<string, string>; rebuildPredecessors: Map<string, string[]> }> {
   const invalidated = new Set<string>();
   for (const node of plan.nodes) {
     if (!closed.has(node.id)) continue;
@@ -999,15 +1021,34 @@ async function applyAcceptanceEvolution(
       lines.push({ event: 'acceptance-changed', node: node.id, recorded, current });
     }
   }
-  const rebuildOnto = new Map<string, string>();
+  // Pinned nodes grouped by the stack sha they share, in plan order — the order
+  // the run rebuilds them in.
+  const byStack = new Map<string, string[]>();
   for (const node of plan.nodes) {
     if (!closed.has(node.id)) continue;
     const stackSha = await deps.isolate.refSha(repoRoot, rebuildRef(node.id));
     if (stackSha === null) continue;
-    closed.delete(node.id);
-    invalidated.add(node.id);
-    rebuildOnto.set(node.id, stackSha);
-    lines.push({ event: 'land-rebuild', node: node.id, onto: stackSha });
+    const group = byStack.get(stackSha) ?? [];
+    group.push(node.id);
+    byStack.set(stackSha, group);
+  }
+  const rebuildOnto = new Map<string, string>();
+  const rebuildPredecessors = new Map<string, string[]>();
+  for (const [stackSha, group] of byStack) {
+    for (let i = 0; i < group.length; i++) {
+      const id = group[i] as string;
+      const after = group.slice(0, i);
+      closed.delete(id);
+      invalidated.add(id);
+      rebuildOnto.set(id, stackSha);
+      rebuildPredecessors.set(id, after);
+      lines.push({
+        event: 'land-rebuild',
+        node: id,
+        onto: stackSha,
+        ...(after.length > 0 ? { after } : {}),
+      });
+    }
   }
   // Cascade: a closed dependent's verification embedded the OLD ancestor —
   // skip-trusting it would land stale work (only sinks land, so the
@@ -1024,7 +1065,7 @@ async function applyAcceptanceEvolution(
       lines.push({ event: 'acceptance-cascade', node: node.id, via });
     }
   }
-  return rebuildOnto;
+  return { rebuildOnto, rebuildPredecessors };
 }
 
 // Every run leaves a copy of its own lines beside the receipts (D21): the
@@ -1248,19 +1289,24 @@ function sealsRed(node: Node, index: number): boolean {
 // from HEAD, so there is nothing to put behind it. A rebuilt node (issue #116)
 // checks out the stack commit and merges its needs; a worker node also merges
 // its own previous verified branch last (the markers are what the worker
-// integrates), while `--fresh` skips that own-branch merge.
+// integrates), while `--fresh` skips that own-branch merge. issue #175: a
+// rebuilt node that shares its stack with earlier group members also merges
+// their newly rebuilt `node/<id>` branches — in plan order — so one run rebuilds
+// the whole group and each later rebuild contains the earlier ones.
 function baseRefsFor(
   node: Node,
   baseRefForClosed: Map<string, string>,
   resumeSha?: string,
   rebuildOnto?: string,
   fresh?: boolean,
+  rebuildAfter?: string[],
 ): string[] {
   const merged = node.needs.map((d) => baseRefForClosed.get(d) ?? `node/${d}`);
   if (resumeSha !== undefined) return [resumeSha, ...merged];
   if (rebuildOnto !== undefined) {
     const mergeOwn = fresh !== true && !('command' in node.work);
-    return [rebuildOnto, ...merged, ...(mergeOwn ? [`node/${node.id}`] : [])];
+    const predecessors = (rebuildAfter ?? []).map((p) => `node/${p}`);
+    return [rebuildOnto, ...predecessors, ...merged, ...(mergeOwn ? [`node/${node.id}`] : [])];
   }
   return merged.length === 0 ? [ROOT_BASE_REF] : merged;
 }

@@ -7,6 +7,7 @@ import {
   CommitAlteredError,
   IsolateCatastrophicError,
   LandBlockedError,
+  type LandConflict,
   LandConflictError,
   LandMergeRefusedError,
 } from '../core/errors.ts';
@@ -820,6 +821,11 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
       // land gate's `{base}` resolves to, and the only moment it is knowable.
       const baseSha = await gitMust(exec, worktreePath, 'rev-parse', 'HEAD');
 
+      // issue #175: land composes everything it can. A conflicting merge is
+      // aborted and recorded, then the remaining sinks still merge, so every
+      // clean sink lands and only the conflicts refuse. Nothing here is
+      // published — the conflicts abort the whole landing below.
+      const conflicts: LandConflict[] = [];
       for (const ref of refs) {
         const verify = await git(
           exec,
@@ -834,7 +840,7 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
         }
         const merge = await git(exec, worktreePath, 'merge', '-m', `pleach: land ${ref}`, ref);
         if (merge.exitCode !== 0) {
-          // A conflict must NEVER land — collect the files, abort, refuse
+          // A conflict must NEVER land — collect the files, abort, record it
           // (the marker-keeping path of isolate() is for node builds only).
           const diff = await git(exec, worktreePath, 'diff', '--name-only', '--diff-filter=U');
           const files = diff.output
@@ -842,11 +848,6 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
             .split('\n')
             .map((l) => l.trim())
             .filter(Boolean);
-          // The stack's HEAD before the abort: the target tip plus every sink
-          // merged before this one — the commit the node must rebuild on
-          // (issue #116). Read while the merge is still in progress, when HEAD
-          // is the pre-merge commit.
-          const stackSha = await gitMust(exec, worktreePath, 'rev-parse', 'HEAD');
           await git(exec, worktreePath, 'merge', '--abort');
           if (files.length === 0) {
             // No unmerged files: git refused the merge without a conflict. Most
@@ -855,8 +856,15 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
             // the cause either way (D28).
             throw new LandMergeRefusedError(ref, merge.output);
           }
-          throw new LandConflictError(ref, files, stackSha);
+          conflicts.push({ ref, files });
         }
+      }
+      if (conflicts.length > 0) {
+        // The stack the conflicts are pinned at: the target tip plus every sink
+        // that merged cleanly (every conflicting merge was aborted). One commit
+        // for the whole group, so the next run rebuilds them all against it.
+        const stackSha = await gitMust(exec, worktreePath, 'rev-parse', 'HEAD');
+        throw new LandConflictError(conflicts, stackSha);
       }
       // The stack is built and unpublished; the loop gates it in `cwd`, then
       // publishes or disposes. Publish is the ONLY touch on the user's

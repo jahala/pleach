@@ -180,7 +180,7 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
     case 'land-blocked':
       return `✗ land refused: ${s(e.reason ?? e.unverified)}`;
     case 'land-conflict':
-      return `✗ land conflict on ${s(e.ref)} — ${s(e.node ?? e.ref)} is pinned for a rebuild on the landed stack (run 'pleach run <plan>', then land again)`;
+      return `✗ land conflict on ${s(e.ref)} — ${s(e.node ?? e.ref)} is pinned for a rebuild on the landed stack (files: ${(Array.isArray(e.files) ? e.files : []).map(s).join(', ')}; run 'pleach run <plan>', then land again)`;
     case 'land-merge-refused':
       return `✗ land refused on ${s(e.ref)}: git would not merge it — repository left untouched`;
     case 'landed': {

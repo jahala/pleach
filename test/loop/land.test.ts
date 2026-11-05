@@ -106,7 +106,7 @@ describe('landPlan', () => {
     const h = makeHarness({
       closed: new Map([['a', 'sha-a']]),
       refs: { 'node/a': 'sha-a' },
-      landThrows: new LandConflictError('node/a', ['same.txt']),
+      landThrows: new LandConflictError([{ ref: 'node/a', files: ['same.txt'] }]),
     });
 
     await expect(landPlan(p, h.deps, OPTS)).rejects.toBeInstanceOf(LandConflictError);
@@ -128,7 +128,7 @@ describe('landPlan', () => {
         ['b', 'sha-b'],
       ]),
       refs: { 'node/a': 'sha-a', 'node/b': 'sha-b' },
-      landThrows: new LandConflictError('node/b', ['same.txt'], 'stack-sha'),
+      landThrows: new LandConflictError([{ ref: 'node/b', files: ['same.txt'] }], 'stack-sha'),
     });
 
     await expect(landPlan(p, h.deps, OPTS)).rejects.toBeInstanceOf(LandConflictError);
