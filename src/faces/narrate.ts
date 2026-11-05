@@ -87,6 +87,8 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       return 'run stopped on request — no new launches; in-flight nodes finishing normally';
     case 'gate-flaky':
       return `${s(e.node)}: ${s(e.gate)} gate red once, green on retry — transient, proceeding`;
+    case 'spawn-retry':
+      return `↻ ${s(e.node)}: worker spawn failed — retrying in ${n(e.waitMs)} ms`;
     case 'blocked':
       return `⚠ ${s(e.node)} NEEDS YOU — worker blocked: ${s(e.reason)}`;
     case 'verdict': {

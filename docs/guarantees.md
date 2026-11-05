@@ -134,6 +134,12 @@ attempt, on the same tree, with the provider's words in the prompt: 15 s, then d
 waits in all (`--provider-backoff-ms` sets the first). Only when the waits are spent does the
 error cost an attempt, and the verdict's `detail` names the cause.
 
+A spawn that fails before any work started is the same shape: the runner could not start a
+worker at all (a transient lock, a listing that failed), so nothing ran and nothing is spent.
+The node waits and re-spawns inside the same attempt on the same backoff; a spawn error never
+costs an attempt. Only when the waits are spent does the node settle failed, the verdict's
+`detail` naming how many spawns failed and why, and its `nextStep` pointing at the runner.
+
 ## A spawn that needs a person settles blocked
 
 The runner refuses a worker whose provider CLI opens on its sign-in screen. umbel exits 126

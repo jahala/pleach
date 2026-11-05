@@ -115,6 +115,12 @@ function buildNextStep(f: AccountFacts): string {
           ? 'fix the plan — no attempt can run the gate'
           : 'fix the environment — no attempt can run the gate';
       }
+      // A spawn that failed before any work (issue #177) is the runner's fault,
+      // never the work's: the next step is to make the runner able to start a
+      // worker, then run again.
+      if (present(f.detail) && /worker spawn failed/.test(f.detail)) {
+        return 'check the runner and re-run';
+      }
       // Never name quarantine/<id> here: the account is written before the
       // settle, and a node whose tree changed nothing has no quarantine.
       return 'fix what the failing gate reports, then re-run the plan';

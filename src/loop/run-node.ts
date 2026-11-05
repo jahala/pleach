@@ -272,6 +272,9 @@ export async function runNode(
   // journal line will carry once the budget is gone.
   let providerErrorWaits = 0;
   let providerErrorDetail: string | undefined;
+  // The spawn-error backoff bookkeeping (issue #177), reset per attempt: how
+  // many waits this attempt has spent re-spawning a worker that never started.
+  let spawnErrorWaits = 0;
   // Receipt facts (§D), reset per attempt: the ladder's gate records in run
   // order, the audit's records, and the staged set once staging happened.
   let gates: GateRecord[] = [];
@@ -308,6 +311,7 @@ export async function runNode(
       phaseClosings = undefined;
       providerErrorWaits = 0;
       providerErrorDetail = undefined;
+      spawnErrorWaits = 0;
 
       // ── the journal says what this attempt is doing (issue #63) ────────────
       // A watcher reads the journal as a stream: `attempt-start` marks where an
@@ -468,6 +472,45 @@ export async function runNode(
               iso = null;
               evidence = undefined;
               continue attempt;
+            }
+            // A spawn that failed before any work (issue #177) is the runner's
+            // fault, never the work's: retried inside this attempt on the
+            // provider-error backoff, without spending an attempt. Only once
+            // the waits are spent does the node settle failed, naming the cause.
+            if (err instanceof WorkerSpawnError) {
+              const waitMs = providerBackoff(spawnErrorWaits, opts.providerBackoffMs);
+              if (waitMs === null) {
+                return handBack({
+                  verdict: failedVerdict(node, attempts, {
+                    gate: { ran: 'seam:worker', exitCode: -1 },
+                  }),
+                  gateOutputTail: outputTail(err.message),
+                  verdictDetail: spawnErrorDetailOf(spawnErrorWaits, err),
+                });
+              }
+              await deps.journal.append({
+                event: 'spawn-retry',
+                node: node.id,
+                attempt: attempts,
+                wait: spawnErrorWaits,
+                waitMs,
+                detail: spawnErrorTail(err.detail),
+              });
+              spawnErrorWaits += 1;
+              // A run teardown (D16) cuts the backoff short and settles
+              // aborted, having spawned no further worker — as the
+              // provider-error wait does.
+              if (await sleepInterrupted(deps.sleep, waitMs, opts.signal)) {
+                const base = baseVerdict(node, attempts);
+                return handBack({
+                  verdict: {
+                    ...base,
+                    status: 'aborted',
+                    evidence: { ...base.evidence, gate: { ran: 'wait:aborted', exitCode: -1 } },
+                  },
+                });
+              }
+              continue;
             }
             throw err;
           }
@@ -1487,6 +1530,20 @@ function providerErrorEvidence(message: string | undefined): string {
   return message !== undefined
     ? `previous attempt ended: provider-error\n${message}`
     : 'previous attempt ended: provider-error';
+}
+
+// ── spawn-error backoff (issue #177) ────────────────────────────────────────
+
+// The spawn error's own text, capped from the end like a gate's output tail —
+// the one line that says WHY the runner could not start a worker.
+function spawnErrorTail(detail: string): string {
+  return detail.slice(-EVIDENCE_TAIL);
+}
+
+// The verdict's journal detail once the spawn backoff budget is spent: how many
+// spawns failed before any work, and what the last one said.
+function spawnErrorDetailOf(waits: number, err: WorkerSpawnError): string {
+  return `worker spawn failed ${waits + 1} times: ${spawnErrorTail(err.detail)}`;
 }
 
 // Sleep through a backoff wait, but a run teardown (D16) cuts it short. The

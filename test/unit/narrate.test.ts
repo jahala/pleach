@@ -169,6 +169,22 @@ describe('narrateEvent (W1 narration floor)', () => {
     expect(line).toBe('· api: audit c3: fail');
   });
 
+  // issue #177 — a spawn that failed before any work is retried inside the
+  // attempt; the operator reading only stderr sees it is waiting, not failed.
+  test('spawn-retry says the spawn failed and it is waiting', () => {
+    const line = narrateEvent({
+      event: 'spawn-retry',
+      node: 'api',
+      attempt: 1,
+      wait: 0,
+      waitMs: 15000,
+      detail: 'database is locked',
+    });
+    expect(line).toContain('api');
+    expect(line).toContain('spawn failed');
+    expect(line).toContain('15000');
+  });
+
   test('attempt-start is narrated only on attempt 2 and up', () => {
     expect(narrateEvent({ event: 'attempt-start', node: 'api', attempt: 1 })).toBeNull();
     expect(narrateEvent({ event: 'attempt-start', node: 'api', attempt: 2 })).toBe(
