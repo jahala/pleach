@@ -13,7 +13,7 @@ import {
 import type { BranchUpstream, LocalOnlyFacts, LocalOnlyNodeBranch } from '../core/local-only.ts';
 import type { Node } from '../core/plan.ts';
 import type { ExecFn, IsolateSeam, Isolation } from '../loop/deps.ts';
-import { resolveGitDir } from './gitdir.ts';
+import { worktreeHomeFor } from './worktree-home.ts';
 
 // Where the friction ledger writes inside a worktree, as path segments
 // (docs/plans/friction-ledger.md §5).
@@ -79,7 +79,11 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
   }
 
   async function worktreeBase(root: string): Promise<string> {
-    const base = join(resolveGitDir(root), 'pleach', 'worktrees');
+    // Node worktrees and land stacks live OUTSIDE `.git/` (issue #174): tools
+    // like Biome turn their React rules off under `.git/`, so a tree under
+    // <git-dir>/pleach/worktrees/ would get a weaker gate than the branch. The
+    // home is one per-repo directory under $PLEACH_WORKTREE_HOME (or the cache).
+    const base = await worktreeHomeFor(root);
     await mkdir(base, { recursive: true });
     return base;
   }
@@ -91,9 +95,10 @@ export function createIsolateSeam(exec: ExecFn, repoRoot: string): IsolateSeam {
       throw new IsolateCatastrophicError('', 'baseRefs must not be empty');
     }
 
-    // Worktrees live under the git dir (D12) — findable by `pleach clean`,
-    // and never in the OS temp reaper's shadow. mkdtemp gives the unique base;
-    // git worktree add needs a non-existent sub-path.
+    // Worktrees live under the per-repo worktree home, outside `.git/` (issue
+    // #174) — findable by `pleach clean`, and never in the OS temp reaper's
+    // shadow. mkdtemp gives the unique base; git worktree add needs a
+    // non-existent sub-path.
     const tmpBase = await mkdtemp(join(await worktreeBase(repoRoot), 'wt-'));
 
     // git worktree add --detach uses the path we give it; mkdtemp already
