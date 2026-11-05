@@ -459,40 +459,15 @@
             <div class="term-bar"><span class="tdot e"></span><span class="tdot c"></span><span class="tdot k"></span><span class="term-title">the tic-tac-toe example plan · claude builds, codex audits</span></div>
 <pre class="term-body"><span class="t-prompt">$</span> pleach validate plan.json | jq -c .waves
 [["ttt.s1","ttt.s2"],["ttt"]]
-<span class="t-prompt">$</span> pleach run plan.json &gt; summary.json
-<span class="t-dim">pleach: running 3 node(s) — Build a PLAYABLE WEB tic-tac-toe game — a self-contained index.html you open in a browser and play.</span>
-▶ ttt.s1: building
-▶ ttt.s2: building
-▸ ttt.s1: setup passed <span class="t-dim">(1.4s)</span>
-▸ ttt.s2: setup passed <span class="t-dim">(1.5s)</span>
-▸ ttt.s2: settle passed <span class="t-dim">(2.0s)</span>
-▸ ttt.s2: marker passed <span class="t-dim">(0.0s)</span>
-▸ ttt.s2: hygiene passed <span class="t-dim">(0.1s)</span>
-▸ ttt.s2: smoke passed <span class="t-dim">(0.4s)</span>
-<span class="t-prompt">✓</span> ttt.s2: verified on local branch <span class="t-path">node/ttt.s2</span> @ 8c41e07
-▸ ttt.s1: settle passed <span class="t-dim">(2.0s)</span>
-▸ ttt.s1: marker passed <span class="t-dim">(0.0s)</span>
-▸ ttt.s1: hygiene passed <span class="t-dim">(0.1s)</span>
-▸ ttt.s1: smoke passed <span class="t-dim">(0.4s)</span>
-<span class="t-prompt">✓</span> ttt.s1: verified on local branch <span class="t-path">node/ttt.s1</span> @ 3b5d9a2
-▶ ttt: building
-▸ ttt: setup passed <span class="t-dim">(1.3s)</span>
-▸ ttt: settle passed <span class="t-dim">(2.0s)</span>
-▸ ttt: marker passed <span class="t-dim">(0.0s)</span>
-▸ ttt: hygiene passed <span class="t-dim">(0.1s)</span>
+<span class="t-prompt">$</span> pleach run plan.json &gt; summary.json 2&gt; run.log &amp;
+<span class="t-prompt">$</span> pleach wait plan.json &gt; /dev/null
+<span class="t-dim">pleach: examples/three-ways/README.md — ended</span>
+<span class="t-dim">node    status  attempts  duration(ms)  progress</span>
+ttt.s1  closed  1         84210
+ttt.s2  closed  1         79655
+ttt     closed  2         212480
+<span class="t-prompt">$</span> grep refused run.log
 <span class="t-err">✗</span> ttt: <span class="t-rule">smoke refused</span> (attempt 1)
-Gate 'smoke' failed (exit 1). Output tail:
-<span class="t-rule">↻</span> ttt: attempt 2
-▸ ttt: setup passed <span class="t-dim">(0.9s)</span>
-▸ ttt: settle passed <span class="t-dim">(2.0s)</span>
-▸ ttt: marker passed <span class="t-dim">(0.0s)</span>
-▸ ttt: hygiene passed <span class="t-dim">(0.1s)</span>
-▸ ttt: smoke passed <span class="t-dim">(1.2s)</span>
-· ttt: audit ttt: pass
-▸ ttt: audit passed <span class="t-dim">(52.6s)</span>
-<span class="t-prompt">✓</span> ttt: verified on local branch <span class="t-path">node/ttt</span> @ e19f4c0
-<span class="t-dim">pleach: run complete — 3 closed · 0 failed · 0 skipped · 0 blocked · 0 already verified</span>
-⚠ 3 verified node branch(es) exist only on this machine — push them to keep the work
 </pre>
           </div>
         </figure>
@@ -563,17 +538,18 @@ Gate 'smoke' failed (exit 1). Output tail:
     </div>
   </div></section>
 
-  <section class="wrap" aria-labelledby="verbs-title"><div class="sec tight g12">
-    <h2 class="label margin" id="verbs-title">the commands</h2>
+  <section class="wrap" aria-labelledby="verbs-title"><div class="sec g12">
+    <p class="label margin">the commands</p>
     <div class="content rise">
-      <ul class="allow-list">
-        <li><code>pleach validate plan.json</code><span>parse and check the plan, and print the order it runs in.</span></li>
-        <li><code>pleach run plan.json</code><span>conduct the plan. Re-run it and verified nodes are skipped.</span></li>
-        <li><code>pleach status plan.json</code><span>the run's state, as JSON and as a table; <code>wait</code> blocks until it ends.</span></li>
-        <li><code>pleach land plan.json</code><span>merge the plan's verified <code>node/&lt;id&gt;</code> branches onto the branch you have checked out.</span></li>
-        <li><code>pleach audit plan.json &lt;node&gt;</code><span>re-run only the audit on a quarantined node.</span></li>
-        <li><code>pleach clean</code><span>sweep the locks, worktrees and sessions a killed run left behind.</span></li>
-      </ul>
+      <h2 id="verbs-title">Six commands carry a plan</h2>
+      <ol class="faces">
+        <li class="face"><span class="n" aria-hidden="true">1</span><p class="cmd"><span>pleach</span> validate</p><p class="what">parses and checks the plan, and prints the order it runs in.</p></li>
+        <li class="face"><span class="n" aria-hidden="true">2</span><p class="cmd"><span>pleach</span> run</p><p class="what">conducts the plan. Re-run it and verified nodes are skipped.</p></li>
+        <li class="face"><span class="n" aria-hidden="true">3</span><p class="cmd"><span>pleach</span> status</p><p class="what">prints the run's state, as JSON and as a table; <code>wait</code> blocks until it ends.</p></li>
+        <li class="face"><span class="n" aria-hidden="true">4</span><p class="cmd"><span>pleach</span> land</p><p class="what">merges the plan's verified <code>node/&lt;id&gt;</code> branches onto the branch you have checked out.</p></li>
+        <li class="face"><span class="n" aria-hidden="true">5</span><p class="cmd"><span>pleach</span> audit</p><p class="what">re-runs only the audit on a quarantined node.</p></li>
+        <li class="face"><span class="n" aria-hidden="true">6</span><p class="cmd"><span>pleach</span> clean</p><p class="what">sweeps the locks, worktrees and sessions a killed run left behind.</p></li>
+      </ol>
       <p class="body note">And stop, receipt, schema and audit-wrap. <code>pleach --help</code> carries every flag, default and exit code.</p>
     </div>
   </div></section>
