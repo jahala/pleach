@@ -12,6 +12,7 @@ const MAIN = join(import.meta.dir, '../../src/main.ts');
 
 async function pleach(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(['bun', MAIN, ...args], {
+    env: process.env,
     stdin: 'ignore',
     stdout: 'pipe',
     stderr: 'pipe',

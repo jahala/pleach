@@ -20,6 +20,7 @@ interface RunResult {
 
 async function pleach(args: string[]): Promise<RunResult> {
   const proc = Bun.spawn(['bun', MAIN, ...args], {
+    env: process.env,
     stdin: 'ignore',
     stdout: 'pipe',
     stderr: 'pipe',
