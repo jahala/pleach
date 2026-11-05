@@ -100,24 +100,27 @@ export async function landPlan(
     } catch (err) {
       // A refused land must be explainable from the journal alone.
       if (err instanceof LandConflictError) {
-        // issue #116: pin the conflict instead of telling the operator to
-        // merge by hand. The conflicting ref maps back to its sink id, and the
-        // stack commit it conflicted against is kept under refs/pleach/rebuild/
-        // so the next run rebuilds the node on the landed stack.
-        const index = refs.indexOf(err.ref);
-        const node = index === -1 ? undefined : sinks[index];
-        const rebuildRefName = node === undefined ? undefined : rebuildRef(node);
-        if (node !== undefined && err.stackSha !== null) {
-          await deps.isolate.setRef(opts.repoRoot, rebuildRefName as string, err.stackSha);
+        // issues #116/#175: pin every conflicting sink at the one final clean
+        // stack commit instead of telling the operator to merge by hand. Each
+        // conflicting ref maps back to its sink id, and the stack commit it
+        // conflicted against is kept under refs/pleach/rebuild/<id> for all of
+        // them, so the next run rebuilds the whole group at once.
+        const refToSink = new Map(refs.map((r, i) => [r, sinks[i] as string]));
+        for (const conflict of err.conflicts) {
+          const node = refToSink.get(conflict.ref);
+          const rebuildRefName = node === undefined ? undefined : rebuildRef(node);
+          if (node !== undefined && err.stackSha !== null) {
+            await deps.isolate.setRef(opts.repoRoot, rebuildRefName as string, err.stackSha);
+          }
+          await deps.journal.append({
+            event: 'land-conflict',
+            ref: conflict.ref,
+            files: conflict.files,
+            ...(node !== undefined ? { node } : {}),
+            ...(rebuildRefName !== undefined ? { rebuildRef: rebuildRefName } : {}),
+            ...(err.stackSha !== null ? { stackSha: err.stackSha } : {}),
+          });
         }
-        await deps.journal.append({
-          event: 'land-conflict',
-          ref: err.ref,
-          files: err.files,
-          ...(node !== undefined ? { node } : {}),
-          ...(rebuildRefName !== undefined ? { rebuildRef: rebuildRefName } : {}),
-          ...(err.stackSha !== null ? { stackSha: err.stackSha } : {}),
-        });
       } else if (err instanceof LandMergeRefusedError) {
         await deps.journal.append({
           event: 'land-merge-refused',

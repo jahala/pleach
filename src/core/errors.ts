@@ -195,25 +195,33 @@ export class LedgerError extends Error {
   }
 }
 
-// Landing hit a real merge conflict between sink branches (ledger B3, issue
-// #116). The landing worktree was disposed; the user's checkout is untouched.
-// `stackSha` is the stack's HEAD just before the abort — the target tip plus
-// every sink merged before this one — the commit the node must be rebuilt on.
-// The loop pins it under refs/pleach/rebuild/<id> so the next run rebuilds the
-// node on that stack instead of the operator merging by hand.
+// One sink whose landing merge conflicted (ledger B3, issues #116/#175). `ref`
+// is the sink's branch, `files` the paths left unmerged.
+export interface LandConflict {
+  ref: string;
+  files: string[];
+}
+
+// Landing hit real merge conflicts between sink branches (ledger B3, issue
+// #116; issue #175 composes everything it can). The landing worktree was
+// disposed; the user's checkout is untouched. `conflicts` holds EVERY sink that
+// conflicted, and `stackSha` is the final clean stack's HEAD — the target tip
+// plus every sink that merged cleanly — the commit each conflicted node must be
+// rebuilt on. The loop pins every conflicting node under refs/pleach/rebuild/<id>
+// at that one stack, so the next run rebuilds the whole group at once instead of
+// the operator merging by hand.
 export class LandConflictError extends Error {
   readonly name = 'LandConflictError';
-  readonly ref: string;
-  readonly files: string[];
+  readonly conflicts: LandConflict[];
   readonly stackSha: string | null;
 
-  constructor(ref: string, files: string[], stackSha: string | null = null) {
+  constructor(conflicts: LandConflict[], stackSha: string | null = null) {
+    const list = conflicts.map((c) => `${c.ref} in: ${c.files.join(', ')}`).join('; ');
     super(
-      `landing ${ref} conflicts in: ${files.join(', ')} — the node is pinned for a rebuild ` +
+      `landing conflicts (${list}) — the conflicting nodes are pinned for a rebuild ` +
         `on the landed stack (run 'pleach run <plan>', then land again)`,
     );
-    this.ref = ref;
-    this.files = files;
+    this.conflicts = conflicts;
     this.stackSha = stackSha;
   }
 }

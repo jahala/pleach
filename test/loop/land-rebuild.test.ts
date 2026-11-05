@@ -176,4 +176,97 @@ describe('a land conflict is rebuilt on the landed stack (issue #116)', () => {
 
     expect(seen).toEqual([[STACK]]);
   });
+
+  // issue #175 — two pinned nodes at one stack rebuild as a group, in plan
+  // order: the second waits for the first and merges its rebuilt branch before
+  // its own old work, so one run resolves what used to take two.
+  test('two pinned nodes at one stack rebuild in plan order, the second on the first rebuilt branch', async () => {
+    const h = makeHarness({
+      closed: new Map([
+        ['b', OLD],
+        ['c', OLD],
+      ]),
+      refs: {
+        'refs/pleach/rebuild/b': STACK,
+        'refs/pleach/rebuild/c': STACK,
+        'node/b': OLD,
+        'node/c': OLD,
+      },
+      changedByNode: { b: ['shared.txt'], c: ['shared.txt'] },
+    });
+    const seen = bases(h);
+
+    const summary = await runPlan(
+      PlanSchema.parse({
+        goal: 'g',
+        source: SOURCE,
+        nodes: [
+          { id: 'b', work: { prompt: 'build b' } },
+          { id: 'c', work: { prompt: 'build c' } },
+        ],
+      }),
+      h.deps,
+      OPTS,
+    );
+
+    expect(summary.closed).toEqual(['b', 'c']);
+    // b rebuilds first on the stack with its own branch; c rebuilds after, on
+    // the stack plus b's rebuilt node/b, then its own node/c.
+    expect(seen).toEqual([
+      [STACK, 'node/b'],
+      [STACK, 'node/b', 'node/c'],
+    ]);
+
+    // The implied order is journaled once per group member.
+    expect(rebuildLines(h)).toMatchObject([
+      { node: 'b', onto: STACK },
+      { node: 'c', onto: STACK, after: ['b'] },
+    ]);
+    expect(rebuildDoneLines(h)).toHaveLength(2);
+    expect(h.git.refs.has('refs/pleach/rebuild/b')).toBe(false);
+    expect(h.git.refs.has('refs/pleach/rebuild/c')).toBe(false);
+  });
+
+  // If the first group member fails, the second is skipped like any node whose
+  // dependency failed — and its pin is kept for the next run.
+  test('when the first group member fails, the second is skipped and its pin is kept', async () => {
+    const h = makeHarness({
+      closed: new Map([
+        ['b', OLD],
+        ['c', OLD],
+      ]),
+      refs: {
+        'refs/pleach/rebuild/b': STACK,
+        'refs/pleach/rebuild/c': STACK,
+        'node/b': OLD,
+        'node/c': OLD,
+      },
+      conflicts: { b: ['shared.txt'] },
+      changedByNode: { b: ['shared.txt'], c: ['shared.txt'] },
+      markersByNode: { b: ['shared.txt'] },
+    });
+    const seen = bases(h);
+
+    const summary = await runPlan(
+      PlanSchema.parse({
+        goal: 'g',
+        source: SOURCE,
+        nodes: [
+          { id: 'b', work: { prompt: 'build b' }, policy: { maxAttempts: 1 } },
+          { id: 'c', work: { prompt: 'build c' } },
+        ],
+      }),
+      h.deps,
+      OPTS,
+    );
+
+    expect(summary.failed).toEqual(['b']);
+    expect(summary.skipped).toEqual(['c']);
+    // c never isolated — it waited for b, which failed.
+    expect(seen).toEqual([[STACK, 'node/b']]);
+    // b's failed close keeps its own pin; c's is untouched.
+    expect(h.git.refs.get('refs/pleach/rebuild/b')).toBe(STACK);
+    expect(h.git.refs.get('refs/pleach/rebuild/c')).toBe(STACK);
+    expect(rebuildDoneLines(h)).toHaveLength(0);
+  });
 });

@@ -117,7 +117,7 @@ describe('isolate seam — land', () => {
       throw new Error('expected LandConflictError');
     } catch (err) {
       if (!(err instanceof LandConflictError)) throw err;
-      expect(err.files).toEqual(['same.txt']);
+      expect(err.conflicts).toEqual([{ ref: 'node/b', files: ['same.txt'] }]);
     }
   });
 
