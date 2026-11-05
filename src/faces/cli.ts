@@ -96,9 +96,10 @@ Flags (run):
   --max-concurrency N     Parallel node cap (default: plan.maxConcurrency, else CPU cores − 2)
   --timeout-ms N          Default per-attempt timeout when a node omits policy.timeoutMs (default: 30m)
   --idle-ms N             End a worker's wait after this long with no activity (default: 10m).
-  --provider-backoff-ms N First wait after a provider or network error (default: 15000). Five
-                          waits, each double the last, run inside the same attempt; only once
-                          they are spent does the error cost an attempt.
+  --provider-backoff-ms N First wait after a provider or network error, or a worker spawn
+                          that failed (default: 15000). Five waits, each double the last, run
+                          inside the same attempt; a provider error costs an attempt only
+                          once they are spent.
   --settle-ms N           After a worker stops, wait until the tree is unchanged for this long
                           before any gate reads it (default: 2000, or $PLEACH_SETTLE_MS; 0 turns
                           it off). A tree still changing after 60 s fails the attempt, naming

@@ -64,6 +64,7 @@ export const KINDS: Record<string, Kind> = {
   'worker-reaped': 'node.lifecycle',
   'phase-commit': 'node.lifecycle',
   'provider-error-backoff': 'node.lifecycle',
+  'spawn-retry': 'node.lifecycle',
   'set-aside': 'node.lifecycle',
   'resumed-from-quarantine': 'node.lifecycle',
   'resume-refused': 'node.lifecycle',

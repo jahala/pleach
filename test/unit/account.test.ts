@@ -52,6 +52,15 @@ describe('account — failed', () => {
     expect(a.nextStep).toContain('fix the environment');
   });
 
+  test('a spawn that failed before any work points at the runner', () => {
+    const a = account(
+      facts({ status: 'failed', detail: 'worker spawn failed 6 times: database is locked' }),
+    );
+    expect(a.reason).toContain('worker spawn failed');
+    expect(a.reason).toContain('database is locked');
+    expect(a.nextStep).toBe('check the runner and re-run');
+  });
+
   test('only the audit lane throwing points at a re-audit, not a rebuild', () => {
     const a = account(
       facts({
