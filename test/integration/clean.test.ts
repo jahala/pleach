@@ -4,12 +4,13 @@
  *
  * A killed run used to leave three things behind: the temp worktree entry, the
  * lock file, and a live worker session. Sessions are umbel's; the other two
- * are pleach's to sweep — and worktrees now live under
- * <git-dir>/pleach/worktrees/ so ownership is unambiguous and the OS temp
- * reaper never eats a live run's tree.
+ * are pleach's to sweep — and worktrees now live under the per-repository
+ * worktree home (issue #174), outside `.git/` so no tool treats the tree as a
+ * git dir. Ownership is unambiguous, and the OS temp reaper never eats a live
+ * run's tree.
  */
 import { expect, test } from 'bun:test';
-import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ExecFn } from '../../src/loop/deps.ts';
@@ -17,16 +18,19 @@ import { ownsWorktree, sweepOrphanWorktrees, sweepStaleLocks } from '../../src/s
 import { exec as execLocalSeam } from '../../src/seams/exec.ts';
 import { resolveGitDir } from '../../src/seams/gitdir.ts';
 import { createIsolateSeam } from '../../src/seams/isolate.ts';
+import { worktreeHomeFor } from '../../src/seams/worktree-home.ts';
 import { createRepo, execLocal, gitIn } from '../support/git-repo.ts';
 
 const exec: ExecFn = (argv, opts) => execLocal(argv as string[], opts.cwd);
 
-test('isolate worktrees live under <git-dir>/pleach/worktrees — not the OS temp dir', async () => {
+test('isolate worktrees live under the per-repo home — not the git dir, not the OS temp dir', async () => {
   const { path: repo, cleanup } = await createRepo();
   try {
     const seam = createIsolateSeam(exec, repo);
     const iso = await seam.isolate({ id: 'x' } as Parameters<typeof seam.isolate>[0], ['HEAD']);
-    expect(iso.cwd.startsWith(join(resolveGitDir(repo), 'pleach', 'worktrees'))).toBe(true);
+    const home = await worktreeHomeFor(repo);
+    expect(iso.cwd.startsWith(`${home}/`)).toBe(true);
+    expect(iso.cwd.includes('/.git/')).toBe(false);
     await iso.dispose();
   } finally {
     await cleanup();
@@ -99,6 +103,36 @@ test('sweepOrphanWorktrees disposes pleach-owned worktrees and prunes vanished e
   }
 });
 
+test('sweepOrphanWorktrees sweeps the new home and the old <git-dir>/pleach/worktrees home, then removes the empty per-repo dir', async () => {
+  const { path: repo, cleanup } = await createRepo();
+  try {
+    // An orphan in the NEW home, exactly as a killed run leaves it.
+    const seam = createIsolateSeam(exec, repo);
+    const iso = await seam.isolate({ id: 'x' } as Parameters<typeof seam.isolate>[0], ['HEAD']);
+    const newCwd = await realpath(iso.cwd);
+
+    // An orphan in the OLD home, left by a version before the relocation.
+    const oldBase = join(resolveGitDir(repo), 'pleach', 'worktrees', 'wt-old');
+    await mkdir(oldBase, { recursive: true });
+    await gitIn(repo, 'worktree', 'add', '--detach', join(oldBase, 'wt'), 'HEAD');
+    const oldCwd = await realpath(join(oldBase, 'wt'));
+
+    const home = await worktreeHomeFor(repo);
+
+    const removed = await sweepOrphanWorktrees(exec, repo);
+
+    expect(removed).toContain(newCwd);
+    expect(removed).toContain(oldCwd);
+    const after = await gitIn(repo, 'worktree', 'list', '--porcelain');
+    expect(after).not.toContain(newCwd);
+    expect(after).not.toContain(oldCwd);
+    // The per-repo directory the sweep emptied is gone, not left behind.
+    await expect(realpath(home)).rejects.toThrow();
+  } finally {
+    await cleanup();
+  }
+});
+
 test('sweepOrphanWorktrees never touches a worktree it does not own', async () => {
   const { path: repo, cleanup } = await createRepo();
   // A human's own worktree, outside pleach's namespace. The path must be
@@ -132,14 +166,17 @@ test('the exec seam honors an abort signal — resolves promptly, non-zero, neve
 });
 
 test('ownsWorktree — the predicate between the sweep and a human checkout', () => {
-  const ownBase = '/repo/.git/pleach/worktrees';
+  const newHome = '/cache/pleach/worktrees/bandung-0123456789ab';
+  const oldHome = '/repo/.git/pleach/worktrees';
   const tmp = '/private/var/folders/xx/T';
-  // pleach's own homes:
-  expect(ownsWorktree(`${ownBase}/wt-abc/wt`, ownBase, tmp)).toBe(true);
-  expect(ownsWorktree(`${tmp}/pleach-abc123/wt`, ownBase, tmp)).toBe(true);
-  expect(ownsWorktree(`${tmp}/pleach-land-abc/wt`, ownBase, tmp)).toBe(true);
+  // pleach's own homes — the new per-repo dir, the old git-dir home, and the
+  // legacy OS-temp mkdtemp shape:
+  expect(ownsWorktree(`${newHome}/wt-abc/wt`, [newHome, oldHome], tmp)).toBe(true);
+  expect(ownsWorktree(`${oldHome}/wt-abc/wt`, [newHome, oldHome], tmp)).toBe(true);
+  expect(ownsWorktree(`${tmp}/pleach-abc123/wt`, [newHome, oldHome], tmp)).toBe(true);
+  expect(ownsWorktree(`${tmp}/pleach-land-abc/wt`, [newHome, oldHome], tmp)).toBe(true);
   // a human's checkout that merely LOOKS pleach-ish:
-  expect(ownsWorktree('/home/user/code/pleach-v1/wt', ownBase, tmp)).toBe(false); // outside tmp
-  expect(ownsWorktree(`${tmp}/pleach-abc123/checkout`, ownBase, tmp)).toBe(false); // wrong suffix
-  expect(ownsWorktree(`${tmp}/other-abc/wt`, ownBase, tmp)).toBe(false); // wrong prefix
+  expect(ownsWorktree('/home/user/code/pleach-v1/wt', [newHome, oldHome], tmp)).toBe(false); // outside tmp
+  expect(ownsWorktree(`${tmp}/pleach-abc123/checkout`, [newHome, oldHome], tmp)).toBe(false); // wrong suffix
+  expect(ownsWorktree(`${tmp}/other-abc/wt`, [newHome, oldHome], tmp)).toBe(false); // wrong prefix
 });

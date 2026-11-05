@@ -316,6 +316,16 @@ written before this change has no patch-id and verifies exactly as it did.
 
 ## Two operational facts
 
+**Worktrees live outside `.git/`.** A gate must check the same rules wherever it
+runs, and tools treat paths under `.git/` differently — Biome turns its React rules off
+there, so a node whose smoke passed in a worktree under the git dir could fail on the
+branch. Node worktrees and land stacks therefore live under
+`$PLEACH_WORKTREE_HOME` when it is set, else `$XDG_CACHE_HOME/pleach/worktrees`, else
+`~/.cache/pleach/worktrees` — one directory per repository, named
+`<repo-basename>-<first 12 hex of sha256 of the git dir's realpath>`. `pleach clean`
+still sweeps the older homes (`<git-dir>/pleach/worktrees/…` and the legacy OS-temp
+`pleach-*/wt`) so leftovers from earlier versions keep getting cleaned up.
+
 **Claude Code workers need the repo trusted.** Trust follows the main checkout
 (`~/.claude.json`) rather than the worktree, and pleach's temporary worktrees inherit it. An
 untrusted repo makes every worker hit the trust dialog.

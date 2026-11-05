@@ -92,7 +92,9 @@ Usage:
   pleach --version
 
 Flags (run):
-  --repo-root PATH        Git repo the worktrees and node/<id> branches live in (default: cwd)
+  --repo-root PATH        Git repo the node/<id> branches live in (default: cwd). Worktrees
+                          live in the worktree home ($PLEACH_WORKTREE_HOME, else the cache),
+                          outside this repo.
   --max-concurrency N     Parallel node cap (default: plan.maxConcurrency, else CPU cores − 2)
   --timeout-ms N          Default per-attempt timeout when a node omits policy.timeoutMs (default: 30m)
   --idle-ms N             End a worker's wait after this long with no activity (default: 10m).
