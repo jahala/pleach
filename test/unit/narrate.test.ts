@@ -338,4 +338,13 @@ describe('narration — a land refusal shows the failing command output', () => 
     expect(line).toContain('install-deps');
     expect(line).toContain('registry down');
   });
+
+  test('land-integrity-failed prints what the culprit-free stack said (issue #124)', () => {
+    const line = narrateEvent({
+      event: 'land-integrity-failed',
+      outputTail: 'error TS2345: Argument of type string',
+    });
+    expect(line).toContain('culprit-free stack also fails');
+    expect(line).toContain('error TS2345');
+  });
 });

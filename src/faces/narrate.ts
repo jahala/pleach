@@ -188,8 +188,13 @@ export function narrateEvent(e: Record<string, unknown>): string | null {
       const head = `✗ culprit: ${s(e.node)} — '${s(e.command)}' fails when it lands with the others`;
       return why === '' ? head : `${head}\n${why}`;
     }
-    case 'land-integrity-failed':
-      return `✗ land diagnosis incoherent — the culprit-free stack also fails; nothing lands`;
+    case 'land-integrity-failed': {
+      // No culprit to name, so what the culprit-free stack said is the only
+      // account of the failure (issue #124).
+      const why = typeof e.outputTail === 'string' ? e.outputTail.trim() : '';
+      const head = '✗ land diagnosis incoherent — the culprit-free stack also fails; nothing lands';
+      return why === '' ? head : `${head}\n${why}`;
+    }
     case 'land-blocked':
       return `✗ land refused: ${s(e.reason ?? e.unverified)}`;
     case 'land-conflict':
