@@ -137,7 +137,7 @@ An operator runs a whole DAG unattended, and only verified work publishes a bran
 - [x] (code) The isolate seam records the whole working tree without touching the index and restores exactly what changed since: a gate's modification, deletion and new file are undone, the friction journal is kept, and a worker's untracked file the gate never touched is neither rewritten nor named · test/integration/isolate.test.ts @82d2b00 · by cli
 - [x] (code) A provider error re-runs inside the same attempt on a backoff (15 s doubling, five waits, or from `--provider-backoff-ms`), the provider's text in the re-prompt and each wait journaled; once the waits are spent the attempt counts and the verdict names the cause; a stop during a wait settles aborted · test/loop/provider-error-backoff.test.ts @75bc5c5 · by cli
 - [x] (code) After a worker's stop the loop waits until two tree records match before any gate, a tree still changing past the bound fails under the `settle` gate naming the path, a stop during the wait settles aborted, and settleMs 0 waits not at all · test/loop/tree-settle.test.ts @8ed9e87 · by cli
-- [ ] (code) A worker spawn that fails before any work is retried on the provider backoff without spending an attempt, settles failed naming the error once the waits are spent, and settles aborted when the run stops mid-wait · test/loop/spawn-error-retry.test.ts
+- [x] (code) A worker spawn that fails before any work is retried on the provider backoff without spending an attempt, settles failed naming the error once the waits are spent, and settles aborted when the run stops mid-wait · test/loop/spawn-error-retry.test.ts @053c57808ab9ef · by cli
 ## For #operator #developer
 
 ## Tried
